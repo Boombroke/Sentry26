@@ -1,8 +1,8 @@
 #!/bin/bash
 # ==============================================================================
 # Sentry Nav - 一键环境配置脚本
-# 适用系统: Ubuntu 22.04
-# ROS 版本: ROS2 Humble
+# 适用系统: Ubuntu 24.04
+# ROS 版本: ROS2 Jazzy
 # 用法: bash scripts/setup_env.sh
 # ==============================================================================
 
@@ -23,22 +23,22 @@ error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 # ---------- 0. 系统检查 ----------
 info "检查系统环境..."
 
-if [[ "$(lsb_release -cs 2>/dev/null)" != "jammy" ]]; then
-    warn "当前系统非 Ubuntu 22.04 (Jammy)，可能存在兼容性问题"
+if [[ "$(lsb_release -cs 2>/dev/null)" != "noble" ]]; then
+    warn "当前系统非 Ubuntu 24.04 (Noble)，可能存在兼容性问题"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 info "项目根目录: $PROJECT_DIR"
 
-# ---------- 1. 安装 ROS2 Humble ----------
-install_ros2_humble() {
-    if command -v ros2 &>/dev/null && ros2 doctor --report 2>/dev/null | grep -q "humble"; then
-        ok "ROS2 Humble 已安装"
+# ---------- 1. 安装 ROS2 Jazzy ----------
+install_ros2_jazzy() {
+    if command -v ros2 &>/dev/null && ros2 doctor --report 2>/dev/null | grep -q "jazzy"; then
+        ok "ROS2 Jazzy 已安装"
         return 0
     fi
 
-    info "开始安装 ROS2 Humble..."
+    info "开始安装 ROS2 Jazzy..."
 
     sudo apt update && sudo apt install -y software-properties-common curl
 
@@ -52,23 +52,23 @@ install_ros2_humble() {
         | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
     sudo apt update
-    sudo apt install -y ros-humble-desktop ros-dev-tools
+    sudo apt install -y ros-jazzy-desktop ros-dev-tools
 
-    ok "ROS2 Humble 安装完成"
+    ok "ROS2 Jazzy 安装完成"
 }
 
-# ---------- 2. 安装 Gazebo Ignition Fortress ----------
+# ---------- 2. 安装 Gazebo Harmonic ----------
 install_gazebo() {
-    if command -v ign &>/dev/null || command -v gz &>/dev/null; then
-        ok "Gazebo Ignition 已安装"
+    if command -v gz &>/dev/null; then
+        ok "Gazebo Harmonic 已安装"
         return 0
     fi
 
-    info "开始安装 Gazebo Ignition Fortress..."
+    info "开始安装 Gazebo Harmonic..."
 
-    sudo apt install -y ros-humble-ros-gz
+    sudo apt install -y ros-jazzy-ros-gz
 
-    ok "Gazebo Ignition Fortress 安装完成"
+    ok "Gazebo Harmonic 安装完成"
 }
 
 # ---------- 3. 安装系统依赖 ----------
@@ -88,17 +88,17 @@ install_system_deps() {
         libpcl-dev \
         libunwind-dev \
         libgoogle-glog-dev \
-        ros-humble-navigation2 \
-        ros-humble-nav2-bringup \
-        ros-humble-slam-toolbox \
-        ros-humble-joint-state-publisher \
-        ros-humble-robot-state-publisher \
-        ros-humble-xacro \
-        ros-humble-pcl-conversions \
-        ros-humble-pcl-ros \
-        ros-humble-tf2-eigen \
-        ros-humble-serial-driver \
-        ros-humble-joy
+        ros-jazzy-navigation2 \
+        ros-jazzy-nav2-bringup \
+        ros-jazzy-slam-toolbox \
+        ros-jazzy-joint-state-publisher \
+        ros-jazzy-robot-state-publisher \
+        ros-jazzy-xacro \
+        ros-jazzy-pcl-conversions \
+        ros-jazzy-pcl-ros \
+        ros-jazzy-tf2-eigen \
+        ros-jazzy-serial-driver \
+        ros-jazzy-joy
 
     ok "系统依赖安装完成"
 
@@ -149,7 +149,7 @@ init_rosdep() {
     if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
         sudo rosdep init 2>/dev/null || true
     fi
-    rosdep update --rosdistro=humble
+    rosdep update --rosdistro=jazzy
 
     ok "rosdep 初始化完成"
 }
@@ -160,7 +160,7 @@ build_workspace() {
 
     # source ROS2 环境
     # shellcheck disable=SC1091
-    source /opt/ros/humble/setup.bash
+    source /opt/ros/jazzy/setup.bash
 
     WS_DIR="${WS_DIR:-$HOME/sentry_ws}"
 
@@ -181,7 +181,7 @@ build_workspace() {
     # 安装 ROS 依赖
     info "安装 ROS 包依赖 (rosdep)..."
     cd "$WS_DIR"
-    rosdep install -r --from-paths src --ignore-src --rosdistro humble -y 2>/dev/null || \
+    rosdep install -r --from-paths src --ignore-src --rosdistro jazzy -y 2>/dev/null || \
         warn "部分 rosdep 依赖未能自动安装，可能需要手动处理"
 
     # 编译
@@ -212,7 +212,7 @@ setup_bashrc() {
         {
             echo ""
             echo "# Sentry Nav ROS2 工作空间"
-            echo "source /opt/ros/humble/setup.bash"
+            echo "source /opt/ros/jazzy/setup.bash"
             echo "$SETUP_LINE"
         } >> ~/.bashrc
         ok "已写入 ~/.bashrc"
@@ -223,11 +223,11 @@ setup_bashrc() {
 echo ""
 echo "============================================"
 echo "  Sentry Nav - 一键环境配置"
-echo "  Ubuntu 22.04 + ROS2 Humble"
+echo "  Ubuntu 24.04 + ROS2 Jazzy"
 echo "============================================"
 echo ""
 
-install_ros2_humble
+install_ros2_jazzy
 install_gazebo
 install_system_deps
 install_small_gicp
