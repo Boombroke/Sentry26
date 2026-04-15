@@ -333,6 +333,7 @@ bt_navigator:
 controller_server:
   ros__parameters:
     use_sim_time: true
+    enable_stamped_cmd_vel: true
     odom_topic: odometry
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
@@ -590,6 +591,7 @@ velocity_smoother:
 teleop_twist_joy_node:
   ros__parameters:
     use_sim_time: true
+    publish_stamped_twist: true
     robot_base_frame: gimbal_yaw
     control_mode: auto_control    # Option: auto_control, manual_control
 

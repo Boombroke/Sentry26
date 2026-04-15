@@ -48,7 +48,7 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
 
   cmd_spin_sub_ = this->create_subscription<example_interfaces::msg::Float32>(
     cmd_spin_topic_, 1, std::bind(&FakeVelTransform::cmdSpinCallback, this, std::placeholders::_1));
-  cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
+  cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::TwistStamped>(
     input_cmd_vel_topic_, 10,
     std::bind(&FakeVelTransform::cmdVelCallback, this, std::placeholders::_1));
 
@@ -71,14 +71,14 @@ void FakeVelTransform::odometryCallback(const nav_msgs::msg::Odometry::ConstShar
   current_robot_base_angle_ = tf2::getYaw(msg->pose.pose.orientation);
 }
 
-void FakeVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
+void FakeVelTransform::cmdVelCallback(const geometry_msgs::msg::TwistStamped::SharedPtr msg)
 {
   double angle;
   {
     std::lock_guard<std::mutex> lock(angle_mutex_);
     angle = current_robot_base_angle_;
   }
-  auto aft_tf_vel = transformVelocity(msg, angle);
+  auto aft_tf_vel = transformVelocity(msg->twist, angle);
   cmd_vel_chassis_pub_->publish(aft_tf_vel);
 }
 
@@ -100,12 +100,12 @@ void FakeVelTransform::publishTransform()
 }
 
 geometry_msgs::msg::Twist FakeVelTransform::transformVelocity(
-  const geometry_msgs::msg::Twist::SharedPtr & twist, float yaw_diff)
+  const geometry_msgs::msg::Twist & twist, float yaw_diff)
 {
   geometry_msgs::msg::Twist aft_tf_vel;
-  aft_tf_vel.angular.z = twist->angular.z + spin_speed_;
-  aft_tf_vel.linear.x = twist->linear.x * cos(yaw_diff) + twist->linear.y * sin(yaw_diff);
-  aft_tf_vel.linear.y = -twist->linear.x * sin(yaw_diff) + twist->linear.y * cos(yaw_diff);
+  aft_tf_vel.angular.z = twist.angular.z + spin_speed_;
+  aft_tf_vel.linear.x = twist.linear.x * cos(yaw_diff) + twist.linear.y * sin(yaw_diff);
+  aft_tf_vel.linear.y = -twist.linear.x * sin(yaw_diff) + twist.linear.y * cos(yaw_diff);
   return aft_tf_vel;
 }
 
