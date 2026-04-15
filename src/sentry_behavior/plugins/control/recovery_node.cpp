@@ -19,7 +19,7 @@
 namespace sentry_behavior
 {
 
-RecoveryNode::RecoveryNode(const std::string & name, const BT::NodeConfiguration & conf)
+RecoveryNode::RecoveryNode(const std::string & name, const BT::NodeConfig & conf)
 : BT::ControlNode::ControlNode(name, conf), current_child_idx_(0), num_attempts_(1), retry_count_(0)
 {
 }

@@ -3,7 +3,7 @@
 namespace sentry_behavior
 {
 BattlefieldInformationAction::BattlefieldInformationAction(
-const std::string& name,const BT::NodeConfiguration& config)
+const std::string& name,const BT::NodeConfig& config)
 : BT::SyncActionNode(name, config),
 logger_(rclcpp::get_logger("BattlefieldInformationAction"))
 {}
