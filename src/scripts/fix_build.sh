@@ -10,16 +10,16 @@ WS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
 info "工作空间: $WS_DIR"
 
-source /opt/ros/humble/setup.bash 2>/dev/null || { echo "请先安装 ROS2: bash src/scripts/fix_ros_env.sh"; exit 1; }
+source /opt/ros/jazzy/setup.bash 2>/dev/null || { echo "请先安装 ROS2: bash src/scripts/fix_ros_env.sh"; exit 1; }
 
 info "安装 rosdep 依赖..."
 cd "$WS_DIR"
 if ! command -v rosdep &>/dev/null; then
     sudo apt install -y python3-rosdep
     sudo rosdep init 2>/dev/null || true
-    rosdep update --rosdistro=humble
+    rosdep update --rosdistro=jazzy
 fi
-rosdep install -r --from-paths src --ignore-src --rosdistro humble -y 2>/dev/null || \
+rosdep install -r --from-paths src --ignore-src --rosdistro jazzy -y 2>/dev/null || \
     warn "部分依赖未能自动安装"
 
 info "清理旧编译缓存..."
