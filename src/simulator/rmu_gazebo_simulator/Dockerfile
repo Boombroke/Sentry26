@@ -1,4 +1,4 @@
-FROM ros:humble-ros-base
+FROM ros:jazzy-ros-base
 
 RUN sudo apt update && \
     sudo apt install python3-pip curl wget htop vim lsb-release gnupg -y && \
@@ -12,11 +12,9 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
     chsh -s /bin/zsh
 CMD [ "/bin/zsh" ]
 
-# Add Gazebo package repository and install Ignition Fortress
-RUN curl -sSL https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" > /etc/apt/sources.list.d/gazebo-stable.list && \
-    apt-get update && \
-    apt-get install -y ignition-fortress
+# Install Gazebo Harmonic via ros-jazzy-ros-gz
+RUN apt-get update && \
+    apt-get install -y ros-jazzy-ros-gz
 
 # create workspace
 RUN mkdir -p ~/ros_ws && \
