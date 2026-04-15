@@ -85,8 +85,8 @@ FIX_SCRIPTS = {
 
 REMEDIES = {
     'no_ros': {
-        'desc': 'ROS2 Humble 未安装或未 source',
-        'hint': '执行: source /opt/ros/humble/setup.bash\n或安装: bash src/scripts/fix_ros_env.sh',
+        'desc': 'ROS2 Jazzy 未安装或未 source',
+        'hint': '执行: source /opt/ros/jazzy/setup.bash\n或安装: bash src/scripts/fix_ros_env.sh',
         'script': 'fix_ros_env.sh',
     },
     'no_serial_device': {

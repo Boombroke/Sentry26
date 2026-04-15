@@ -1,4 +1,4 @@
-FROM ros:humble-ros-base
+FROM ros:jazzy-ros-base
 
 RUN sudo apt update && \
     sudo apt install python3-pip curl wget htop vim unzip -y && \
