@@ -20,7 +20,7 @@
 #include <memory>
 #include <vector>
 
-#include "ignition/transport/Node.hh"
+#include "gz/transport/Node.hh"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
@@ -40,14 +40,14 @@ public:
   }
 
 private:
-  void gz_image_cb(const ignition::msgs::Image & msg);
+  void gz_image_cb(const gz::msgs::Image & msg);
   void get_camera_info_cb(
     const rmoss_interfaces::srv::GetCameraInfo::Request::SharedPtr request,
     rmoss_interfaces::srv::GetCameraInfo::Response::SharedPtr response);
 
 private:
   rclcpp::Node::SharedPtr node_;
-  std::shared_ptr<ignition::transport::Node> gz_node_;
+  std::shared_ptr<gz::transport::Node> gz_node_;
   // default image transport
   std::shared_ptr<image_transport::Publisher> img_pub_;
   // image_transporter for camera publisher

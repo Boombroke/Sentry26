@@ -22,7 +22,7 @@
 
 #include <rmoss_interfaces/msg/rfid_status_array.hpp>
 #include <rmoss_interfaces/msg/rfid_status.hpp>
-#include "ignition/transport/Node.hh"
+#include "gz/transport/Node.hh"
 #include "rclcpp/rclcpp.hpp"
 #include "tf2_msgs/msg/tf_message.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
@@ -42,11 +42,11 @@ public:
   }
 
   void set_pose_cb(const geometry_msgs::msg::TransformStamped::SharedPtr msg);
-  void gz_rfid_cb(const ignition::msgs::Pose & msg);
+  void gz_rfid_cb(const gz::msgs::Pose & msg);
 
 private:
   rclcpp::Node::SharedPtr node_;
-  std::shared_ptr<ignition::transport::Node> gz_node_;
+  std::shared_ptr<gz::transport::Node> gz_node_;
   // ros publisher
   rclcpp::Publisher<rmoss_interfaces::msg::RfidStatusArray>::SharedPtr rfid_pub_;
   // rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr enable_control_sub_;
