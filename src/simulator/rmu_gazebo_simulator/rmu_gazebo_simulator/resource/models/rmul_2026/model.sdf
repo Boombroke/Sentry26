@@ -1,0 +1,35 @@
+<?xml version='1.0'?>
+<sdf version='1.6'>
+  <model name='rmul_2026'>
+    <static>true</static>
+    <link name='body'>
+      <!-- If your mesh origin/height differs, adjust this pose -->
+      <pose frame=''>0 0 0.2 0 0 0</pose>
+      <self_collide>0</self_collide>
+      <kinematic>0</kinematic>
+      <gravity>1</gravity>
+      <visual name='visual'>
+        <geometry>
+          <mesh>
+            <uri>model://rmul_2026/meshes/rmul_2026.stl</uri>
+            <scale>1 1 1</scale>
+          </mesh>
+        </geometry>
+        <!-- STL 本身不带颜色/材质，这里显式指定渲染材质 -->
+        <material>
+          <ambient>0.4 0.4 0.4 1</ambient>
+          <diffuse>0.7 0.7 0.7 1</diffuse>
+          <specular>0.05 0.05 0.05 1</specular>
+        </material>
+      </visual>
+      <collision name='collision'>
+        <geometry>
+          <mesh>
+            <uri>model://rmul_2026/meshes/rmul_2026.stl</uri>
+            <scale>1 1 1</scale>
+          </mesh>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

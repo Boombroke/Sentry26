@@ -1,0 +1,512 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4">
+  <BehaviorTree ID="blue">
+    <Sequence>
+      <IsGameStatus max_remain_time="420"
+                    min_remain_time="0"
+                    expected_game_progress="4"
+                    key_port="{@referee_gameStatus}"
+                    state="{@state}"/>
+      <Switch3 case_1="1.0"
+               case_2="2.0"
+               case_3="3.0"
+               variable="{@state}">
+        <SubTree ID="blue_down_1"
+                 _autoremap="true"/>
+        <SubTree ID="blue_down_2"
+                 _autoremap="true"/>
+        <SubTree ID="blue_up"
+                 _autoremap="true"/>
+        <Sleep msec="1111"/>
+      </Switch3>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="blue_down_1">
+    <WhileDoElse>
+      <IsStatusOK ammo_min="1"
+                  heat_max="350"
+                  hp_min="200"
+                  key_port="{@referee_robotStatus}"/>
+      <Sequence>
+        <PubGoal goal_pose_x="5.7"
+                 goal_pose_y="6.8"
+                 topic_name="/goal_pose"/>
+        <Sleep msec="13000"/>
+        <PubGoal goal_pose_x="4.9"
+                 goal_pose_y="-2.3"
+                 topic_name="/goal_pose"/>
+        <Sleep msec="10000"/>
+        <PubGoal goal_pose_x="4.6"
+                 goal_pose_y="1.7"
+                 topic_name="/goal_pose"/>
+        <Sleep msec="11000"/>
+      </Sequence>
+      <WhileDoElse>
+        <IsRfidDetected friendly_supply_zone_exchange="false"
+                        friendly_supply_zone_non_exchange="true"
+                        center_gain_point="false"
+                        friendly_fortress_gain_point="false"
+                        key_port="{@referee_rfidStatus}"/>
+        <Sleep msec="6000"/>
+        <PubGoal goal_pose_x="-1.05"
+                 goal_pose_y="-4.97"
+                 topic_name="/goal_pose"/>
+      </WhileDoElse>
+    </WhileDoElse>
+  </BehaviorTree>
+
+  <BehaviorTree ID="blue_down_2">
+    <WhileDoElse>
+      <IsStatusOK ammo_min="1"
+                  heat_max="350"
+                  hp_min="150"
+                  key_port="{@referee_robotStatus}"/>
+      <PubGoal goal_pose_x="5.5"
+               goal_pose_y="7.7"
+               topic_name="/goal_pose"/>
+      <WhileDoElse>
+        <IsRfidDetected friendly_supply_zone_exchange="false"
+                        friendly_supply_zone_non_exchange="true"
+                        center_gain_point="false"
+                        friendly_fortress_gain_point="false"
+                        key_port="{@referee_rfidStatus}"/>
+        <Sleep msec="6000"/>
+        <PubGoal goal_pose_x="-1.05"
+                 goal_pose_y="-5.46"
+                 topic_name="/goal_pose"/>
+      </WhileDoElse>
+    </WhileDoElse>
+  </BehaviorTree>
+
+  <BehaviorTree ID="blue_up">
+    <WhileDoElse>
+      <IsOutpostOk key_port="{@referee_allRobotHP}"/>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="1"
+                    heat_max="350"
+                    hp_min="200"
+                    key_port="{@referee_robotStatus}"/>
+        <PubGoal goal_pose_x="12.07"
+                 goal_pose_y="-0.76"
+                 topic_name="/goal_pose"/>
+        <WhileDoElse>
+          <IsRfidDetected friendly_supply_zone_exchange="false"
+                          friendly_supply_zone_non_exchange="true"
+                          center_gain_point="false"
+                          friendly_fortress_gain_point="false"
+                          key_port="{@referee_rfidStatus}"/>
+          <Sleep msec="4000"/>
+          <PubGoal goal_pose_x="8.05"
+                   goal_pose_y="-2.89"
+                   topic_name="/goal_pose"/>
+        </WhileDoElse>
+      </WhileDoElse>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="1"
+                    heat_max="350"
+                    hp_min="200"
+                    key_port="{@referee_robotStatus}"/>
+        <PubGoal goal_pose_x="12.07"
+                 goal_pose_y="-0.76"
+                 topic_name="/goal_pose"/>
+        <WhileDoElse>
+          <IsRfidDetected friendly_supply_zone_exchange="false"
+                          friendly_supply_zone_non_exchange="true"
+                          center_gain_point="false"
+                          friendly_fortress_gain_point="false"
+                          key_port="{@referee_rfidStatus}"/>
+          <Sleep msec="6000"/>
+          <PubGoal goal_pose_x="-1.05"
+                   goal_pose_y="-4.97"
+                   topic_name="/goal_pose"/>
+        </WhileDoElse>
+      </WhileDoElse>
+    </WhileDoElse>
+  </BehaviorTree>
+
+  <BehaviorTree ID="red">
+    <Sequence>
+      <IsGameStatus max_remain_time="420"
+                    min_remain_time="0"
+                    expected_game_progress="4"
+                    key_port="{@referee_gameStatus}"
+                    state="{@state}"/>
+      <Switch3 case_1="1.0"
+               case_2="2.0"
+               case_3="3.0"
+               variable="{@state}">
+        <SubTree ID="red_down"
+                 _autoremap="true"/>
+        <SubTree ID="red_down_2"
+                 _autoremap="true"/>
+        <SubTree ID="red_up"
+                 _autoremap="true"/>
+        <Sleep msec="10000"/>
+      </Switch3>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="red_down">
+    <Sequence>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="1"
+                    heat_max="350"
+                    hp_min="150"
+                    key_port="{@referee_robotStatus}"/>
+        <Sequence>
+          <PubGoal goal_pose_x="3.88"
+                   goal_pose_y="2.67"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="10000"/>
+          <PubGoal goal_pose_x="4.24"
+                   goal_pose_y="-2.54"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="15000"/>
+          <PubGoal goal_pose_x="3.85"
+                   goal_pose_y="2.58"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="10000"/>
+        </Sequence>
+        <WhileDoElse>
+          <IsRfidDetected friendly_supply_zone_exchange="false"
+                          friendly_supply_zone_non_exchange="true"
+                          center_gain_point="false"
+                          friendly_fortress_gain_point="false"
+                          key_port="{@referee_rfidStatus}"/>
+          <Sleep msec="6000"/>
+          <PubGoal goal_pose_x="-1.02"
+                   goal_pose_y="-4.91"
+                   topic_name="/goal_pose"/>
+        </WhileDoElse>
+      </WhileDoElse>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="red_down_1">
+    <Sequence>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="1"
+                    heat_max="350"
+                    hp_min="150"
+                    key_port="{@referee_robotStatus}"/>
+        <PubGoal goal_pose_x="4.25"
+                 goal_pose_y="0.79"
+                 topic_name="/goal_pose"/>
+        <WhileDoElse>
+          <IsRfidDetected friendly_supply_zone_exchange="false"
+                          friendly_supply_zone_non_exchange="true"
+                          center_gain_point="false"
+                          friendly_fortress_gain_point="false"
+                          key_port="{@referee_rfidStatus}"/>
+          <Sleep msec="6000"/>
+          <PubGoal goal_pose_x="-1.02"
+                   goal_pose_y="-4.91"
+                   topic_name="/goal_pose"/>
+        </WhileDoElse>
+      </WhileDoElse>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="red_down_2">
+    <Sequence>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="1"
+                    heat_max="350"
+                    hp_min="150"
+                    key_port="{@referee_robotStatus}"/>
+        <PubGoal goal_pose_x="5.08"
+                 goal_pose_y="6.96"
+                 topic_name="/goal_pose"/>
+        <WhileDoElse>
+          <IsRfidDetected friendly_supply_zone_exchange="false"
+                          friendly_supply_zone_non_exchange="true"
+                          center_gain_point="false"
+                          friendly_fortress_gain_point="false"
+                          key_port="{@referee_rfidStatus}"/>
+          <Sleep msec="6000"/>
+          <PubGoal goal_pose_x="-1.02"
+                   goal_pose_y="-4.97"
+                   topic_name="/goal_pose"/>
+        </WhileDoElse>
+      </WhileDoElse>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="red_up">
+    <Sequence>
+      <WhileDoElse>
+        <IsOutpostOk key_port="{@referee_allRobotHP}"/>
+        <WhileDoElse>
+          <IsStatusOK ammo_min="1"
+                      heat_max="350"
+                      hp_min="150"
+                      key_port="{@referee_robotStatus}"/>
+          <PubGoal goal_pose_x="12.08"
+                   goal_pose_y="0.09"
+                   topic_name="/goal_pose"/>
+          <WhileDoElse>
+            <IsRfidDetected friendly_supply_zone_exchange="false"
+                            friendly_supply_zone_non_exchange="false"
+                            center_gain_point="false"
+                            friendly_fortress_gain_point="false"
+                            key_port="{@referee_rfidStatus}"/>
+            <Sleep msec="4000"/>
+            <PubGoal goal_pose_x="7.94"
+                     goal_pose_y="-2.72"
+                     topic_name="/goal_pose"/>
+          </WhileDoElse>
+        </WhileDoElse>
+        <WhileDoElse>
+          <IsStatusOK ammo_min="1"
+                      heat_max="350"
+                      hp_min="200"
+                      key_port="{@referee_robotStatus}"/>
+          <PubGoal goal_pose_x="12.08"
+                   goal_pose_y="0.09"
+                   topic_name="/goal_pose"/>
+          <WhileDoElse>
+            <IsRfidDetected friendly_supply_zone_exchange="false"
+                            friendly_supply_zone_non_exchange="false"
+                            center_gain_point="false"
+                            friendly_fortress_gain_point="false"
+                            key_port="{@referee_rfidStatus}"/>
+            <Sleep msec="6000"/>
+            <PubGoal goal_pose_x="-1.02"
+                     goal_pose_y="-4.91"
+                     topic_name="/goal_pose"/>
+          </WhileDoElse>
+        </WhileDoElse>
+      </WhileDoElse>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="rmuc1">
+    <Sequence>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="0"
+                    heat_max="350"
+                    hp_min="100"
+                    key_port="{@referee_robotStatus}"/>
+        <Sequence>
+          <IsStatusOK ammo_min="0"
+                      heat_max="350"
+                      hp_min="400"
+                      key_port="{@referee_robotStatus}"/>
+          <PubGoal goal_pose_x="13.6"
+                   goal_pose_y="-1.31"
+                   topic_name="/goal_pose"/>
+        </Sequence>
+        <PubGoal goal_pose_x="-0.29"
+                 goal_pose_y="-7.37"
+                 topic_name="/goal_pose"/>
+      </WhileDoElse>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="rmuc2">
+    <Sequence>
+      <Pursuit key_port="{@tracker_target}"
+               topic_name="/goal_pose"/>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="rmuc_no">
+    <Sequence>
+      <BattlefieldInformation key_port="{@referee_allRobotHP}"
+                              weight="{@weight}"/>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="1"
+                    heat_max="350"
+                    hp_min="180"
+                    key_port="{@referee_robotStatus}"/>
+        <Switch3 case_1="1.0"
+                 case_2="2.0"
+                 case_3="0.0"
+                 variable="{@weight}">
+          <PubGoal goal_pose_x="11.76"
+                   goal_pose_y="-0.17"
+                   topic_name="/goal_pose"/>
+          <PubGoal goal_pose_x="14.35"
+                   goal_pose_y="2.61"
+                   topic_name="/goal_pose"/>
+          <PubGoal goal_pose_x="8.59"
+                   goal_pose_y="-4.34"
+                   topic_name="/goal_pose"/>
+          <PubGoal goal_pose_x="4.85"
+                   goal_pose_y="-0.75"
+                   topic_name="/goal_pose"/>
+        </Switch3>
+        <WhileDoElse>
+          <IsRfidDetected friendly_supply_zone_exchange="false"
+                          friendly_supply_zone_non_exchange="true"
+                          center_gain_point="false"
+                          friendly_fortress_gain_point="false"
+                          key_port="{@referee_rfidStatus}"/>
+          <Sleep msec="4000"/>
+          <PubGoal goal_pose_x="0.68"
+                   goal_pose_y="-3.64"
+                   topic_name="/goal_pose"/>
+        </WhileDoElse>
+      </WhileDoElse>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="rmuc_yes">
+    <Sequence>
+      <BattlefieldInformation key_port="{@referee_allRobotHP}"
+                              weight="{@weight}"/>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="1"
+                    heat_max="350"
+                    hp_min="180"
+                    key_port="{@referee_robotStatus}"/>
+        <WhileDoElse>
+          <IsOutpostOk key_port="{@referee_allRobotHP}"/>
+          <PubGoal goal_pose_x="10.61"
+                   goal_pose_y="6.31"
+                   topic_name="/goal_pose"/>
+          <Switch3 case_1="1.0"
+                   case_2="2.0"
+                   case_3="0.0"
+                   variable="{@weight}">
+            <PubGoal goal_pose_x="11.76"
+                     goal_pose_y="-0.17"
+                     topic_name="/goal_pose"/>
+            <PubGoal goal_pose_x="14.35"
+                     goal_pose_y="2.61"
+                     topic_name="/goal_pose"/>
+            <PubGoal goal_pose_x="8.59"
+                     goal_pose_y="-4.34"
+                     topic_name="/goal_pose"/>
+            <PubGoal goal_pose_x="4.85"
+                     goal_pose_y="-0.75"
+                     topic_name="/goal_pose"/>
+          </Switch3>
+        </WhileDoElse>
+        <WhileDoElse>
+          <IsRfidDetected friendly_supply_zone_exchange="false"
+                          friendly_supply_zone_non_exchange="true"
+                          center_gain_point="false"
+                          friendly_fortress_gain_point="false"
+                          key_port="{@referee_rfidStatus}"/>
+          <Sleep msec="4000"/>
+          <PubGoal goal_pose_x="0.68"
+                   goal_pose_y="-3.64"
+                   topic_name="/goal_pose"/>
+        </WhileDoElse>
+      </WhileDoElse>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="test">
+    <Sequence>
+      <IsGameStatus max_remain_time="420"
+                    min_remain_time="0"
+                    expected_game_progress="4"
+                    key_port="{@referee_gameStatus}"
+                    state="{@state}"/>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="0"
+                    heat_max="350"
+                    hp_min="300"
+                    key_port="{@referee_robotStatus}"/>
+        <Sequence>
+          <PubGoal goal_pose_x="1.0"
+                   goal_pose_y="0.0"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="2000"/>
+          <PubGoal goal_pose_x="1.5"
+                   goal_pose_y="0.0"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="2000"/>
+          <PubGoal goal_pose_x="1.5"
+                   goal_pose_y="1.0"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="2000"/>
+          <PubGoal goal_pose_x="1.0"
+                   goal_pose_y="1.0"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="2000"/>
+        </Sequence>
+        <PubGoal goal_pose_x="0.0"
+                 goal_pose_y="0.0"
+                 topic_name="/goal_pose"/>
+      </WhileDoElse>
+    </Sequence>
+  </BehaviorTree>
+
+  <!-- Description of Node Models (used by Groot) -->
+  <TreeNodesModel>
+    <Action ID="BattlefieldInformation"
+            editable="true">
+      <input_port name="key_port"
+                  default="{@referee_allRobotHP}"/>
+      <output_port name="weight"/>
+    </Action>
+    <Condition ID="IsGameStatus"
+               editable="true">
+      <input_port name="max_remain_time"
+                  default="420">GameStatus port on blackboard</input_port>
+      <input_port name="min_remain_time"
+                  default="0">Expected game progress stage</input_port>
+      <input_port name="expected_game_progress"
+                  default="4">Minimum remaining time (s)</input_port>
+      <input_port name="key_port"
+                  default="{@referee_gameStatus}">Maximum remaining time (s)</input_port>
+      <output_port name="state"
+                   default="{@state}"/>
+    </Condition>
+    <Condition ID="IsOutpostOk"
+               editable="true">
+      <input_port name="key_port"
+                  default="{@referee_allRobotHP}"/>
+    </Condition>
+    <Condition ID="IsRfidDetected">
+      <input_port name="friendly_supply_zone_exchange"
+                  default="false"
+                  type="bool">己方与兑换区重叠的补给区</input_port>
+      <input_port name="friendly_supply_zone_non_exchange"
+                  default="false"
+                  type="bool">己方与兑换区不重叠的补给区 / RMUL 补给区</input_port>
+      <input_port name="center_gain_point"
+                  default="false"
+                  type="bool">中心增益点（仅 RMUL 适用）</input_port>
+      <input_port name="friendly_fortress_gain_point"
+                  default="false"
+                  type="bool">己方堡垒增益点</input_port>
+      <input_port name="key_port"
+                  default="{@referee_rfidStatus}"
+                  type="rm_interfaces::msg::RfidStatus_&lt;std::allocator&lt;void&gt; &gt;">RfidStatus port on blackboard</input_port>
+    </Condition>
+    <Condition ID="IsStatusOK">
+      <input_port name="ammo_min"
+                  default="0"
+                  type="int">Lower then minimum ammo will return FAILURE</input_port>
+      <input_port name="heat_max"
+                  default="350"
+                  type="int">Maximum heat. NOTE: Sentry heat limit is 400</input_port>
+      <input_port name="hp_min"
+                  default="300"
+                  type="int">Minimum HP. NOTE: Sentry init/max HP is 400</input_port>
+      <input_port name="key_port"
+                  default="{@referee_robotStatus}"
+                  type="rm_interfaces::msg::RobotStatus_&lt;std::allocator&lt;void&gt; &gt;">RobotStatus port on blackboard</input_port>
+    </Condition>
+    <Action ID="PubGoal"
+            editable="true">
+      <input_port name="goal_pose_x"/>
+      <input_port name="goal_pose_y"/>
+      <input_port name="topic_name"
+                  default="/goal_pose"/>
+    </Action>
+    <Action ID="Pursuit"
+            editable="true">
+      <input_port name="key_port"
+                  default="{@tracker_target}"/>
+      <input_port name="topic_name"
+                  default="/goal_pose"/>
+    </Action>
+  </TreeNodesModel>
+
+</root>

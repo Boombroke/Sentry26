@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4">
+  <BehaviorTree ID="rmul">
+    <Sequence>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="0"
+                    heat_max="350"
+                    hp_min="200"
+                    key_port="{@referee_robotStatus}"/>
+        <PubGoal goal_pose_x="4.6"
+                 goal_pose_y="-3.3"
+                 topic_name="/goal_pose"/>
+        <Sequence>
+          <PubGoal goal_pose_x="0"
+                   goal_pose_y="-0.5"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="10000"/>
+        </Sequence>
+      </WhileDoElse>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="rmul1">
+    <Sequence>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="0"
+                    heat_max="350"
+                    hp_min="150"
+                    key_port="{@referee_robotStatus}"/>
+        <Sequence>
+          <PubGoal goal_pose_x="5.0"
+                   goal_pose_y="-2.7"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="1000"/>
+          <PubGoal goal_pose_x="4.4"
+                   goal_pose_y="-3.9"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="1000"/>
+        </Sequence>
+        <Sequence>
+          <PubGoal goal_pose_x="0"
+                   goal_pose_y="-0.5"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="8000"/>
+        </Sequence>
+      </WhileDoElse>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="rmul2">
+    <Sequence>
+      <WhileDoElse>
+        <IsStatusOK ammo_min="0"
+                    heat_max="350"
+                    hp_min="150"
+                    key_port="{@referee_robotStatus}"/>
+        <Sequence>
+          <IsStatusOK ammo_min="0"
+                      heat_max="400"
+                      hp_min="300"
+                      key_port="{@referee_robotStatus}"/>
+          <PubGoal goal_pose_x="6.5"
+                   goal_pose_y="-1.4"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="5000"/>
+          <PubGoal goal_pose_x="-1.61"
+                   goal_pose_y="-4.49"
+                   topic_name="/goal_pose"/>
+          <Sleep msec="5000"/>
+        </Sequence>
+        <Sequence>
+          <PubGoal goal_pose_x="0"
+                   goal_pose_y="-0.5"
+                   topic_name="/goal_pose"/>
+        </Sequence>
+      </WhileDoElse>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="test_add">
+    <WhileDoElse>
+      <IsHPAdd key_port="{@referee_robotStatus}"/>
+      <Sleep msec="10"/>
+      <Sleep msec="10"/>
+    </WhileDoElse>
+  </BehaviorTree>
+
+  <BehaviorTree ID="test_case">
+    <Sequence>
+      <BattlefieldInformation key_port="{@referee_allRobotHP}"
+                              weight="1"/>
+      <Switch3 case_1="0.0"
+               case_2="1.0"
+               case_3="2.0"
+               variable="weight">
+        <PubGoal goal_pose_x="1"
+                 goal_pose_y="0"
+                 topic_name="/goal_pose"/>
+        <PubGoal goal_pose_x="2"
+                 goal_pose_y="0"
+                 topic_name="/goal_pose"/>
+        <PubGoal goal_pose_x="3"
+                 goal_pose_y="0"
+                 topic_name="/goal_pose"/>
+      </Switch3>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="test_home">
+    <Sequence>
+      <PubGoal goal_pose_x="-1.94"
+               goal_pose_y="-5.46"
+               topic_name="/goal_pose"/>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="test_sub">
+    <Sequence>
+      <Sleep msec="10"/>
+      <Sleep msec="10"/>
+      <Sleep msec="10"/>
+      <Sleep msec="10"/>
+      <Sleep msec="10"/>
+    </Sequence>
+  </BehaviorTree>
+
+  <!-- Description of Node Models (used by Groot) -->
+  <TreeNodesModel>
+    <Action ID="BattlefieldInformation"
+            editable="true">
+      <input_port name="key_port"
+                  default="{@referee_allRobotHP}"/>
+      <output_port name="weight"/>
+    </Action>
+    <Condition ID="IsHPAdd"
+               editable="true">
+      <input_port name="key_port"
+                  default="{@referee_robotStatus}"/>
+    </Condition>
+    <Condition ID="IsStatusOK">
+      <input_port name="ammo_min"
+                  default="0"
+                  type="int">Lower then minimum ammo will return FAILURE</input_port>
+      <input_port name="heat_max"
+                  default="350"
+                  type="int">Maximum heat. NOTE: Sentry heat limit is 400</input_port>
+      <input_port name="hp_min"
+                  default="300"
+                  type="int">Minimum HP. NOTE: Sentry init/max HP is 400</input_port>
+      <input_port name="key_port"
+                  default="{@referee_robotStatus}"
+                  type="rm_interfaces::msg::RobotStatus_&lt;std::allocator&lt;void&gt; &gt;">RobotStatus port on blackboard</input_port>
+    </Condition>
+    <Action ID="PubGoal"
+            editable="true">
+      <input_port name="goal_pose_x"/>
+      <input_port name="goal_pose_y"/>
+      <input_port name="topic_name"
+                  default="/goal_pose"/>
+    </Action>
+  </TreeNodesModel>
+
+</root>

@@ -1,0 +1,65 @@
+#ifndef __NAVIGATION_AUTO_H
+#define __NAVIGATION_AUTO_H
+
+#include "cmsis_os.h"
+#include <stdbool.h>
+#include <string.h>
+
+#define APP_RX_DATA_SIZE  2048
+#define APP_TX_DATA_SIZE  2048
+
+{% for p in stm32_to_ros -%}
+#define {{ "%-14s"|format(p.c_header_const) }} {{ p.header_hex }}
+{% endfor %}
+#define FH_RX          {{ nav_packet.header_hex }}
+
+// FreeRTOS task ~1000Hz (osDelay(1)). Interval in ticks.
+{% for p in stm32_to_ros -%}
+#define {{ "%-22s"|format('SEND_' + p.name_upper + '_INTERVAL') }} {{ p.send_interval }}
+{% endfor %}
+
+{% for p in stm32_to_ros -%}
+// {{ p.header_hex }} — {{ p.total_size }} bytes, ~{{ p.frequency_hz }}Hz
+typedef struct
+{
+  uint8_t  header;
+{% for f in p.fields -%}
+  {{ "%-8s"|format(f.c_type) }} {{ f.name }};{% if f.desc %}{% if f.name == 'team_colour' %}  // {{ f.desc }}{% endif %}{% endif %}
+{% endfor -%}
+  uint16_t checksum;
+} __attribute__((packed)) {{ p.c_struct_name }};
+
+{% endfor %}
+typedef struct
+{
+  uint8_t  header;
+{% for f in nav_packet.fields -%}
+  {{ "%-8s"|format(f.c_type) }} {{ f.name }};
+{% endfor -%}
+  uint16_t checksum;
+} __attribute__((packed)) {{ nav_packet.c_struct_name }};
+
+typedef struct
+{
+{% for f in nav_packet.fields -%}
+  {{ "%-8s"|format(f.c_type) }} {{ f.name }};
+{% endfor -%}
+} Navigation;
+
+void Navigation_Init(void);
+void Navigation_Task(void);
+
+{% for p in stm32_to_ros -%}
+void send_{{ p.name_camel }}Packet(void);
+{% endfor %}
+void receive_Navigation(void);
+void Navigation_Parm(Navigation *navigation);
+void Append_CRC16_Check_Sum_Buf(uint8_t *buf, uint32_t len);
+
+{% for p in stm32_to_ros -%}
+extern {{ "%-16s"|format(p.c_struct_name) }} {{ "%-10s"|format('Smsg_' + p.key) }};
+{% endfor %}
+extern ReceivePacket    Rmsg;
+extern Navigation       navigation;
+
+#endif

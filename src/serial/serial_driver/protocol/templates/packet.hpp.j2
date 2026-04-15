@@ -1,0 +1,66 @@
+#ifndef RM_SERIAL_DRIVER__PACKET_HPP_
+#define RM_SERIAL_DRIVER__PACKET_HPP_
+
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <vector>
+
+namespace rm_serial_driver
+{
+
+{% for p in packets -%}
+constexpr uint8_t {{ "%-16s"|format(p.cpp_header_const) }} = {{ p.header_hex }};
+{% endfor %}
+
+{% for p in stm32_to_ros -%}
+// {{ p.header_hex }} — {{ p.total_size }} bytes, ~{{ p.frequency_hz }}Hz
+struct {{ p.cpp_struct_name }}
+{
+  uint8_t  header = {{ p.cpp_header_const }};
+{% for f in p.fields -%}
+  {{ "%-8s"|format(f.cpp_type) }} {{ "%-27s"|format(f.name + ';') }}{% if f.desc %}//{{ f.desc }}{% endif %}
+{% endfor -%}
+  uint16_t checksum = 0;
+} __attribute__((packed));
+
+{% endfor %}
+// {{ nav_packet.header_hex }} — {{ nav_packet.total_size }} bytes, ROS→电控导航速度指令
+struct {{ nav_packet.cpp_struct_name }}
+{
+  uint8_t  header = {{ nav_packet.cpp_header_const }};
+{% for f in nav_packet.fields -%}
+  {{ "%-8s"|format(f.cpp_type) }} {{ "%-27s"|format(f.name + ';') }}{% if f.desc %}//{{ f.desc }}{% endif %}
+{% endfor -%}
+  uint16_t checksum = 0;
+} __attribute__((packed));
+
+inline size_t packetSizeForHeader(uint8_t header)
+{
+  switch (header) {
+{% for p in stm32_to_ros -%}
+    case {{ p.cpp_header_const }}:    return sizeof({{ p.cpp_struct_name }});
+{% endfor %}
+    default:                 return 0;
+  }
+}
+
+template <typename T>
+inline T fromVector(const std::vector<uint8_t> & data)
+{
+  T packet;
+  std::memcpy(reinterpret_cast<uint8_t *>(&packet), data.data(),
+              std::min(data.size(), sizeof(T)));
+  return packet;
+}
+
+inline std::vector<uint8_t> toVector(const {{ nav_packet.cpp_struct_name }} & data)
+{
+  std::vector<uint8_t> packet(sizeof({{ nav_packet.cpp_struct_name }}));
+  std::memcpy(packet.data(), reinterpret_cast<const uint8_t *>(&data), sizeof({{ nav_packet.cpp_struct_name }}));
+  return packet;
+}
+
+}  // namespace rm_serial_driver
+
+#endif  // RM_SERIAL_DRIVER__PACKET_HPP_

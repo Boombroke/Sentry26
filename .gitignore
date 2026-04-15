@@ -1,0 +1,20 @@
+build/
+install/
+log/
+AGENTS.md
+MEMORY.md
+.cache/
+__pycache__/
+*.pyc
+
+# 大文件（点云、地图、3D 模型等）
+*.pcd
+*.pgm
+*.stl
+*.dae
+
+# 地图和点云数据目录（需单独下载）
+src/sentry_nav_bringup/map/reality/
+src/sentry_nav_bringup/map/simulation/
+src/sentry_nav_bringup/pcd/reality/
+src/sentry_nav_bringup/pcd/simulation/

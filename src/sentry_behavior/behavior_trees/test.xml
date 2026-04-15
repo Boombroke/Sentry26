@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4">
+  <BehaviorTree ID="test_uphill">
+    <Sequence>
+      <PubGoal goal_pose_x="0.0"
+               goal_pose_y="0.0"
+               topic_name="/goal_pose"/>
+      <Sleep msec="4000"/>
+    </Sequence>
+  </BehaviorTree>
+
+  <!-- Description of Node Models (used by Groot) -->
+  <TreeNodesModel>
+    <Action ID="PubGoal"
+            editable="true">
+      <input_port name="goal_pose_x"/>
+      <input_port name="goal_pose_y"/>
+      <input_port name="topic_name"
+                  default="/goal_pose"/>
+    </Action>
+  </TreeNodesModel>
+
+</root>

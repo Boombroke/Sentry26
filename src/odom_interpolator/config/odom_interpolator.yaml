@@ -1,0 +1,23 @@
+odom_interpolator:
+  ros__parameters:
+    # 里程计订阅话题
+    odom_topic: "/odom"
+    
+    # 插值后的里程计发布话题
+    interpolated_odom_topic: "/odom_interpolated"
+    
+    # 差分速度发布话题
+    diff_vel_topic: "/cmd_vel_diff"
+    
+    # 外部速度命令订阅话题
+    cmd_vel_topic: "/cmd_vel"
+    
+    # 里程计坐标系（通常为 state_estimation 或 odom）
+    odom_frame_id: "odom"
+    
+    # 机器人坐标系（通常为 chassis_link 或 base_link）
+    robot_frame_id: "gimbal_yaw_fake"
+    
+    # 插值频率 (Hz)
+    interpolation_rate: 100.0
+

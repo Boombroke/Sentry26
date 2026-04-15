@@ -1,0 +1,23 @@
+odom_interpolator:
+  ros__parameters:
+    # 里程计话题名称
+    odom_topic: "/Odometry"
+    
+    # 插值后的里程计话题名称
+    interpolated_odom_topic: "/odom_interpolated"
+    
+    # 差分速度话题名称
+    diff_vel_topic: "/cmd_vel_diff"
+    
+    # cmd_vel话题名称（发布给下位的速度命令）
+    cmd_vel_topic: "/cmd_vel"
+    
+    # 速度标记可视化话题名称
+    velocity_marker_topic: "/velocity_markers"
+    
+    # 插值发布频率 (Hz)
+    interpolation_rate: 100.0
+    
+    # 箭头缩放因子（用于可视化箭头长度）
+    arrow_scale: 1.0
+

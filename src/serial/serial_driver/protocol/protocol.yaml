@@ -1,0 +1,50 @@
+version: "2.0"
+
+# type_map 用于代码生成器将抽象类型映射到各语言的具体类型
+type_map:
+  uint8:  { c: uint8_t,  cpp: uint8_t,  python_struct: B, size: 1 }
+  uint16: { c: uint16_t, cpp: uint16_t, python_struct: H, size: 2 }
+  float:  { c: float,    cpp: float,    python_struct: f, size: 4 }
+
+packets:
+  imu:
+    header: 0xA1
+    direction: stm32_to_ros
+    frequency_hz: 1000
+    fields:
+      - { name: pitch, type: float, unit: rad, desc: "云台 pitch" }
+      - { name: yaw,   type: float, unit: rad, desc: "云台 yaw" }
+
+  status:
+    header: 0xA2
+    direction: stm32_to_ros
+    frequency_hz: 10
+    fields:
+      - { name: game_progress,             type: uint8,  desc: "游戏阶段 0-未开始 1-准备 2-自检 3-倒计时 4-比赛中 5-结算" }
+      - { name: stage_remain_time,         type: uint16, unit: s,   desc: "当前阶段剩余时间" }
+      - { name: current_hp,               type: uint16, desc: "机器人当前血量" }
+      - { name: projectile_allowance_17mm, type: uint16, desc: "17mm弹丸剩余发射次数" }
+      - { name: team_colour,              type: uint8,  desc: "1=red 0=blue" }
+      - { name: rfid_base,                type: uint8,  desc: "己方基地增益点" }
+
+  hp:
+    header: 0xA3
+    direction: stm32_to_ros
+    frequency_hz: 2
+    fields:
+      - { name: ally_1_robot_hp, type: uint16, desc: "己方1号英雄血量" }
+      - { name: ally_2_robot_hp, type: uint16, desc: "己方2号工程血量" }
+      - { name: ally_3_robot_hp, type: uint16, desc: "己方3号步兵血量" }
+      - { name: ally_4_robot_hp, type: uint16, desc: "己方4号步兵血量" }
+      - { name: ally_7_robot_hp, type: uint16, desc: "己方7号哨兵血量" }
+      - { name: ally_outpost_hp, type: uint16, desc: "己方前哨站血量" }
+      - { name: ally_base_hp,   type: uint16, desc: "己方基地血量" }
+
+  nav:
+    header: 0xB5
+    direction: ros_to_stm32
+    frequency_hz: 20
+    fields:
+      - { name: vel_x, type: float, unit: m/s,   desc: "底盘x方向线速度" }
+      - { name: vel_y, type: float, unit: m/s,   desc: "底盘y方向线速度" }
+      - { name: vel_w, type: float, unit: rad/s, desc: "底盘角速度" }
