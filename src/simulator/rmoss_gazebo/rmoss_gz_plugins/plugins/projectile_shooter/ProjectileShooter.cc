@@ -16,35 +16,35 @@
 #include <list>
 #include <sstream>
 
-#include <ignition/common/Profiler.hh>
-#include <ignition/common/SystemPaths.hh>
-#include <ignition/common/Util.hh>
-#include <ignition/plugin/Register.hh>
-#include <ignition/transport/Node.hh>
+#include <gz/common/Profiler.hh>
+#include <gz/common/SystemPaths.hh>
+#include <gz/common/Util.hh>
+#include <gz/plugin/Register.hh>
+#include <gz/transport/Node.hh>
 
-#include "ignition/gazebo/components/ContactSensorData.hh"
-#include "ignition/gazebo/components/Name.hh"
-#include "ignition/gazebo/components/ParentEntity.hh"
-#include <ignition/gazebo/components/LinearVelocityCmd.hh>
-#include <ignition/gazebo/components/Pose.hh>
-#include <ignition/gazebo/components/World.hh>
+#include "gz/sim/components/ContactSensorData.hh"
+#include "gz/sim/components/Name.hh"
+#include "gz/sim/components/ParentEntity.hh"
+#include <gz/sim/components/LinearVelocityCmd.hh>
+#include <gz/sim/components/Pose.hh>
+#include <gz/sim/components/World.hh>
 
-#include <ignition/gazebo/Conversions.hh>
-#include <ignition/gazebo/Link.hh>
-#include <ignition/gazebo/Model.hh>
-#include <ignition/gazebo/SdfEntityCreator.hh>
-#include <ignition/gazebo/Util.hh>
+#include <gz/sim/Conversions.hh>
+#include <gz/sim/Link.hh>
+#include <gz/sim/Model.hh>
+#include <gz/sim/SdfEntityCreator.hh>
+#include <gz/sim/Util.hh>
 
-#include <ignition/math/Pose3.hh>
-#include <ignition/math/Quaternion.hh>
-#include <ignition/math/Vector3.hh>
+#include <gz/math/Pose3.hh>
+#include <gz/math/Quaternion.hh>
+#include <gz/math/Vector3.hh>
 
 #include "ProjectileShooter.hh"
 #include <sdf/Model.hh>
 #include <sdf/Root.hh>
 
-using namespace ignition;
-using namespace gazebo;
+using namespace gz;
+using namespace sim;
 using namespace systems;
 
 struct ProjectileInfo {
@@ -67,15 +67,15 @@ struct ProjectileInfo {
     }
 };
 
-class ignition::gazebo::systems::ProjectileShooterPrivate {
+class gz::sim::systems::ProjectileShooterPrivate {
 public:
-    void OnCmd(const ignition::msgs::Int32& _msg);
-    void OnSetVel(const ignition::msgs::Double& _msg);
-    void PreUpdate(const ignition::gazebo::UpdateInfo& _info, 
-                    ignition::gazebo::EntityComponentManager& _ecm);
-    void publishAttackInfo(const ignition::gazebo::UpdateInfo& _info,
-             ignition::gazebo::EntityComponentManager& _ecm,Entity _targetCollision);
-    void publishShootInfo(const ignition::gazebo::UpdateInfo& _info);
+    void OnCmd(const gz::msgs::Int32& _msg);
+    void OnSetVel(const gz::msgs::Double& _msg);
+    void PreUpdate(const gz::sim::UpdateInfo& _info, 
+                    gz::sim::EntityComponentManager& _ecm);
+    void publishAttackInfo(const gz::sim::UpdateInfo& _info,
+             gz::sim::EntityComponentManager& _ecm,Entity _targetCollision);
+    void publishShootInfo(const gz::sim::UpdateInfo& _info);
 
 public:
     // node and tool
@@ -117,7 +117,7 @@ void ProjectileShooter::Configure(const Entity& _entity,
     this->dataPtr->model = _entity;
     auto modelWrapper = Model(_entity);
     if (!modelWrapper.Valid(_ecm)) {
-        ignerr << "ProjectileShooter plugin should be attached to a model entity. \
+        gzerr << "ProjectileShooter plugin should be attached to a model entity. \
                      Failed to initialize." << std::endl;
         return;
     }
@@ -126,7 +126,7 @@ void ProjectileShooter::Configure(const Entity& _entity,
     auto linkName= _sdf->Get<std::string>("shooter_link");
     this->dataPtr->shooterLink = modelWrapper.LinkByName(_ecm, linkName);
     if (this->dataPtr->shooterLink == kNullEntity) {
-        ignerr << "shooter link with name[" << linkName << "] not found. " << std::endl;
+        gzerr << "shooter link with name[" << linkName << "] not found. " << std::endl;
         return;
     }
     if (_sdf->HasElement("shooter_name")) {
@@ -135,7 +135,7 @@ void ProjectileShooter::Configure(const Entity& _entity,
     if (_sdf->HasElement("shooter_offset")) {
         this->dataPtr->shooterOffset = _sdf->Get<math::Pose3d>("shooter_offset");
     } else{
-        ignerr << "The tag <shooter_offset> is not found. " << std::endl;
+        gzerr << "The tag <shooter_offset> is not found. " << std::endl;
         return;  
     }
     if (_sdf->HasElement("projectile_velocity")) {
@@ -145,7 +145,7 @@ void ProjectileShooter::Configure(const Entity& _entity,
     if (_sdf->HasElement("projectile_uri")) {
         projectile_uri = _sdf->Get<std::string>("projectile_uri");
     } else {
-        ignerr << "The tag <projectile_uri> is not found." << std::endl;
+        gzerr << "The tag <projectile_uri> is not found." << std::endl;
         return;
     }
     std::string shootInfoTopic = "/referee_system/shoot_info";
@@ -157,18 +157,18 @@ void ProjectileShooter::Configure(const Entity& _entity,
         attackInfoTopic = _sdf->Get<std::string>("attack_info_topic");
     }
     // Load projectile model sdf
-    ignition::common::SystemPaths systemPaths;
+    gz::common::SystemPaths systemPaths;
     sdf::Root projectileSdfRoot;
     sdf::Errors errors = projectileSdfRoot.Load(systemPaths.FindFileURI(projectile_uri));
     if (!errors.empty()) {
-        ignerr << "Load Projectile Model:"<<projectile_uri<< std::endl;
+        gzerr << "Load Projectile Model:"<<projectile_uri<< std::endl;
         for (const auto& e : errors) {
-            ignerr << e.Message() << std::endl;
+            gzerr << e.Message() << std::endl;
         }
         return;
     }
     if (projectileSdfRoot.Model() == nullptr) {
-        ignerr << "Projectile Model not found" << std::endl;
+        gzerr << "Projectile Model not found" << std::endl;
         return;
     }
     this->dataPtr->projectileSdfModel = *projectileSdfRoot.Model();
@@ -185,44 +185,44 @@ void ProjectileShooter::Configure(const Entity& _entity,
     this->dataPtr->world = _ecm.EntityByComponents(components::World());
     this->dataPtr->initialized = true;
     //debug info
-    igndbg << "[" << this->dataPtr->modelName << " ProjectileShooter Info]:" << std::endl;
-    igndbg << "Shooter name: " << this->dataPtr->shooterName << std::endl;
-    igndbg << "Shooter offset: " << this->dataPtr->shooterOffset << std::endl;
-    igndbg << "Projectile name: " << this->dataPtr->projectileSdfModel.Name() << std::endl;
-    igndbg << "Shoot CMD Topic: " << shootCmdTopic << std::endl;
-    igndbg << "Set Vel Topic: " << setVelTopic << std::endl;
-    igndbg << "Shoot Info Topic: " << shootInfoTopic << std::endl;
-    igndbg << "Attack Info Topic: " << attackInfoTopic << std::endl;
+    gzdbg << "[" << this->dataPtr->modelName << " ProjectileShooter Info]:" << std::endl;
+    gzdbg << "Shooter name: " << this->dataPtr->shooterName << std::endl;
+    gzdbg << "Shooter offset: " << this->dataPtr->shooterOffset << std::endl;
+    gzdbg << "Projectile name: " << this->dataPtr->projectileSdfModel.Name() << std::endl;
+    gzdbg << "Shoot CMD Topic: " << shootCmdTopic << std::endl;
+    gzdbg << "Set Vel Topic: " << setVelTopic << std::endl;
+    gzdbg << "Shoot Info Topic: " << shootInfoTopic << std::endl;
+    gzdbg << "Attack Info Topic: " << attackInfoTopic << std::endl;
 }
 
-void ProjectileShooter::PreUpdate(const ignition::gazebo::UpdateInfo& _info,
-    ignition::gazebo::EntityComponentManager& _ecm)
+void ProjectileShooter::PreUpdate(const gz::sim::UpdateInfo& _info,
+    gz::sim::EntityComponentManager& _ecm)
 {
     this->dataPtr->PreUpdate(_info, _ecm);
 }
 
 /******************implementation for ProjectileShooterPrivate******************/
 
-void ProjectileShooterPrivate::OnCmd(const ignition::msgs::Int32& _msg)
+void ProjectileShooterPrivate::OnCmd(const gz::msgs::Int32& _msg)
 {
     std::lock_guard<std::mutex> lock(this->waitShootNumMutex);
     if (_msg.data() >=0) {
         this->waitShootNum = _msg.data();
     }
-    // ignmsg << "ProjectileShooter OnCmd msg: [" << _msg.data() << "]" << std::endl;
+    // gzmsg << "ProjectileShooter OnCmd msg: [" << _msg.data() << "]" << std::endl;
 }
 
 
-void ProjectileShooterPrivate::OnSetVel(const ignition::msgs::Double& _msg)
+void ProjectileShooterPrivate::OnSetVel(const gz::msgs::Double& _msg)
 {
     std::lock_guard<std::mutex> lock(this->waitShootNumMutex);
     if (_msg.data() >0 && _msg.data() < 30) {
         this->shootVel = _msg.data();
     }
-    // ignmsg << "ProjectileShooter OnSetVel msg: [" << _msg.data() << "]" << std::endl;
+    // gzmsg << "ProjectileShooter OnSetVel msg: [" << _msg.data() << "]" << std::endl;
 }
 
-void ProjectileShooterPrivate::PreUpdate(const ignition::gazebo::UpdateInfo& _info, ignition::gazebo::EntityComponentManager& _ecm)
+void ProjectileShooterPrivate::PreUpdate(const gz::sim::UpdateInfo& _info, gz::sim::EntityComponentManager& _ecm)
 {
     // do nothing if it's paused or not initialized.
     if (_info.paused || !this->initialized) {
@@ -292,7 +292,7 @@ void ProjectileShooterPrivate::PreUpdate(const ignition::gazebo::UpdateInfo& _in
                 Entity collision2 = contacts.contact(0).collision2().id();
                 Entity targetCollision = (collision == collision1) ? collision2 : collision1;
                 this->publishAttackInfo(_info,_ecm,targetCollision);
-                //ignmsg << "ProjectileShooter contact_size: [" << contacts.contact_size() << "]" << std::endl;
+                //gzmsg << "ProjectileShooter contact_size: [" << contacts.contact_size() << "]" << std::endl;
             }
             double t = std::chrono::duration_cast<std::chrono::milliseconds>(_info.simTime - pInfo.spawnTime).count();
             if (contacts.contact_size() > 0 || t > 4000) {
@@ -305,8 +305,8 @@ void ProjectileShooterPrivate::PreUpdate(const ignition::gazebo::UpdateInfo& _in
     }
 }
 
-void ProjectileShooterPrivate::publishAttackInfo(const ignition::gazebo::UpdateInfo& _info,
-             ignition::gazebo::EntityComponentManager& _ecm,Entity _targetCollision){
+void ProjectileShooterPrivate::publishAttackInfo(const gz::sim::UpdateInfo& _info,
+             gz::sim::EntityComponentManager& _ecm,Entity _targetCollision){
     std::string target = scopedName(_targetCollision, _ecm, "/", false);
     std::string result = this->modelName+"/" + this->shooterName+"," + target;
     // publish msg
@@ -314,23 +314,23 @@ void ProjectileShooterPrivate::publishAttackInfo(const ignition::gazebo::UpdateI
     msg.mutable_header()->mutable_stamp()->CopyFrom(convert<msgs::Time>(_info.simTime));
     msg.set_data(result);
     this->attackInfoPub.Publish(msg);
-    // ignmsg << "ProjectileShooter AttackInfo : [" << result << "]" << std::endl;
+    // gzmsg << "ProjectileShooter AttackInfo : [" << result << "]" << std::endl;
 }
 
-void ProjectileShooterPrivate::publishShootInfo(const ignition::gazebo::UpdateInfo& _info){
+void ProjectileShooterPrivate::publishShootInfo(const gz::sim::UpdateInfo& _info){
     // publish msg
     std::string result = this->modelName+"/"+this->shooterName+","+ std::to_string(this->shootVel);
     msgs::StringMsg msg;
     msg.mutable_header()->mutable_stamp()->CopyFrom(convert<msgs::Time>(_info.simTime));
     msg.set_data(result);
     this->shootInfoPub.Publish(msg);
-    // ignmsg << "ProjectileShooter ShootInfo : [" << result << "]" << std::endl;
+    // gzmsg << "ProjectileShooter ShootInfo : [" << result << "]" << std::endl;
 }
 
 /******************register*************************************************/
-IGNITION_ADD_PLUGIN(ProjectileShooter,
-    ignition::gazebo::System,
+GZ_ADD_PLUGIN(ProjectileShooter,
+    gz::sim::System,
     ProjectileShooter::ISystemConfigure,
     ProjectileShooter::ISystemPreUpdate)
 
-IGNITION_ADD_PLUGIN_ALIAS(ProjectileShooter, "ignition::gazebo::systems::ProjectileShooter")
+GZ_ADD_PLUGIN_ALIAS(ProjectileShooter, "gz::sim::systems::ProjectileShooter")

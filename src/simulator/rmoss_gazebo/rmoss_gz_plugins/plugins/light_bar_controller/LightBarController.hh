@@ -9,21 +9,21 @@
  *
  ******************************************************************************/
 
-#ifndef IGNITION_GAZEBO_SYSTEMS_LIGHT_BAR_CONTROLLER_HH
-#define IGNITION_GAZEBO_SYSTEMS_LIGHT_BAR_CONTROLLER_HH
+#ifndef GZ_SIM_SYSTEMS_LIGHT_BAR_CONTROLLER_HH
+#define GZ_SIM_SYSTEMS_LIGHT_BAR_CONTROLLER_HH
 
 #include <memory>
-#include <ignition/gazebo/System.hh>
+#include <gz/sim/System.hh>
 
-namespace ignition
+namespace gz
 {
-    namespace gazebo
+    namespace sim
     {
         namespace systems
         {
             class LightBarControllerPrivate;
-            class IGNITION_GAZEBO_VISIBLE LightBarController
-                : public ignition::gazebo::System,
+            class GZ_SIM_VISIBLE LightBarController
+                : public gz::sim::System,
                   public ISystemConfigure,
                   public ISystemPreUpdate
             {
@@ -36,13 +36,13 @@ namespace ignition
                                const std::shared_ptr<const sdf::Element> &_sdf,
                                EntityComponentManager &_ecm,
                                EventManager &_eventMgr) override;
-                void PreUpdate(const ignition::gazebo::UpdateInfo &_info,
-                               ignition::gazebo::EntityComponentManager &_ecm) override;
+                void PreUpdate(const gz::sim::UpdateInfo &_info,
+                               gz::sim::EntityComponentManager &_ecm) override;
             private:
                 std::unique_ptr<LightBarControllerPrivate> dataPtr;
             };
         } // namespace systems
-    }     // namespace gazebo
-} // namespace ignition
+    }     // namespace sim
+} // namespace gz
 
-#endif //IGNITION_GAZEBO_SYSTEMS_LIGHT_BAR_CONTROLLER_HH
+#endif //GZ_SIM_SYSTEMS_LIGHT_BAR_CONTROLLER_HH

@@ -10,33 +10,33 @@
  ******************************************************************************/
 #include <mutex>
 #include <map>
-#include <ignition/common/Util.hh>
-#include <ignition/plugin/Register.hh>
-#include <ignition/transport/Node.hh>
+#include <gz/common/Util.hh>
+#include <gz/plugin/Register.hh>
+#include <gz/transport/Node.hh>
 
-#include <ignition/gazebo/components/ParentEntity.hh>
-#include <ignition/gazebo/components/Visual.hh>
-#include <ignition/gazebo/components/Model.hh>
-#include <ignition/gazebo/components/Name.hh>
-#include <ignition/gazebo/components/Link.hh>
-#include <ignition/gazebo/components/Material.hh>
+#include <gz/sim/components/ParentEntity.hh>
+#include <gz/sim/components/Visual.hh>
+#include <gz/sim/components/Model.hh>
+#include <gz/sim/components/Name.hh>
+#include <gz/sim/components/Link.hh>
+#include <gz/sim/components/Material.hh>
 
-#include <ignition/gazebo/Link.hh>
-#include <ignition/gazebo/Model.hh>
-#include <ignition/gazebo/Util.hh>
-#include <ignition/gazebo/Conversions.hh>
+#include <gz/sim/Link.hh>
+#include <gz/sim/Model.hh>
+#include <gz/sim/Util.hh>
+#include <gz/sim/Conversions.hh>
 
 #include "LightBarController.hh"
 
-using namespace ignition;
-using namespace gazebo;
+using namespace gz;
+using namespace sim;
 using namespace systems;
 
 
 sdf::Material GetMaterial(int state){
     sdf::Material m;
-    ignition::math::Color color;
-    ignition::math::Color emissiveColor;
+    gz::math::Color color;
+    gz::math::Color emissiveColor;
 
     if(state == 0){
         color.Set(1, 1, 1, 1);
@@ -72,12 +72,12 @@ struct VisualEntityInfo {
     }
 };
 
-class ignition::gazebo::systems::LightBarControllerPrivate
+class gz::sim::systems::LightBarControllerPrivate
 {
 public:
-    void OnCmd(const ignition::msgs::Int32 &_msg);
-    void Init(ignition::gazebo::EntityComponentManager &_ecm);
-    void ApplyMaterial(ignition::gazebo::EntityComponentManager &_ecm,
+    void OnCmd(const gz::msgs::Int32 &_msg);
+    void Init(gz::sim::EntityComponentManager &_ecm);
+    void ApplyMaterial(gz::sim::EntityComponentManager &_ecm,
                        const sdf::Material &_material);
 
 public:
@@ -106,7 +106,7 @@ void LightBarController::Configure(const Entity &_entity,
     this->dataPtr->model = Model(_entity);
     if (!this->dataPtr->model.Valid(_ecm))
     {
-        ignerr << "LightBarController plugin should be attached to a model entity. Failed to initialize." << std::endl;
+        gzerr << "LightBarController plugin should be attached to a model entity. Failed to initialize." << std::endl;
         return;
     }
     // Get params from SDF
@@ -124,7 +124,7 @@ void LightBarController::Configure(const Entity &_entity,
             this->dataPtr->targetState = color_map[color];
             this->dataPtr->change = true;
         }else{
-            ignwarn << "LightBarController color [" << color << "] is invalid." << std::endl;
+            gzwarn << "LightBarController color [" << color << "] is invalid." << std::endl;
         }
     }
     // link_visual
@@ -141,11 +141,11 @@ void LightBarController::Configure(const Entity &_entity,
     // Subscribe to commands
     std::string topic{this->dataPtr->model.Name(_ecm) +"/"+controller_name+ "/set_state"};
     this->dataPtr->node.Subscribe(topic, &LightBarControllerPrivate::OnCmd, this->dataPtr.get());
-    ignmsg << "LightBarController subscribing to int32 messages on [" << topic << "]" << std::endl;
+    gzmsg << "LightBarController subscribing to int32 messages on [" << topic << "]" << std::endl;
 }
 
-void LightBarController::PreUpdate(const ignition::gazebo::UpdateInfo &_info,
-                             ignition::gazebo::EntityComponentManager &_ecm)
+void LightBarController::PreUpdate(const gz::sim::UpdateInfo &_info,
+                             gz::sim::EntityComponentManager &_ecm)
 {
     if(_info.paused){
         return;
@@ -166,14 +166,14 @@ void LightBarController::PreUpdate(const ignition::gazebo::UpdateInfo &_info,
 
 
 /******************implementation for LightBarControllerPrivate******************/
-void LightBarControllerPrivate::OnCmd(const ignition::msgs::Int32 &_msg)
+void LightBarControllerPrivate::OnCmd(const gz::msgs::Int32 &_msg)
 {
     std::lock_guard<std::mutex> lock(this->targetMutex);
     this->targetState = _msg.data();
     this->change = true;
 }
 
-void LightBarControllerPrivate::Init(ignition::gazebo::EntityComponentManager &_ecm){
+void LightBarControllerPrivate::Init(gz::sim::EntityComponentManager &_ecm){
     for(const auto &linkVisual : this->linkVisuals){
         auto v = common::split(linkVisual,"/");
         if(v.size() == 2){
@@ -187,13 +187,13 @@ void LightBarControllerPrivate::Init(ignition::gazebo::EntityComponentManager &_
                 continue;
             }
         }
-        ignerr << "LightBarController: visual element of link ["
+        gzerr << "LightBarController: visual element of link ["
                << linkVisual << "] is invalid" << std::endl;
     }
 }
 
 void LightBarControllerPrivate::ApplyMaterial(
-    ignition::gazebo::EntityComponentManager &_ecm,
+    gz::sim::EntityComponentManager &_ecm,
     const sdf::Material &_material)
 {
     for(auto &info : this->visualEntityInfos){
@@ -209,10 +209,10 @@ void LightBarControllerPrivate::ApplyMaterial(
 }
 
 /******************register*************************************************/
-IGNITION_ADD_PLUGIN(LightBarController,
-                    ignition::gazebo::System,
+GZ_ADD_PLUGIN(LightBarController,
+                    gz::sim::System,
                     LightBarController::ISystemConfigure,
                     LightBarController::ISystemPreUpdate
                     )
 
-IGNITION_ADD_PLUGIN_ALIAS(LightBarController, "ignition::gazebo::systems::LightBarController")
+GZ_ADD_PLUGIN_ALIAS(LightBarController, "gz::sim::systems::LightBarController")

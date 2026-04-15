@@ -13,21 +13,21 @@
 // limitations under the License.
 
 
-#ifndef IGNITION_GAZEBO_SYSTEMS_MECANUM_DRIVE_HH
-#define IGNITION_GAZEBO_SYSTEMS_MECANUM_DRIVE_HH
+#ifndef GZ_SIM_SYSTEMS_MECANUM_DRIVE_HH
+#define GZ_SIM_SYSTEMS_MECANUM_DRIVE_HH
 
 #include <memory>
-#include <ignition/gazebo/System.hh>
+#include <gz/sim/System.hh>
 
-namespace ignition
+namespace gz
 {
-    namespace gazebo
+    namespace sim
     {
         namespace systems
         {
             class MecanumDrive2Private;
-            class IGNITION_GAZEBO_VISIBLE MecanumDrive2
-                : public ignition::gazebo::System,
+            class GZ_SIM_VISIBLE MecanumDrive2
+                : public gz::sim::System,
                   public ISystemConfigure,
                   public ISystemPreUpdate,
                   public ISystemPostUpdate
@@ -41,16 +41,16 @@ namespace ignition
                                const std::shared_ptr<const sdf::Element> &_sdf,
                                EntityComponentManager &_ecm,
                                EventManager &_eventMgr) override;
-                void PreUpdate(const ignition::gazebo::UpdateInfo &_info,
-                               ignition::gazebo::EntityComponentManager &_ecm) override;
-                void PostUpdate(const ignition::gazebo::UpdateInfo &_info,
-                                const ignition::gazebo::EntityComponentManager &_ecm) override;
+                void PreUpdate(const gz::sim::UpdateInfo &_info,
+                               gz::sim::EntityComponentManager &_ecm) override;
+                void PostUpdate(const gz::sim::UpdateInfo &_info,
+                                const gz::sim::EntityComponentManager &_ecm) override;
 
             private:
                 std::unique_ptr<MecanumDrive2Private> dataPtr;
             };
         } // namespace systems
-    }     // namespace gazebo
-} // namespace ignition
+    }     // namespace sim
+} // namespace gz
 
-#endif //IGNITION_GAZEBO_SYSTEMS_MECANUM_DRIVE_HH
+#endif //GZ_SIM_SYSTEMS_MECANUM_DRIVE_HH
