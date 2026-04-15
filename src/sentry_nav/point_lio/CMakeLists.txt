@@ -5,16 +5,13 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-ADD_COMPILE_OPTIONS(-std=c++17)
-set(CMAKE_CXX_FLAGS "-std=c++17 -O3")
-
 add_definitions(-DROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/\")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fexceptions")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -pthread -fexceptions")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fexceptions")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
@@ -41,7 +38,6 @@ endif()
 # Find packages
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(rclpy REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -54,7 +50,7 @@ find_package(livox_ros_driver2 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(glog REQUIRED)
 find_package(OpenMP QUIET)
-find_package(PythonLibs REQUIRED) # Consider using Pybind11 for ROS2
+find_package(Python3 COMPONENTS Development REQUIRED)
 find_path(MATPLOTLIB_CPP_INCLUDE_DIRS "matplotlibcpp.h")
 
 if(OPENMP_FOUND)
@@ -66,7 +62,6 @@ include_directories(
   include
   ${EIGEN3_INCLUDE_DIR}
   ${PCL_INCLUDE_DIRS}
-  ${PYTHON_INCLUDE_DIRS}
 )
 
 link_directories(
@@ -86,7 +81,6 @@ add_executable(pointlio_mapping
 
 ament_target_dependencies(pointlio_mapping
   rclcpp
-  rclpy
   geometry_msgs
   nav_msgs
   sensor_msgs
@@ -98,8 +92,7 @@ ament_target_dependencies(pointlio_mapping
   livox_ros_driver2
 )
 
-target_link_libraries(pointlio_mapping ${PCL_LIBRARIES} ${PYTHON_LIBRARIES})
-target_include_directories(pointlio_mapping PRIVATE ${PYTHON_INCLUDE_DIRS})
+target_link_libraries(pointlio_mapping ${PCL_LIBRARIES} Python3::Python)
 
 # Install the executable
 install(TARGETS
@@ -115,7 +108,6 @@ install(
 # Export dependencies
 ament_export_dependencies(
   rclcpp
-  rclpy
   geometry_msgs
   nav_msgs
   sensor_msgs
