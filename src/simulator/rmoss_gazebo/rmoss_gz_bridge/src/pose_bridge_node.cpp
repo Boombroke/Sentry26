@@ -18,6 +18,9 @@
 #include <memory>
 #include <string>
 
+#include <gz/msgs/pose.pb.h>
+#include <gz/msgs/boolean.pb.h>
+
 #include "ros_gz_bridge/convert.hpp"
 
 namespace rmoss_gz_bridge

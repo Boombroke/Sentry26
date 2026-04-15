@@ -23,6 +23,7 @@
 #include <rmoss_interfaces/msg/rfid_status_array.hpp>
 #include <rmoss_interfaces/msg/rfid_status.hpp>
 #include "gz/transport/Node.hh"
+#include <gz/msgs/pose.pb.h>
 #include "rclcpp/rclcpp.hpp"
 #include "tf2_msgs/msg/tf_message.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"

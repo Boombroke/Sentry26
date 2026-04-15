@@ -18,7 +18,7 @@
 #include <memory>
 
 #include "rmoss_interfaces/srv/get_camera_info.hpp"
-#include "cv_bridge/cv_bridge.h"
+#include "cv_bridge/cv_bridge.hpp"
 
 using namespace std::chrono_literals;
 

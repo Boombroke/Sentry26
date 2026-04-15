@@ -19,6 +19,7 @@
 #include <mutex>
 
 #include "gz/transport/Node.hh"
+#include <gz/msgs/imu.pb.h>
 #include "hardware_interface.hpp"
 #include "rclcpp/clock.hpp"
 #include "rmoss_interfaces/msg/gimbal.hpp"

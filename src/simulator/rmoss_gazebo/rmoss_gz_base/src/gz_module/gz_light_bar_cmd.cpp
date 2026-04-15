@@ -16,6 +16,8 @@
 #include <memory>
 #include <string>
 
+#include <gz/msgs/int32.pb.h>
+
 namespace rmoss_gz_base
 {
 

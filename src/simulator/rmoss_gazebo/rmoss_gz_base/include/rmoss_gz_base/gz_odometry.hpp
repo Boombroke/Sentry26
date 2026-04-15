@@ -19,6 +19,7 @@
 #include <mutex>
 
 #include "gz/transport/Node.hh"
+#include <gz/msgs/odometry.pb.h>
 #include "hardware_interface.hpp"
 #include "rclcpp/clock.hpp"
 #include "nav_msgs/msg/odometry.hpp"

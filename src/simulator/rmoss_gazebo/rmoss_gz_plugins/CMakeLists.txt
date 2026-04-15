@@ -24,6 +24,7 @@ add_library(MecanumDrive2 SHARED plugins/mecanum_drive2/MecanumDrive2.cc)
 
 target_link_libraries(MecanumDrive2
   gz-sim${GZ_SIM_VER}::gz-sim${GZ_SIM_VER}
+  gz-msgs${GZ_MSGS_VER}::gz-msgs${GZ_MSGS_VER}
 )
 
 # for plugins ProjectileShooter

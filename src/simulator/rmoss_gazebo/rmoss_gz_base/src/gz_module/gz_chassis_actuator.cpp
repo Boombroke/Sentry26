@@ -16,6 +16,8 @@
 #include <memory>
 #include <string>
 
+#include <gz/msgs/twist.pb.h>
+
 namespace rmoss_gz_base
 {
 

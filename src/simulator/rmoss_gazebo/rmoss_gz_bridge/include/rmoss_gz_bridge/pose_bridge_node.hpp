@@ -20,6 +20,7 @@
 #include <string>
 
 #include "gz/transport/Node.hh"
+#include <gz/msgs/pose_v.pb.h>
 #include "rclcpp/rclcpp.hpp"
 #include "tf2_msgs/msg/tf_message.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"

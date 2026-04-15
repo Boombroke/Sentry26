@@ -18,6 +18,10 @@
 #include <gz/plugin/Register.hh>
 #include <gz/transport/Node.hh>
 
+#include <gz/msgs/twist.pb.h>
+#include <gz/msgs/odometry.pb.h>
+#include <gz/msgs/Utility.hh>
+
 #include <gz/sim/components/Pose.hh>
 #include <gz/sim/components/LinearVelocity.hh>
 #include <gz/sim/components/AngularVelocity.hh>
@@ -212,7 +216,7 @@ void MecanumDrive2Private::UpdateOdometry(const gz::sim::UpdateInfo &_info,
     const auto chassisPose = _ecm.Component<components::WorldPose>(this->chassisLink)->Data();
     const auto linearVel = _ecm.Component<components::LinearVelocity>(this->chassisLink)->Data();
     const auto angularVel = _ecm.Component<components::AngularVelocity>(this->chassisLink)->Data();
-    auto diffPose = chassisPose - initPose;
+    auto diffPose = initPose.Inverse() * chassisPose;
     // Construct the odometry message and publish it.
     msgs::Odometry msg;
     msg.mutable_pose()->mutable_position()->set_x(chassisPose.X());
