@@ -92,7 +92,7 @@ omni_pid_pursuit_controller (局部控制)
 ## 2. 仿真导航模式
 
 ### 前置条件
-- Gazebo Ignition Fortress 已安装
+- Gazebo Harmonic 已安装
 - 项目已编译且 `source install/setup.bash`
 - 先验点云文件 (PCD) 已放置在 `sentry_nav_bringup/pcd/simulation/` 目录
 
@@ -107,9 +107,9 @@ QT_QPA_PLATFORM=xcb ros2 launch rmu_gazebo_simulator bringup_sim.launch.py
 
 等待 Gazebo 窗口出现后，点击 Play 按钮启动仿真。若 Play 按钮无响应（Wayland 已知问题），使用命令行 unpause：
 ```bash
-ign service -s /world/default/control \
-  --reqtype ignition.msgs.WorldControl \
-  --reptype ignition.msgs.Boolean \
+gz service -s /world/default/control \
+  --reqtype gz.msgs.WorldControl \
+  --reptype gz.msgs.Boolean \
   --timeout 5000 \
   --req 'pause: false'
 ```

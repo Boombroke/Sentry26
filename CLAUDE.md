@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Context
 
-RoboMaster 哨兵机器人 ROS2 自主导航系统，基于 Ubuntu 22.04 + ROS2 Humble。
+RoboMaster 哨兵机器人 ROS2 自主导航系统，基于 Ubuntu 24.04 + ROS2 Jazzy。
 **完整的包职责、架构决策、编码规范、踩坑记录见 `AGENTS.md`（必读）。历次 AI 会话的决策记录见 `MEMORY.md`（必读）。**
 
 ## Build & Run
@@ -49,7 +49,7 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py
 ros2 launch rmu_gazebo_simulator bringup_sim.launch.py headless:=true
 
 # Gazebo 命令行 unpause（Wayland Play 按钮无响应时）
-ign service -s /world/default/control --reqtype ignition.msgs.WorldControl --reptype ignition.msgs.Boolean --timeout 5000 --req 'pause: false'
+gz service -s /world/default/control --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 5000 --req 'pause: false'
 ```
 
 ## Key Architecture

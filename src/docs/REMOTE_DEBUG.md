@@ -7,7 +7,7 @@
 ### 1.1 安装 foxglove_bridge
 
 ```bash
-sudo apt install ros-humble-foxglove-bridge
+sudo apt install ros-jazzy-foxglove-bridge
 ```
 
 ### 1.2 启动导航时启用 Foxglove

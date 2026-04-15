@@ -39,12 +39,12 @@
 ```
 
 ### 1.3 核心框架与版本
-- **操作系统**: Ubuntu 22.04 LTS (Jammy Jellyfish)
-- **中间件**: ROS2 Humble Hawksbill
+- **操作系统**: Ubuntu 24.04 LTS (Noble Numbat)
+- **中间件**: ROS2 Jazzy Jalisco
 - **定位算法**: Point-LIO (激光惯性紧耦合) + Small GICP (点云配准重定位)
 - **导航框架**: Nav2 (Navigation2) 及其自定义插件
 - **决策系统**: BehaviorTree.CPP 4.x + BehaviorTree.ROS2 0.3.0
-- **仿真平台**: Gazebo Ignition Fortress (Fortress 版本)
+- **仿真平台**: Gazebo Harmonic
 - **构建系统**: ament_cmake / colcon (Release 模式优化)
 
 ---
@@ -330,7 +330,7 @@ SmacPlannerHybrid 是一种基于 Hybrid A* 的规划器，能够生成符合机
 ## 第7章: 仿真系统
 
 ### 7.1 仿真环境构建
-系统基于 Gazebo Ignition Fortress 构建了 1:1 的比赛场地仿真，为算法验证提供了安全、高效的环境。
+系统基于 Gazebo Harmonic 构建了 1:1 的比赛场地仿真，为算法验证提供了安全、高效的环境。
 - **世界文件 (`.sdf`)**: 
     - `rmul_2026_world.sdf`: 包含完整的 2026 赛季场地模型。
     - 物理引擎参数经过调优，模拟了真实的地面摩擦力和碰撞特性。
@@ -354,4 +354,4 @@ SmacPlannerHybrid 是一种基于 Hybrid A* 的规划器，能够生成符合机
     - 通过 ZMQ 协议连接到运行中的行为树服务器。
     - 实时显示行为树的执行路径、节点状态（Success/Failure/Running）以及黑板变量的动态变化。
 - **Wayland 适配**: 
-    - 在 Ubuntu 22.04 的 Wayland 桌面环境下，Gazebo GUI 可能会出现无响应。需在启动前设置环境变量 `export QT_QPA_PLATFORM=xcb`。
+    - 在 Ubuntu 24.04 的 Wayland 桌面环境下，Gazebo GUI 可能会出现无响应。需在启动前设置环境变量 `export QT_QPA_PLATFORM=xcb`。

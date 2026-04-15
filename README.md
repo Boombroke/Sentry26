@@ -3,7 +3,7 @@
 # Sentry Nav - ROS2 哨兵导航系统
 
 ## 项目概述
-本项目是为 RoboMaster 比赛哨兵机器人开发的 ROS2 导航系统。系统基于 ROS2 Humble 和 Ubuntu 22.04 构建，集成了定位、感知、规划与决策功能。该系统参考深圳北理莫斯科大学 PolarBear 战队开发。
+本项目是为 RoboMaster 比赛哨兵机器人开发的 ROS2 导航系统。系统基于 ROS2 Jazzy 和 Ubuntu 24.04 构建，集成了定位、感知、规划与决策功能。该系统参考深圳北理莫斯科大学 PolarBear 战队开发。
 
 ## 系统架构
 系统架构包含以下核心模块：
@@ -11,15 +11,15 @@
 - 感知模块：针对倾斜安装的 Livox mid360 雷达进行点云处理，支持地形分析与障碍物检测。
 - 规划模块：基于 Nav2 框架，使用全局规划器配合自定义的 omni_pid_pursuit_controller 局部控制器。
 - 决策模块：利用 BehaviorTree.CPP 构建行为树，实现复杂的比赛逻辑调度。
-- 仿真环境：支持 Gazebo Ignition Fortress 仿真，实现算法的快速迭代与验证。
+- 仿真环境：支持 Gazebo Harmonic 仿真，实现算法的快速迭代与验证。
 
 ## 功能特性
-- 完整支持 ROS2 Humble 架构。
+- 完整支持 ROS2 Jazzy 架构。
 - 支持 SLAM 建图模式与导航模式切换。
 - 集成 PS4 手柄控制功能。
 - 适配倾斜安装的 Livox mid360 激光雷达。
 - 提供多机器人协作支持（实验性）。
-- 包含完整的 Gazebo Ignition 仿真环境。
+- 包含完整的 Gazebo Harmonic 仿真环境。
 - 针对全向移动底盘优化的 PID 追踪控制器。
 
 ## 目录结构
@@ -27,7 +27,7 @@
 src/
 ├── scripts/                     # 自动化脚本（环境配置等）
 ├── docs/                        # 项目文档（部署指南等）
-├── sentry_nav/                  # 顶层元包（含子包：fake_vel_transform, ign_sim_pointcloud_tool, livox_ros_driver2, loam_interface, teleop_twist_joy, sentry_nav(元描述), nav2_plugins, omni_pid_pursuit_controller, point_lio, pointcloud_to_laserscan, sensor_scan_generation, terrain_analysis, terrain_analysis_ext）
+├── sentry_nav/                  # 顶层元包（含子包：fake_vel_transform, ign_sim_pointcloud_tool, livox_ros_driver2, odom_bridge, teleop_twist_joy, sentry_nav(元描述), nav2_plugins, omni_pid_pursuit_controller, point_lio, pointcloud_to_laserscan, terrain_analysis, terrain_analysis_ext）
 ├── sentry_nav_bringup/          # 启动文件、配置、地图、行为树
 ├── sentry_robot_description/    # 机器人URDF/SDF描述
 ├── sentry_behavior/             # 基于BehaviorTree.CPP的行为决策树
@@ -42,9 +42,9 @@ src/
 ```
 
 ## 依赖环境
-- 操作系统：Ubuntu 22.04
-- ROS 版本：ROS2 Humble
-- 仿真器：Gazebo Ignition Fortress
+- 操作系统：Ubuntu 24.04
+- ROS 版本：ROS2 Jazzy
+- 仿真器：Gazebo Harmonic
 - 硬件要求：Livox mid360 激光雷达，全向移动底盘
 
 ## 编译
@@ -57,7 +57,7 @@ bash src/scripts/setup_env.sh
 ### 手动编译
 ```bash
 # 安装 ROS2 依赖
-rosdep install -r --from-paths src --ignore-src --rosdistro humble -y
+rosdep install -r --from-paths src --ignore-src --rosdistro jazzy -y
 
 # 全量编译
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release

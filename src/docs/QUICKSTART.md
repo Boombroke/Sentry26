@@ -3,14 +3,14 @@
 > 如需了解系统各模块的详细架构设计，请参阅 [系统架构详解](ARCHITECTURE.md)。
 
 ## 0. 一键配置（推荐）
-如果你使用全新的 Ubuntu 22.04 系统，可以直接运行一键配置脚本完成所有环境安装和编译：
+如果你使用全新的 Ubuntu 24.04 系统，可以直接运行一键配置脚本完成所有环境安装和编译：
 ```bash
 bash scripts/setup_env.sh
 ```
 
 该脚本会依次执行以下步骤：
-1. **安装 ROS2 Humble**: 添加官方 APT 源，安装 `ros-humble-desktop` 和 `ros-dev-tools`
-2. **安装 Gazebo Ignition Fortress**: 通过 `ros-humble-ros-gz` 安装仿真器
+1. **安装 ROS2 Jazzy**: 添加官方 APT 源，安装 `ros-jazzy-desktop` 和 `ros-dev-tools`
+2. **安装 Gazebo Harmonic**: 通过 `ros-jazzy-ros-gz` 安装仿真器
 3. **安装系统依赖**: Eigen3、OpenMP、PCL、Nav2、SLAM Toolbox、serial-driver 等
 4. **编译安装 small_gicp v1.0.0**: 从 GitHub 克隆并编译（需要 C++17）
 5. **初始化 rosdep**: 配置 ROS 包依赖管理
@@ -20,9 +20,9 @@ bash scripts/setup_env.sh
 如果你希望手动逐步配置，请继续阅读以下章节。
 
 ## 1. 环境要求
-- Ubuntu 22.04
-- ROS2 Humble
-- Gazebo Ignition Fortress (仿真可选)
+- Ubuntu 24.04
+- ROS2 Jazzy
+- Gazebo Harmonic (仿真可选)
 - 配套仿真包: rmu_gazebo_simulator (已包含在 src/simulator 中)
 
 ## 2. Docker 部署 (最快方式)
@@ -83,9 +83,9 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 ## 4. 仿真模式
 
-> **Wayland 用户注意**: 如果使用 Wayland 桌面环境（Ubuntu 22.04 默认），Gazebo GUI 的 Play 按钮可能无法点击。解决方法：
+> **Wayland 用户注意**: 如果使用 Wayland 桌面环境（Ubuntu 24.04 默认），Gazebo GUI 的 Play 按钮可能无法点击。解决方法：
 > - 方法 1：启动 Gazebo 前设置 `export QT_QPA_PLATFORM=xcb`
-> - 方法 2：使用命令行 unpause：`ign service -s /world/default/control --reqtype ignition.msgs.WorldControl --reptype ignition.msgs.Boolean --timeout 5000 --req 'pause: false'`
+> - 方法 2：使用命令行 unpause：`gz service -s /world/default/control --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 5000 --req 'pause: false'`
 
 ### 4.0 启动 Gazebo 仿真器（必须先启动）
 ```bash
@@ -143,7 +143,7 @@ ros2 launch sentry_behavior sentry_behavior_launch.py
 
 ## 8. 常见问题
 - **编译错误**: 请确保 small_gicp (>= v1.0.0) 已正确安装并位于系统路径中。
-- **仿真器无法启动**: 请检查 Gazebo Ignition Fortress 是否已正确安装并能独立运行。
+- **仿真器无法启动**: 请检查 Gazebo Harmonic 是否已正确安装并能独立运行。
 - **Gazebo Play 按钮无响应**: Wayland 环境下的已知问题，设置 `QT_QPA_PLATFORM=xcb` 后重启 Gazebo，或使用命令行 unpause（见第 4.0 节）。
 - **Point-LIO 报 `lidar loop back, clear buffer`**: 仿真启动时序问题。确保先启动 Gazebo 并 unpause，等仿真时钟稳定后再启动导航栈。通常 IMU 初始化完成后会自行恢复。
 - **RViz 中无法显示**: 请检查 namespace 是否与启动参数中的机器人名称一致。
