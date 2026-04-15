@@ -103,7 +103,7 @@ install_system_deps() {
     ok "系统依赖安装完成"
 
     info "安装 Python 工具依赖..."
-    pip3 install --quiet pyserial jinja2 2>/dev/null || \
+    pip3 install --quiet pyserial jinja2 xmacro --break-system-packages 2>/dev/null || \
         sudo apt install -y python3-serial python3-jinja2
 
     ok "Python 工具依赖安装完成"
