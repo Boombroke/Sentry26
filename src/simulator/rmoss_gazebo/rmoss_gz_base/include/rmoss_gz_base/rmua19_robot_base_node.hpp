@@ -55,7 +55,7 @@ public:
 
 private:
   rclcpp::Node::SharedPtr node_;
-  std::shared_ptr<ignition::transport::Node> gz_node_;
+  std::shared_ptr<gz::transport::Node> gz_node_;
   // ros sub
   rclcpp::Subscription<rmoss_interfaces::msg::RobotStatus>::SharedPtr robot_status_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr enable_power_sub_;

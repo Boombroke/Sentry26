@@ -18,7 +18,7 @@
 #include <string>
 #include <mutex>
 
-#include "ignition/transport/Node.hh"
+#include "gz/transport/Node.hh"
 #include "hardware_interface.hpp"
 #include "rclcpp/clock.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -31,7 +31,7 @@ class IgnOdometry
 public:
   IgnOdometry(
     rclcpp::Node::SharedPtr node,
-    std::shared_ptr<ignition::transport::Node> gz_node,
+    std::shared_ptr<gz::transport::Node> gz_node,
     const std::string & gz_odom_topic);
   ~IgnOdometry() {}
 
@@ -39,11 +39,11 @@ public:
   Sensor<nav_msgs::msg::Odometry>::SharedPtr get_odometry_sensor() {return odometry_sensor_;}
 
 private:
-  void gz_odometry_cb(const ignition::msgs::Odometry & msg);
+  void gz_odometry_cb(const gz::msgs::Odometry & msg);
 
 private:
   rclcpp::Node::SharedPtr node_;
-  std::shared_ptr<ignition::transport::Node> gz_node_;
+  std::shared_ptr<gz::transport::Node> gz_node_;
   bool enable_{false};
   std::shared_ptr<DataSensor<nav_msgs::msg::Odometry>> odometry_sensor_;
 };

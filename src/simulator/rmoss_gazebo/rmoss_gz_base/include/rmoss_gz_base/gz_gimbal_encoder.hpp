@@ -21,7 +21,7 @@
 #include <map>
 #include <vector>
 
-#include "ignition/transport/Node.hh"
+#include "gz/transport/Node.hh"
 #include "hardware_interface.hpp"
 #include "rmoss_interfaces/msg/gimbal.hpp"
 
@@ -33,7 +33,7 @@ class IgnGimbalEncoder
 public:
   IgnGimbalEncoder(
     rclcpp::Node::SharedPtr node,
-    std::shared_ptr<ignition::transport::Node> gz_node,
+    std::shared_ptr<gz::transport::Node> gz_node,
     const std::string & gz_joint_state_topic);
   ~IgnGimbalEncoder() {}
 
@@ -43,10 +43,10 @@ public:
   Sensor<rmoss_interfaces::msg::Gimbal>::SharedPtr get_velocity_sensor() {return velocity_sensor_;}
 
 private:
-  void gz_Joint_state_cb(const ignition::msgs::Model & msg);
+  void gz_Joint_state_cb(const gz::msgs::Model & msg);
 
   rclcpp::Node::SharedPtr node_;
-  std::shared_ptr<ignition::transport::Node> gz_node_;
+  std::shared_ptr<gz::transport::Node> gz_node_;
   bool enable_{false};
   // info
   std::shared_ptr<DataSensor<rmoss_interfaces::msg::Gimbal>> position_sensor_;

@@ -24,7 +24,7 @@ namespace rmoss_gz_base
 
 IgnGimbalEncoder::IgnGimbalEncoder(
   rclcpp::Node::SharedPtr node,
-  std::shared_ptr<ignition::transport::Node> gz_node,
+  std::shared_ptr<gz::transport::Node> gz_node,
   const std::string & gz_joint_state_topic)
 : node_(node), gz_node_(gz_node)
 {
@@ -33,7 +33,7 @@ IgnGimbalEncoder::IgnGimbalEncoder(
   velocity_sensor_ = std::make_shared<DataSensor<rmoss_interfaces::msg::Gimbal>>();
 }
 
-void IgnGimbalEncoder::gz_Joint_state_cb(const ignition::msgs::Model & msg)
+void IgnGimbalEncoder::gz_Joint_state_cb(const gz::msgs::Model & msg)
 {
   if (!enable_) {
     return;
