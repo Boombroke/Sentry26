@@ -17,8 +17,8 @@ def generate_launch_description():
         executable="parameter_bridge",
         namespace="referee_system",
         arguments=[
-            "/referee_system/attack_info@std_msgs/msg/String[ignition.msgs.StringMsg",
-            "/referee_system/shoot_info@std_msgs/msg/String[ignition.msgs.StringMsg",
+            "/referee_system/attack_info@std_msgs/msg/String[gz.msgs.StringMsg",
+            "/referee_system/shoot_info@std_msgs/msg/String[gz.msgs.StringMsg",
         ],
     )
 

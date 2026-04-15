@@ -3,7 +3,7 @@
 <package format="3">
     <name>rmoss_gz_base</name>
     <version>1.0.0</version>
-    <description>Robot Base for Ignition Gazebo Simulator</description>
+    <description>Robot Base for Gazebo Harmonic Simulator</description>
     <maintainer email="zhenpeng.ge@qq.com">Zhenpeng Ge</maintainer>
     <license>Apache License 2.0</license>
     <buildtool_depend>ament_cmake</buildtool_depend>
@@ -16,9 +16,9 @@
     <depend>ros_gz_bridge</depend>
     <depend>rmoss_gz_resources</depend>
     <depend>rmoss_gz_plugins</depend>
-    <!-- Gazebo Fortress  (default) -->
-    <depend>ignition-msgs8</depend>
-    <depend>ignition-transport11</depend>
+    <!-- Gazebo Harmonic -->
+    <depend>gz-msgs10</depend>
+    <depend>gz-transport13</depend>
 
     <test_depend>ament_lint_auto</test_depend>
     <test_depend>ament_lint_common</test_depend>

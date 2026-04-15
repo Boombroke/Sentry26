@@ -19,7 +19,7 @@
 #include <memory>
 #include <string>
 
-#include "ignition/transport/Node.hh"
+#include "gz/transport/Node.hh"
 #include "rclcpp/rclcpp.hpp"
 #include "tf2_msgs/msg/tf_message.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
@@ -39,11 +39,11 @@ public:
   }
 
   void set_pose_cb(const geometry_msgs::msg::TransformStamped::SharedPtr msg);
-  void gz_pose_cb(const ignition::msgs::Pose_V & msg);
+  void gz_pose_cb(const gz::msgs::Pose_V & msg);
 
 private:
   rclcpp::Node::SharedPtr node_;
-  std::shared_ptr<ignition::transport::Node> gz_node_;
+  std::shared_ptr<gz::transport::Node> gz_node_;
   // ros sub
   rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr set_pose_sub_;
   rclcpp::Publisher<tf2_msgs::msg::TFMessage>::SharedPtr pose_pub_;

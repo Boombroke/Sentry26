@@ -18,7 +18,7 @@
 #include <string>
 #include <mutex>
 
-#include "ignition/transport/Node.hh"
+#include "gz/transport/Node.hh"
 #include "hardware_interface.hpp"
 #include "rclcpp/clock.hpp"
 #include "rmoss_interfaces/msg/gimbal.hpp"
@@ -31,7 +31,7 @@ class IgnGimbalImu
 public:
   IgnGimbalImu(
     rclcpp::Node::SharedPtr node,
-    std::shared_ptr<ignition::transport::Node> gz_node,
+    std::shared_ptr<gz::transport::Node> gz_node,
     const std::string & gz_gimbal_imu_topic);
   ~IgnGimbalImu() {}
 
@@ -39,11 +39,11 @@ public:
   Sensor<rmoss_interfaces::msg::Gimbal>::SharedPtr get_position_sensor() {return position_sensor_;}
 
 private:
-  void gz_imu_cb(const ignition::msgs::IMU & msg);
+  void gz_imu_cb(const gz::msgs::IMU & msg);
 
 private:
   rclcpp::Node::SharedPtr node_;
-  std::shared_ptr<ignition::transport::Node> gz_node_;
+  std::shared_ptr<gz::transport::Node> gz_node_;
   bool enable_{false};
   // sensor data
   double last_yaw_angle_{0};

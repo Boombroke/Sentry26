@@ -28,7 +28,7 @@ namespace rmoss_gz_cam
 GzCamNode::GzCamNode(const rclcpp::NodeOptions & options)
 {
   node_ = std::make_shared<rclcpp::Node>("gz_cam", options);
-  gz_node_ = std::make_shared<ignition::transport::Node>();
+  gz_node_ = std::make_shared<gz::transport::Node>();
   // declare parameters
   node_->declare_parameter("gz_camera_image_topic", "");
   node_->declare_parameter("gz_camera_info_topic", "");
@@ -52,8 +52,8 @@ GzCamNode::GzCamNode(const rclcpp::NodeOptions & options)
     // get camera info automatically
     std::promise<bool> prom;
     std::future<bool> future_result = prom.get_future();
-    std::function<void(const ignition::msgs::CameraInfo & msg)> camera_info_cb =
-      [&](const ignition::msgs::CameraInfo & msg) {
+    std::function<void(const gz::msgs::CameraInfo & msg)> camera_info_cb =
+      [&](const gz::msgs::CameraInfo & msg) {
         ros_gz_bridge::convert_gz_to_ros(msg, cam_info_);
         cam_info_valid_ = true;
         prom.set_value(true);
@@ -80,7 +80,7 @@ GzCamNode::GzCamNode(const rclcpp::NodeOptions & options)
   // create gazebo image subscriber
   auto ret = gz_node_->Subscribe(gz_camera_image_topic, &GzCamNode::gz_image_cb, this);
   if (!ret) {
-    RCLCPP_FATAL(node_->get_logger(), "failed to create ignition subscriber");
+    RCLCPP_FATAL(node_->get_logger(), "failed to create gz subscriber");
     return;
   }
   // create GetCameraInfo service
@@ -90,7 +90,7 @@ GzCamNode::GzCamNode(const rclcpp::NodeOptions & options)
   RCLCPP_INFO(node_->get_logger(), "init successfully!");
 }
 
-void GzCamNode::gz_image_cb(const ignition::msgs::Image & msg)
+void GzCamNode::gz_image_cb(const gz::msgs::Image & msg)
 {
   if (!run_flag_) {
     return;

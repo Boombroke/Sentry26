@@ -29,7 +29,7 @@ namespace rmoss_gz_bridge
 RfidBridgeNode::RfidBridgeNode(const rclcpp::NodeOptions & options)
 {
   node_ = std::make_shared<rclcpp::Node>("rfid_bridge", options);
-  gz_node_ = std::make_shared<ignition::transport::Node>();
+  gz_node_ = std::make_shared<gz::transport::Node>();
   // parameters
   std::string world_name;
   node_->declare_parameter("world_name", "default");
@@ -39,7 +39,7 @@ RfidBridgeNode::RfidBridgeNode(const rclcpp::NodeOptions & options)
   std::string gz_red_supplier_rfid_topic = "/model/red_supplier/performer_detector/status";
   gz_red_supplier_service_name_ = "/world/" + world_name + "/set_rfid_status";
   gz_blue_supplier_service_name_ = "/world/" + world_name + "/set_rfid_status";
-  // get rfid status from ignition gazebo
+  // get rfid status from gz sim
   gz_node_->Subscribe(gz_blue_supplier_rfid_topic, &RfidBridgeNode::gz_rfid_cb, this);
   gz_node_->Subscribe(gz_red_supplier_rfid_topic, &RfidBridgeNode::gz_rfid_cb, this);
 
@@ -47,7 +47,7 @@ RfidBridgeNode::RfidBridgeNode(const rclcpp::NodeOptions & options)
     "/referee_system/rfid_info", 10);
 }
 
-void RfidBridgeNode::gz_rfid_cb(const ignition::msgs::Pose & msg)
+void RfidBridgeNode::gz_rfid_cb(const gz::msgs::Pose & msg)
 {
   std::string robot_name = msg.name().data();
   for (auto const & p : msg.header().data()) {

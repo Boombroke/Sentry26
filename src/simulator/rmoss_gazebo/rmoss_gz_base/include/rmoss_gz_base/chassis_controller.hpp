@@ -63,7 +63,7 @@ private:
   // pid and pid parameter
   double cur_yaw_{0};
   PidParam chassis_pid_param_;
-  ignition::math::PID chassis_pid_;
+  gz::math::PID chassis_pid_;
   // flag
   bool update_pid_flag_{true};
   bool follow_mode_flag_{true};

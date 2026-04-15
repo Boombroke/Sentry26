@@ -21,18 +21,18 @@ namespace rmoss_gz_base
 
 IgnShootActuator::IgnShootActuator(
   rclcpp::Node::SharedPtr node,
-  std::shared_ptr<ignition::transport::Node> gz_node,
+  std::shared_ptr<gz::transport::Node> gz_node,
   const std::string & robot_name,
   const std::string & shooter_name)
 : node_(node), gz_node_(gz_node)
 {
-  // create ignition pub
+  // create gz pub
   std::string gz_shoot_cmd_topic = "/" + robot_name + "/" + shooter_name + "/shoot";
-  gz_shoot_cmd_pub_ = std::make_unique<ignition::transport::Node::Publisher>(
-    gz_node_->Advertise<ignition::msgs::Int32>(gz_shoot_cmd_topic));
+  gz_shoot_cmd_pub_ = std::make_unique<gz::transport::Node::Publisher>(
+    gz_node_->Advertise<gz::msgs::Int32>(gz_shoot_cmd_topic));
   std::string gz_set_vel_topic = "/" + robot_name + "/" + shooter_name + "/set_vel";
-  gz_set_vel_pub_ = std::make_unique<ignition::transport::Node::Publisher>(
-    gz_node_->Advertise<ignition::msgs::Double>(gz_set_vel_topic));
+  gz_set_vel_pub_ = std::make_unique<gz::transport::Node::Publisher>(
+    gz_node_->Advertise<gz::msgs::Double>(gz_set_vel_topic));
 }
 
 void IgnShootActuator::set(const rmoss_interfaces::msg::ShootCmd & data)
@@ -49,12 +49,12 @@ void IgnShootActuator::set(const rmoss_interfaces::msg::ShootCmd & data)
   // set velocity
   if (std::fabs(data.projectile_velocity - projectile_vel_) < 0.001) {
     projectile_vel_ = data.projectile_velocity;
-    ignition::msgs::Double gz_msg;
+    gz::msgs::Double gz_msg;
     gz_msg.set_data(projectile_vel_);
     gz_set_vel_pub_->Publish(gz_msg);
   }
   // publish shoot msg
-  ignition::msgs::Int32 gz_msg;
+  gz::msgs::Int32 gz_msg;
   if (data.projectile_num > remain_num_) {
     gz_msg.set_data(remain_num_);
   } else {

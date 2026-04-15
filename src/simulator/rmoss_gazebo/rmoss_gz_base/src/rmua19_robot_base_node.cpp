@@ -24,7 +24,7 @@ namespace rmoss_gz_base
 Rmua19RobotBaseNode::Rmua19RobotBaseNode(const rclcpp::NodeOptions & options)
 {
   node_ = std::make_shared<rclcpp::Node>("robot_base", options);
-  gz_node_ = std::make_shared<ignition::transport::Node>();
+  gz_node_ = std::make_shared<gz::transport::Node>();
   // parameters
   std::string world_name, robot_name;
   bool use_odometry = false;

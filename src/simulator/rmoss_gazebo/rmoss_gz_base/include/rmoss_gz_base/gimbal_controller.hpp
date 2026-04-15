@@ -71,8 +71,8 @@ private:
   // pid and pid parameter
   PidParam picth_pid_param_;
   PidParam yaw_pid_param_;
-  ignition::math::PID picth_pid_;
-  ignition::math::PID yaw_pid_;
+  gz::math::PID picth_pid_;
+  gz::math::PID yaw_pid_;
   std::chrono::nanoseconds pid_period_;
   // flag
   bool update_pid_flag_{true};

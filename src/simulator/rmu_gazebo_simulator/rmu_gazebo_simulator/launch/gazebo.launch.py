@@ -17,7 +17,7 @@ def generate_launch_description():
     pkg_simulator = get_package_share_directory("rmu_gazebo_simulator")
 
     world_sdf_path = LaunchConfiguration("world_sdf_path")
-    ign_config_path = LaunchConfiguration("ign_config_path")
+    gz_config_path = LaunchConfiguration("gz_config_path")
     headless = LaunchConfiguration("headless")
 
     declare_world_sdf_path = DeclareLaunchArgument(
@@ -28,10 +28,10 @@ def generate_launch_description():
         description="Path to the world SDF file",
     )
 
-    declare_ign_config_path = DeclareLaunchArgument(
-        "ign_config_path",
+    declare_gz_config_path = DeclareLaunchArgument(
+        "gz_config_path",
         default_value=os.path.join(pkg_simulator, "resource", "ign", "gui.config"),
-        description="Path to the Ignition Gazebo GUI configuration file",
+        description="Path to the Gazebo GUI configuration file",
     )
 
     declare_headless = DeclareLaunchArgument(
@@ -46,7 +46,7 @@ def generate_launch_description():
     )
 
     append_enviroment_models = AppendEnvironmentVariable(
-        name="IGN_GAZEBO_RESOURCE_PATH",
+        name="GZ_SIM_RESOURCE_PATH",
         value=os.path.join(pkg_simulator, "resource", "models"),
     )
 
@@ -57,11 +57,11 @@ def generate_launch_description():
             )
         ),
         launch_arguments={
-            "gz_version": "6",
+            "gz_version": "8",
             "gz_args": [
                 world_sdf_path,
                 TextSubstitution(text=" --gui-config "),
-                ign_config_path,
+                gz_config_path,
             ],
         }.items(),
         condition=UnlessCondition(headless),
@@ -74,7 +74,7 @@ def generate_launch_description():
             )
         ),
         launch_arguments={
-            "gz_version": "6",
+            "gz_version": "8",
             "gz_args": [
                 world_sdf_path,
                 TextSubstitution(text=" -s --headless-rendering"),
@@ -94,7 +94,7 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     ld.add_action(declare_world_sdf_path)
-    ld.add_action(declare_ign_config_path)
+    ld.add_action(declare_gz_config_path)
     ld.add_action(declare_headless)
     ld.add_action(append_enviroment_worlds)
     ld.add_action(append_enviroment_models)
