@@ -41,7 +41,7 @@ public:
    * @param name Name for the XML tag for this node
    * @param conf BT node configuration
    */
-  RecoveryNode(const std::string & name, const BT::NodeConfiguration & conf);
+  RecoveryNode(const std::string & name, const BT::NodeConfig & conf);
 
   /**
    * @brief A destructor for sentry_behavior::RecoveryNode

@@ -20,7 +20,7 @@
 namespace sentry_behavior
 {
 
-RateController::RateController(const std::string & name, const BT::NodeConfiguration & conf)
+RateController::RateController(const std::string & name, const BT::NodeConfig & conf)
 : BT::DecoratorNode(name, conf), first_time_(false)
 {
   double hz = 1.0;

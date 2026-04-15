@@ -34,7 +34,7 @@ public:
    * @param name Name for the XML tag for this node
    * @param conf BT node configuration
    */
-  RateController(const std::string & name, const BT::NodeConfiguration & conf);
+  RateController(const std::string & name, const BT::NodeConfig & conf);
 
   /**
    * @brief Creates list of BT ports
