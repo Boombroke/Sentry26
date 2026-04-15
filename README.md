@@ -38,9 +38,7 @@ src/
 ├── odom_interpolator/           # 里程计插值
 ├── small_gicp_relocalization/   # 基于small_gicp的重定位
 ├── BehaviorTree.ROS2/           # 行为树ROS2集成
-├── simulator/                   # Gazebo仿真（rmoss_core, rmoss_gazebo, rmu_gazebo_simulator, sdformat_tools等）
-├── costmap_converter/           # 代价地图转换
-└── teb_local_planner/           # TEB局部规划器
+└── simulator/                   # Gazebo仿真（rmoss_core, rmoss_gazebo, rmu_gazebo_simulator, sdformat_tools等）
 ```
 
 ## 依赖环境
