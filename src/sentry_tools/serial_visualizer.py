@@ -17,7 +17,7 @@ import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
 
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, TwistStamped
 from nav_msgs.msg import Odometry
 from rm_interfaces.msg import GameRobotHP, GameStatus, RobotStatus
 from sensor_msgs.msg import JointState
@@ -120,7 +120,7 @@ class SerialVisualizerNode(Node):
         # Subscribe to cmd_vel_nav2_result (before fake_vel_transform):
         #   This is in gimbal_yaw_fake frame ≈ world frame (fixed yaw), no spin_speed added.
         #   Directly comparable to /odometry twist which is also in world (odom) frame.
-        self.create_subscription(Twist, 'cmd_vel_nav2_result', self._on_cmd_vel, 10)
+        self.create_subscription(TwistStamped, 'cmd_vel_nav2_result', self._on_cmd_vel, 10)
         # All topic names are relative so they respect the node's namespace.
         # Launch with: --ros-args -r __ns:=/red_standard_robot1
         self.create_subscription(Twist, 'cmd_vel', self._on_final_cmd_vel, 10)
@@ -144,19 +144,19 @@ class SerialVisualizerNode(Node):
             self.shared.gimbal_yaw.append(float(yaw))
             self.shared.last_rx['gimbal'] = now
 
-    def _on_cmd_vel(self, msg: Twist) -> None:
+    def _on_cmd_vel(self, msg: TwistStamped) -> None:
         now = time.monotonic()
-        self._last_cmd_vx = float(msg.linear.x)
-        self._last_cmd_vy = float(msg.linear.y)
-        self._last_cmd_vw = float(msg.angular.z)
+        self._last_cmd_vx = float(msg.twist.linear.x)
+        self._last_cmd_vy = float(msg.twist.linear.y)
+        self._last_cmd_vw = float(msg.twist.angular.z)
         with self.shared.lock:
             self.shared.cmd_t.append(now)
-            self.shared.cmd_vx.append(float(msg.linear.x))
-            self.shared.cmd_vy.append(float(msg.linear.y))
-            self.shared.cmd_vw.append(float(msg.angular.z))
-            self.shared.latest_vx = float(msg.linear.x)
-            self.shared.latest_vy = float(msg.linear.y)
-            self.shared.latest_vw = float(msg.angular.z)
+            self.shared.cmd_vx.append(float(msg.twist.linear.x))
+            self.shared.cmd_vy.append(float(msg.twist.linear.y))
+            self.shared.cmd_vw.append(float(msg.twist.angular.z))
+            self.shared.latest_vx = float(msg.twist.linear.x)
+            self.shared.latest_vy = float(msg.twist.linear.y)
+            self.shared.latest_vw = float(msg.twist.angular.z)
             self.shared.cmd_count += 1
             self.shared.last_rx['cmd_vel'] = now
 
