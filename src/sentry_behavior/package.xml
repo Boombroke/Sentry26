@@ -22,7 +22,6 @@
   <depend>geometry_msgs</depend>
   <depend>behaviortree_ros2</depend>
   <depend>rm_interfaces</depend>
-  <depend>auto_aim_interfaces</depend>
   <depend>nav2_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>visualization_msgs</depend>

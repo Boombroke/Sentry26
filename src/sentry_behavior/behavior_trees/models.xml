@@ -12,7 +12,7 @@
         <Condition ID="IsDetectEnemy">
             <input_port name="armor_id" type="std::vector&lt;int, std::allocator&lt;int&gt; &gt;" default="1;2;3;4;5;7">Expected id of armors. Multiple numbers should be separated by the character `;` in Groot2</input_port>
             <input_port name="max_distance" type="float" default="8.000000">Distance to enemy target</input_port>
-            <input_port name="key_port" type="auto_aim_interfaces::msg::Armors_&lt;std::allocator&lt;void&gt; &gt;" default="{@detector_armors}">Vision detector port on blackboard</input_port>
+            <input_port name="key_port" type="rm_interfaces::msg::Armors_&lt;std::allocator&lt;void&gt; &gt;" default="{@detector_armors}">Vision detector port on blackboard</input_port>
         </Condition>
         <Condition ID="IsGameStatus">
             <output_port name="state" type="std::string"/>
@@ -47,7 +47,7 @@
         </Condition>
         <Condition ID="Pursuit">
             <input_port name="topic_name" type="std::string"/>
-            <input_port name="key_port" type="auto_aim_interfaces::msg::Target_&lt;std::allocator&lt;void&gt; &gt;" default="{@tracker_target}">target port on blackboard</input_port>
+            <input_port name="key_port" type="rm_interfaces::msg::Target_&lt;std::allocator&lt;void&gt; &gt;" default="{@tracker_target}">target port on blackboard</input_port>
         </Condition>
         <Decorator ID="RateController">
             <input_port name="hz" type="double" default="10.000000">Rate</input_port>

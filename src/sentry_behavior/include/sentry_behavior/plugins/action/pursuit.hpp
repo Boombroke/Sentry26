@@ -5,7 +5,7 @@
 #include "behaviortree_ros2/bt_topic_pub_node.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "visualization_msgs/msg/marker.hpp"
-#include "auto_aim_interfaces/msg/target.hpp"
+#include "rm_interfaces/msg/target.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
@@ -24,16 +24,16 @@ public:
   bool setMessage(geometry_msgs::msg::PoseStamped & goal) override;
 
 private:
-  //void receiveEnemyPoint(const auto_aim_interfaces::msg::Target & msg);
-  void calculatePursuitPose(const auto_aim_interfaces::msg::Target & target_);
+  //void receiveEnemyPoint(const rm_interfaces::msg::Target & msg);
+  void calculatePursuitPose(const rm_interfaces::msg::Target & target_);
   void publishMarkers();
 
-  rclcpp::Subscription<auto_aim_interfaces::msg::Target>::SharedPtr enemy_point_sub_;
+  rclcpp::Subscription<rm_interfaces::msg::Target>::SharedPtr enemy_point_sub_;
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
 
   geometry_msgs::msg::PoseStamped robot_pose_;
   geometry_msgs::msg::PoseStamped pursuit_pose;
-  auto_aim_interfaces::msg::Target target_;
+  rm_interfaces::msg::Target target_;
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
 };

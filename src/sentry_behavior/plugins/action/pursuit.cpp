@@ -9,7 +9,7 @@ PursuitBTNode::PursuitBTNode(
   tf_buffer_(this->node_->get_clock()),
   tf_listener_(tf_buffer_)
 {
-  // enemy_point_sub_ = node_->create_subscription<auto_aim_interfaces::msg::Target>(
+  // enemy_point_sub_ = node_->create_subscription<rm_interfaces::msg::Target>(
   //   "enemy_pose", 10, std::bind(&PursuitBTNode::receiveEnemyPoint, this, std::placeholders::_1));
 
   marker_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>("visualization_marker", 10);
@@ -18,7 +18,7 @@ PursuitBTNode::PursuitBTNode(
 BT::PortsList PursuitBTNode::providedPorts()
 {
   return {
-    BT::InputPort<auto_aim_interfaces::msg::Target>(
+    BT::InputPort<rm_interfaces::msg::Target>(
       "key_port", "{@tracker_target}", "target port on blackboard"),
     BT::InputPort<std::string>("topic_name"),
   };
@@ -30,7 +30,7 @@ bool PursuitBTNode::setMessage(geometry_msgs::msg::PoseStamped & goal)
     RCLCPP_WARN(node_->get_logger(), "Failed to get robot pose");
     return false;
   }
-  auto msg = getInput<auto_aim_interfaces::msg::Target>("key_port");
+  auto msg = getInput<rm_interfaces::msg::Target>("key_port");
   if (!msg) {
     RCLCPP_ERROR(node_->get_logger(), "allRobotHP message is not available");
     return false;
@@ -45,13 +45,13 @@ bool PursuitBTNode::setMessage(geometry_msgs::msg::PoseStamped & goal)
   return true;
 }
 
-// void PursuitBTNode::receiveEnemyPoint(const auto_aim_interfaces::msg::Target & msg)
+// void PursuitBTNode::receiveEnemyPoint(const rm_interfaces::msg::Target & msg)
 // {
 //   target_ = msg;
 //   RCLCPP_INFO(node_->get_logger(), "Received enemy point: x=%f, y=%f", msg.position.x, msg.position.y);
 // }
 
-void PursuitBTNode::calculatePursuitPose(const auto_aim_interfaces::msg::Target & target_)
+void PursuitBTNode::calculatePursuitPose(const rm_interfaces::msg::Target & target_)
 {
   double self_x = robot_pose_.pose.position.x;
   double self_y = robot_pose_.pose.position.y;
