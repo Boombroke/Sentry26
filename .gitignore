@@ -18,3 +18,11 @@ src/sentry_nav_bringup/map/reality/
 src/sentry_nav_bringup/map/simulation/
 src/sentry_nav_bringup/pcd/reality/
 src/sentry_nav_bringup/pcd/simulation/
+
+# AI agent 配置和工作文件
+CLAUDE.md
+.sisyphus/
+opencode.json
+.cursor/
+.cursorrules
+.github/copilot-instructions.md
