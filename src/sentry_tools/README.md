@@ -11,7 +11,7 @@ source install/setup.bash
 python3 src/sentry_tools/serial_visualizer.py
 ```
 
-依赖：`pip install pyserial`（PyQt5/matplotlib/numpy/pyyaml 随 ROS2 Jazzy 自带）
+依赖：`pip install pyserial`（PyQt5/pyqtgraph PyOpenGL/numpy/pyyaml 随 ROS2 Jazzy 自带）
 
 ---
 
