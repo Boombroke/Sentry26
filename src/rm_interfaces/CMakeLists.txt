@@ -25,8 +25,13 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Models.msg"
   "msg/RobotStateInfo.msg"
 
+  "msg/vision/Armor.msg"
+  "msg/vision/Armors.msg"
+  "msg/vision/Target.msg"
+
   DEPENDENCIES
     geometry_msgs
+    std_msgs
 )
 
 
