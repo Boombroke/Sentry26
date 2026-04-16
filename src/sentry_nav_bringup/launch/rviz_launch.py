@@ -55,6 +55,7 @@ def generate_launch_description():
         namespace=namespace,
         arguments=["-d", rviz_config_file],
         output="screen",
+        additional_env={"QT_QPA_PLATFORM": "xcb"},  # Wayland + Qt6.4 GoalTool bug causes fullscreen
         remappings=[
             ("/tf", "tf"),
             ("/tf_static", "tf_static"),
