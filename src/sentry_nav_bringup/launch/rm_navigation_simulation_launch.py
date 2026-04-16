@@ -193,14 +193,7 @@ def generate_launch_description():
         }.items(),
     )
 
-    joy_teleop_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(launch_dir, "joy_teleop_launch.py")),
-        launch_arguments={
-            "namespace": namespace,
-            "use_sim_time": use_sim_time,
             "joy_config_file": params_file,
-        }.items(),
-    )
 
     ld = LaunchDescription()
 
@@ -222,7 +215,6 @@ def generate_launch_description():
     # Add the actions to launch all of the navigation nodes
     ld.add_action(start_velodyne_convert_tool)
     ld.add_action(bringup_cmd)
-    ld.add_action(joy_teleop_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(foxglove_bridge_cmd)
 

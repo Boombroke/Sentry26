@@ -85,7 +85,6 @@ src/
 │   ├── livox_ros_driver2/       #   Livox 雷达驱动
 │   ├── pointcloud_to_laserscan/ #   点云 → 2D scan
 │   ├── ign_sim_pointcloud_tool/ #   仿真点云格式转换
-│   └── teleop_twist_joy/        #   手柄遥控
 ├── sentry_nav_bringup/          # Launch 文件、Nav2 参数、地图、行为树 XML
 ├── sentry_behavior/             # BehaviorTree.CPP 行为树插件
 ├── sentry_robot_description/    # 机器人 URDF/SDF 模型

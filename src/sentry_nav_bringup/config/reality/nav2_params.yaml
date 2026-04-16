@@ -917,12 +917,6 @@ velocity_smoother:
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
 
-teleop_twist_joy_node:
-  ros__parameters:
-    use_sim_time: false
-    publish_stamped_twist: true
-    robot_base_frame: gimbal_yaw
-    control_mode: auto_control    # Option: auto_control, manual_control
 
     require_enable_button: true
     enable_button: 4              # L1 shoulder button

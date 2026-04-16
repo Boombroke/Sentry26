@@ -214,14 +214,7 @@ def generate_launch_description():
         }.items(),
     )
 
-    joy_teleop_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(launch_dir, "joy_teleop_launch.py")),
-        launch_arguments={
-            "namespace": namespace,
-            "use_sim_time": use_sim_time,
             "joy_config_file": params_file,
-        }.items(),
-    )
 
     odom2map_tf_node= Node(
         package='tf2_ros',
@@ -229,7 +222,6 @@ def generate_launch_description():
         arguments=['0.0', '0.0', '0.0', '0.0', '0.0', '0.0' , 'odom', 'map']
         # 参数说明：x y z yaw pitch roll parent_frame child_frame
         # 此处发布odom到map的静态变换，所有平移和旋转均为0
-    )
 
     ld = LaunchDescription()
 
@@ -253,7 +245,6 @@ def generate_launch_description():
     ld.add_action(start_robot_state_publisher_cmd)
     ld.add_action(start_livox_ros_driver2_node)
     ld.add_action(bringup_cmd)
-    ld.add_action(joy_teleop_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(foxglove_bridge_cmd)
     # ld.add_action(odom2map_tf_node)

@@ -20,7 +20,6 @@
   <exec_depend>nav2_smac_planner</exec_depend>
   <exec_depend>nav2_plugins</exec_depend>
   <exec_depend>sentry_nav</exec_depend>
-  <exec_depend>teleop_twist_joy</exec_depend>
   <exec_depend>livox_ros_driver2</exec_depend>
   <exec_depend>point_lio</exec_depend>
   <exec_depend>odom_bridge</exec_depend>
