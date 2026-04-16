@@ -24,7 +24,12 @@ from nav_msgs.msg import Odometry
 from rm_interfaces.msg import GameRobotHP, GameStatus, RobotStatus
 from sensor_msgs.msg import JointState
 
-pg.setConfigOptions(useOpenGL=True, antialias=False,
+# OpenGL disabled by default — Intel iGPU can only serve one GL context, and
+# Gazebo simulation already takes it.  Set VIZ_OPENGL=1 to force GPU rendering
+# when running without Gazebo (e.g. real robot).
+import os
+_use_opengl = os.environ.get('VIZ_OPENGL', '0') == '1'
+pg.setConfigOptions(useOpenGL=_use_opengl, antialias=False,
                     foreground='#d0d0d0', background='#1e1e2e')
 
 GAME_PROGRESS_LABELS = [
