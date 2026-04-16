@@ -37,7 +37,7 @@ def generate_launch_description():
     log_level = LaunchConfiguration("log_level")
 
     # Variables
-    lifecycle_nodes = ["map_saver"]
+    lifecycle_nodes = ["slam_toolbox", "map_saver"]
 
     # Create our own temporary YAML files that include substitutions
     param_substitutions = {"use_sim_time": use_sim_time}
