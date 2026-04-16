@@ -89,8 +89,7 @@ src/
 ├── sentry_behavior/             # BehaviorTree.CPP 行为树插件
 ├── sentry_robot_description/    # 机器人 URDF/SDF 模型
 ├── serial/                      # rm_serial_driver 串口通信
-├── rm_interfaces/               # 裁判系统自定义消息
-├── auto_aim_interfaces/         # 自动瞄准接口
+├── rm_interfaces/               # 统一自定义消息（裁判系统 + 视觉）
 ├── small_gicp_relocalization/   # 全局重定位节点
 ├── odom_interpolator/           # 里程计插值
 ├── sentry_tools/                # 调试工具（串口 Mock / 地图拾取 / 数据可视化）

@@ -376,8 +376,8 @@ ros2 launch sentry_behavior sentry_behavior_launch.py target_tree:=rmul
 | `referee_robotStatus` | `referee/robot_status` | `rm_interfaces/RobotStatus` |
 | `referee_rfidStatus` | `referee/rfid_status` | `rm_interfaces/RfidStatus` |
 | `referee_allRobotHP` | `referee/all_robot_hp` | `rm_interfaces/GameRobotHP` |
-| `detector_armors` | `detector/armors` | `auto_aim_interfaces/Armors` |
-| `tracker_target` | `tracker/target` | `auto_aim_interfaces/Target` |
+| `detector_armors` | `detector/armors` | `rm_interfaces/Armors` |
+| `tracker_target` | `tracker/target` | `rm_interfaces/Target` |
 | `nav_globalCostmap` | `global_costmap/costmap` | `nav2_msgs/Costmap` |
 
 ---

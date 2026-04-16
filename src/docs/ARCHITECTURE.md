@@ -308,7 +308,7 @@ SmacPlannerHybrid 是一种基于 Hybrid A* 的规划器，能够生成符合机
 - `GameRobotHP`: 
     - 实时同步红蓝双方所有 14 台机器人的血量。`BattlefieldInformation` 节点通过计算双方总血量差值来评估战场态势。
 
-### 6.2 自动瞄准接口 (auto_aim_interfaces)
+### 6.2 视觉接口 (rm_interfaces/msg/vision/)
 - `Armors`: 
     - 视觉算法识别出的所有装甲板在相机坐标系下的位姿。
     - 包含 `armor_id` 和 `distance`，用于 `IsDetectEnemy` 节点过滤目标。

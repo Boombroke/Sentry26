@@ -26,9 +26,12 @@ sentry_behavior 是哨兵机器人的行为决策系统。本系统基于 Behavi
   - tick_after_timeout_node: 在指定超时时间后触发 tick。
 
 ## 订阅话题
-- referee/game_status: 接收比赛阶段与剩余时间。
-- referee/robot_status: 获取机器人等级、血量等信息。
-- referee/rfid_status: 监控增益点占领情况。
+- referee/game_status (rm_interfaces/msg/GameStatus): 接收比赛阶段与剩余时间。
+- referee/robot_status (rm_interfaces/msg/RobotStatus): 获取机器人等级、血量等信息。
+- referee/rfid_status (rm_interfaces/msg/RfidStatus): 监控增益点占领情况。
+- referee/all_robot_hp (rm_interfaces/msg/GameRobotHP): 己方全部单位血量。
+- detector/armors (rm_interfaces/msg/Armors): 视觉装甲板检测结果（SensorDataQoS）。
+- tracker/target (rm_interfaces/msg/Target): 视觉目标跟踪状态（SensorDataQoS）。
 
 ## 发布话题
 - behavior_tree_log: 发布行为树节点状态切换日志。
