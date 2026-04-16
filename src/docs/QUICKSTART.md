@@ -87,12 +87,28 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 > - 方法 1：启动 Gazebo 前设置 `export QT_QPA_PLATFORM=xcb`
 > - 方法 2：使用命令行 unpause：`gz service -s /world/default/control --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 5000 --req 'pause: false'`
 
-### 4.0 启动 Gazebo 仿真器（必须先启动）
+### 4.0 仿真启动（三步）
+
+**步骤 1：启动 Gazebo**（可选 `headless:=true` 无 GUI）
 ```bash
 # Wayland 环境下加 QT_QPA_PLATFORM=xcb
 QT_QPA_PLATFORM=xcb ros2 launch rmu_gazebo_simulator bringup_sim.launch.py
 ```
-等待 Gazebo 窗口出现后，点击 Play 按钮或使用上述命令行 unpause。确认仿真时钟开始运行后，再在新终端启动导航。
+
+**步骤 2：Unpause Gazebo 仿真**（等待机器人 spawn 完成后执行）
+```bash
+gz service -s /world/default/control --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 5000 --req 'pause: false'
+```
+
+**步骤 3：等待 ~10 秒后启动导航**
+```bash
+# slam 建图模式
+ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_2026 slam:=True
+
+# 或者使用已有地图的定位模式
+ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_2026 slam:=False
+```
+
 
 ### 4.1 单机器人导航
 ```bash

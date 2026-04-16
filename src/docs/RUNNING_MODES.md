@@ -101,11 +101,13 @@ omni_pid_pursuit_controller (局部控制)
 **第 1 步：启动 Gazebo 仿真器（必须先启动）**
 
 ```bash
-# Wayland 桌面环境必须设置 QT_QPA_PLATFORM=xcb
+# Wayland 桌面环境必须设置 QT_QPA_PLATFORM=xcb（可选 headless:=true 无 GUI）
 QT_QPA_PLATFORM=xcb ros2 launch rmu_gazebo_simulator bringup_sim.launch.py
 ```
 
-等待 Gazebo 窗口出现后，点击 Play 按钮启动仿真。若 Play 按钮无响应（Wayland 已知问题），使用命令行 unpause：
+**第 2 步：Unpause Gazebo 仿真**
+
+等待机器人 spawn 完成后，点击 Play 按钮或使用命令行 unpause：
 ```bash
 gz service -s /world/default/control \
   --reqtype gz.msgs.WorldControl \
@@ -114,12 +116,16 @@ gz service -s /world/default/control \
   --req 'pause: false'
 ```
 
-> **重要**：必须确认仿真时钟已开始运行后，再启动导航栈。否则 Point-LIO 会因时间戳异常报错 `lidar loop back, clear buffer`。
+**第 3 步：等待 ~10 秒后启动导航**
 
-**第 2 步：启动导航**
+> **重要**：必须等待仿真时钟稳定后再启动导航栈。否则 Point-LIO 会因时间戳异常导致 TF 不同步。
 
 ```bash
-ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmuc_2025 slam:=False
+# 导航模式（使用已有地图）
+ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_2026 slam:=False
+
+# 建图模式
+ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_2026 slam:=True
 ```
 
 ### 完整参数列表

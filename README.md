@@ -73,10 +73,16 @@ colcon build --packages-select sentry_behavior --symlink-install --cmake-args -D
 
 ### 仿真模式
 ```bash
-# 启动 Gazebo 仿真器（Wayland 环境需加 QT_QPA_PLATFORM=xcb）
+# 步骤 1：启动 Gazebo（Wayland 环境需加 QT_QPA_PLATFORM=xcb，可选 headless:=true 无 GUI）
 QT_QPA_PLATFORM=xcb ros2 launch rmu_gazebo_simulator bringup_sim.launch.py
 
-# 确保 Gazebo 已 unpause 后，启动导航（另一终端）
+# 步骤 2：Unpause Gazebo（等待机器人 spawn 完成后执行）
+gz service -s /world/default/control --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 5000 --req 'pause: false'
+
+# 步骤 3：等待 ~10 秒后启动导航（另一终端）
+# slam 建图模式
+ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_2026 slam:=True
+# 或已有地图的定位模式
 ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_2026 slam:=False
 ```
 
