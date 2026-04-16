@@ -193,7 +193,6 @@ def generate_launch_description():
         }.items(),
     )
 
-            "joy_config_file": params_file,
 
     ld = LaunchDescription()
 
