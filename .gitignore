@@ -13,6 +13,13 @@ __pycache__/
 *.stl
 *.dae
 
+# 仿真模型 mesh 必须保留
+!src/simulator/rmoss_gz_resources/resource/models/**/*.dae
+!src/simulator/rmoss_gz_resources/resource/models/**/*.stl
+!src/simulator/rmu_gazebo_simulator/rmu_gazebo_simulator/resource/models/**/*.dae
+!src/simulator/rmu_gazebo_simulator/rmu_gazebo_simulator/resource/models/**/*.stl
+!src/sentry_robot_description/resource/models/**/*.dae
+
 # 地图和点云数据目录（需单独下载）
 src/sentry_nav_bringup/map/reality/
 src/sentry_nav_bringup/map/simulation/
