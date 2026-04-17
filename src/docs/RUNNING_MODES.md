@@ -134,7 +134,7 @@ ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_20
 |:---|:---|:---|:---|
 | `namespace` | string | `red_standard_robot1` | 机器人命名空间，多机模式下区分不同机器人 |
 | `slam` | bool | `False` | `True`=SLAM 建图模式，`False`=导航模式（使用先验地图定位） |
-| `world` | string | `rmuc_2025` | 仿真世界名。可选：`rmul_2024`, `rmuc_2024`, `rmul_2025`, `rmuc_2025` |
+| `world` | string | `rmuc_2025` | 仿真世界名。可选：`rmuc_2025`, `rmul_2026` |
 | `map` | string | 自动推导 | 2D 栅格地图路径，默认 `map/simulation/{world}.yaml` |
 | `prior_pcd_file` | string | 自动推导 | 先验 PCD 文件路径，默认 `pcd/simulation/{world}.pcd` |
 | `use_sim_time` | bool | `True` | 使用 Gazebo 仿真时钟 |
@@ -163,7 +163,7 @@ ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_20
 **导航模式（使用先验地图）：**
 ```bash
 ros2 launch sentry_nav_bringup rm_navigation_reality_launch.py \
-  world:=rmul_2024 \
+  world:=rmul_2026 \
   slam:=False \
   use_robot_state_pub:=True
 ```
@@ -181,7 +181,7 @@ ros2 launch sentry_nav_bringup rm_navigation_reality_launch.py \
 |:---|:---|:---|:---|
 | `namespace` | string | `""` (空) | 仿真默认 `red_standard_robot1` |
 | `slam` | bool | `False` | 同仿真 |
-| `world` | string | `rmul_2024` | 仿真默认 `rmuc_2025` |
+| `world` | string | `rmul_2026` | 仿真默认 `rmuc_2025` |
 | `map` | string | `map/reality/{world}.yaml` | 使用 reality 子目录 |
 | `prior_pcd_file` | string | `pcd/reality/{world}.pcd` | 使用 reality 子目录 |
 | `use_sim_time` | bool | `False` | 使用系统真实时钟 |

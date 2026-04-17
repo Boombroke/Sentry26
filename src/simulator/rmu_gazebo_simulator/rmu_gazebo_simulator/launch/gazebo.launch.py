@@ -23,7 +23,7 @@ def generate_launch_description():
     declare_world_sdf_path = DeclareLaunchArgument(
         "world_sdf_path",
         default_value=os.path.join(
-            pkg_simulator, "resource", "worlds", "rmul_2024_world.sdf"
+            pkg_simulator, "resource", "worlds", "rmuc_2025_world.sdf"
         ),
         description="Path to the world SDF file",
     )

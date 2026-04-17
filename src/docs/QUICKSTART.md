@@ -126,7 +126,7 @@ ros2 run nav2_map_server map_saver_cli -f <MAP_NAME> --ros-args -r __ns:=/red_st
 
 ### 4.3 多机器人 (实验性)
 ```bash
-ros2 launch sentry_nav_bringup rm_multi_navigation_simulation_launch.py world:=rmul_2024 robots:="red_standard_robot1={x: 0.0, y: 0.0, yaw: 0.0}; blue_standard_robot1={x: 5.6, y: 1.4, yaw: 3.14};"
+ros2 launch sentry_nav_bringup rm_multi_navigation_simulation_launch.py world:=rmuc_2025 robots:="red_standard_robot1={x: 0.0, y: 0.0, yaw: 0.0}; blue_standard_robot1={x: 5.6, y: 1.4, yaw: 3.14};"
 ```
 
 ## 5. 实车模式

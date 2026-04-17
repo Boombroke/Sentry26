@@ -48,8 +48,8 @@ def generate_launch_description():
 
     declare_world_cmd = DeclareLaunchArgument(
         "world",
-        default_value="rmul_2024",
-        description="Map name (rmul_2024 / rmuc_2024 etc.)",
+        default_value="rmul_2026",
+        description="Map name (rmuc_2025 / rmul_2026 etc.)",
     )
 
     declare_use_rviz_cmd = DeclareLaunchArgument(
