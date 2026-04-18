@@ -1,7 +1,8 @@
 build/
 install/
 log/
-logs/
+# logs/ 目录保留（README + .gitkeep），但归档的运行日志不入仓
+logs/*
 !logs/README.md
 !logs/.gitkeep
 .claude/worktrees/
