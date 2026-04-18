@@ -150,16 +150,6 @@ def generate_launch_description():
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
-                package="fake_vel_transform",
-                executable="fake_vel_transform_node",
-                name="fake_vel_transform",
-                output="screen",
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=[configured_params],
-                arguments=["--ros-args", "--log-level", log_level],
-            ),
-            Node(
                 package="nav2_controller",
                 executable="controller_server",
                 name="controller_server",
@@ -260,12 +250,6 @@ def generate_launch_description():
                 package="odom_bridge",
                 plugin="odom_bridge::OdomBridgeNode",
                 name="odom_bridge",
-                parameters=[configured_params],
-            ),
-            ComposableNode(
-                package="fake_vel_transform",
-                plugin="fake_vel_transform::FakeVelTransform",
-                name="fake_vel_transform",
                 parameters=[configured_params],
             ),
             ComposableNode(
