@@ -1,6 +1,8 @@
 build/
 install/
 log/
+.claude/worktrees/
+.vscode/
 AGENTS.md
 MEMORY.md
 .cache/
