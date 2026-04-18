@@ -278,12 +278,12 @@ controller_server:
     odom_topic: odometry
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
-    min_y_velocity_threshold: 0.5
+    min_y_velocity_threshold: 0.0                       # 差速底盘无侧向速度
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugins: ["progress_checker"]
     goal_checker_plugins: ["general_goal_checker"]
-    controller_plugins: ["FollowPath"]
+    controller_plugins: ["RotateShim", "FollowPath"]
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.5
@@ -292,38 +292,37 @@ controller_server:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.15
-      yaw_goal_tolerance: 6.28
+      yaw_goal_tolerance: 6.28                          # 终端对齐由 RPP use_rotate_to_heading 完成
+    RotateShim:
+      plugin: "nav2_rotation_shim_controller::RotationShimController"
+      primary_controller: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+      angular_dist_threshold: 0.785                     # 路径起始方向与当前朝向差 > 45° 时先原地旋转
+      forward_sampling_distance: 0.5
+      rotate_to_heading_angular_vel: 1.5
+      max_angular_accel: 3.2
+      simulate_ahead_time: 1.0
     FollowPath:
-      plugin: "omni_pid_pursuit_controller::OmniPidPursuitController"
-      translation_kp: 3.0
-      translation_ki: 0.1
-      translation_kd: 0.3
-      enable_rotation: false
-      rotation_kp: 3.0
-      rotation_ki: 0.1
-      rotation_kd: 0.3
-      transform_tolerance: 0.1
-      min_max_sum_error: 1.0
-      lookahead_dist: 2.0
-      use_velocity_scaled_lookahead_dist: true
+      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+      desired_linear_vel: 2.0
+      lookahead_dist: 1.2
+      min_lookahead_dist: 0.6
+      max_lookahead_dist: 1.5
       lookahead_time: 1.0
-      min_lookahead_dist: 1.0
-      max_lookahead_dist: 2.0
-      use_interpolation: false
-      use_rotate_to_heading: false
-      use_rotate_to_heading_treshold: 0.1
-      min_approach_linear_velocity: 0.5
-      approach_velocity_scaling_dist: 1.0
-      v_linear_min: -2.5
-      v_linear_max: 2.5
-      v_angular_min: -3.0
-      v_angular_max: 3.0
-      curvature_min: 0.8                                # 低曲率阈值，低于此值不减速
-      curvature_max: 1.5                                # 高曲率阈值，高于此值大幅减速
-      reduction_ratio_at_high_curvature: 0.6            # 高曲率时的速度降低比例。 0.6 (即减速 40%)
-      curvature_forward_dist: 0.5                       # 前向距离，用于曲率计算
-      curvature_backward_dist: 0.2                      # 后向距离，用于曲率计算
-      max_velocity_scaling_factor_rate: 3.0             # 速度缩放因子的最大变化率（加快速度恢复）
+      use_velocity_scaled_lookahead_dist: true
+      transform_tolerance: 0.1
+      min_approach_linear_velocity: 0.3
+      approach_velocity_scaling_dist: 0.8
+      use_collision_detection: true
+      max_allowed_time_to_collision_up_to_carrot: 1.5
+      use_regulated_linear_velocity_scaling: true
+      regulated_linear_scaling_min_radius: 0.5
+      regulated_linear_scaling_min_speed: 0.3
+      use_rotate_to_heading: true                       # 差速核心：终端对齐
+      rotate_to_heading_min_angle: 0.5
+      max_angular_accel: 3.2
+      rotate_to_heading_angular_vel: 1.5
+      allow_reversing: false
+      max_robot_pose_search_dist: 10.0
 
 
 local_costmap:
