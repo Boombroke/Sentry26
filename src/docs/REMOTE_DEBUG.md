@@ -1,5 +1,7 @@
 # 远程调试指南
 
+> **Maintainer**: Boombroke <boombroke@icloud.com>
+
 通过 Foxglove Studio + foxglove_bridge 实现远程 Web 可视化，无需在远程机器上安装 ROS2，浏览器即可查看 costmap、路径、TF、点云等所有导航信息。
 
 ## 1. 服务端（机器人 / 运行导航的电脑）

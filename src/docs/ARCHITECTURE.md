@@ -1,5 +1,9 @@
 # 哨兵导航系统架构详解
 
+> **Maintainer**: Boombroke <boombroke@icloud.com>
+> **基于**: [pb2025_sentry_nav](https://github.com/SMBU-PolarBear-Robotics-Team/pb2025_sentry_nav) by Lihan Chen，2026 差速轮足架构迁移由 Boombroke 主导
+> 相关文档：[快速部署](QUICKSTART.md) · [运行模式](RUNNING_MODES.md) · [参数调优](TUNING_GUIDE.md)
+
 ## 第1章: 系统总览
 
 ### 1.1 项目背景与功能描述

@@ -1,5 +1,8 @@
 # Point-LIO 与导航参数调优指南
 
+> **Maintainer**: Boombroke <boombroke@icloud.com>
+> 相关文档：[快速部署](QUICKSTART.md) · [架构详解](ARCHITECTURE.md) · [运行模式](RUNNING_MODES.md)
+
 本文档列出了需要在实车上根据实际情况微调的参数，以及对应的调优方法。
 
 配置文件位置：
