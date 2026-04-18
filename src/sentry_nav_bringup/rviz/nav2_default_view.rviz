@@ -137,19 +137,11 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        gimbal_pitch_odom:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
         gimbal_yaw:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        gimbal_yaw_odom:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
         light_indicator:
           Alpha: 1
           Show Axes: false
@@ -215,13 +207,9 @@ Visualization Manager:
           Value: true
         gimbal_pitch:
           Value: true
-        gimbal_pitch_odom:
+        gimbal_pitch:
           Value: true
         gimbal_yaw:
-          Value: true
-        gimbal_yaw_fake:
-          Value: true
-        gimbal_yaw_odom:
           Value: true
         light_indicator:
           Value: true
@@ -261,19 +249,15 @@ Visualization Manager:
                   {}
                 front_right_wheel:
                   {}
-                gimbal_yaw_odom:
-                  gimbal_pitch_odom:
-                    gimbal_yaw:
-                      front_mid360:
+                gimbal_yaw:
+                  gimbal_pitch:
+                    front_mid360:
+                      {}
+                    front_industrial_camera:
+                      front_industrial_camera_optical_frame:
                         {}
-                      gimbal_pitch:
-                        front_industrial_camera:
-                          front_industrial_camera_optical_frame:
-                            {}
-                        speed_monitor:
-                          {}
-                      gimbal_yaw_fake:
-                        {}
+                    speed_monitor:
+                      {}
                 light_indicator:
                   {}
                 rear_left_wheel:
@@ -282,13 +266,6 @@ Visualization Manager:
                   {}
       Update Interval: 0
       Value: true
-    - Class: rviz_default_plugins/Axes
-      Enabled: false
-      Length: 0.699999988079071
-      Name: GimbalYawFake
-      Radius: 0.10000000149011612
-      Reference Frame: gimbal_yaw_fake
-      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
