@@ -199,9 +199,8 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=["--ros-args", "--log-level", log_level],
-                remappings=[
-                    ("cmd_vel", "cmd_vel_nav2_result"),  # remap output
-                ],
+                # cmd_vel 直出 /cmd_vel（差速底盘消费者默认话题）
+                remappings=[],
             ),
             Node(
                 package="nav2_waypoint_follower",
@@ -224,7 +223,7 @@ def generate_launch_description():
                 arguments=["--ros-args", "--log-level", log_level],
                 remappings=[
                     ("cmd_vel", "cmd_vel_controller"),  # remap input
-                    ("cmd_vel_smoothed", "cmd_vel_nav2_result"),  # remap output
+                    ("cmd_vel_smoothed", "cmd_vel"),             # 差速底盘直接下发 /cmd_vel
                 ],
             ),
             Node(
@@ -276,18 +275,16 @@ def generate_launch_description():
                 plugin="behavior_server::BehaviorServer",
                 name="behavior_server",
                 parameters=[configured_params],
-                remappings=[
-                    ("cmd_vel", "cmd_vel_nav2_result"),  # remap output
-                ],
+                # cmd_vel 直出 /cmd_vel（差速底盘消费者默认话题）
+                remappings=[],
             ),
             ComposableNode(
                 package="nav2_bt_navigator",
                 plugin="nav2_bt_navigator::BtNavigator",
                 name="bt_navigator",
                 parameters=[configured_params],
-                remappings=[
-                    ("cmd_vel", "cmd_vel_nav2_result"),
-                ],
+                # cmd_vel 直出 /cmd_vel（差速底盘消费者默认话题）
+                remappings=[],
             ),
             ComposableNode(
                 package="nav2_waypoint_follower",
@@ -302,7 +299,7 @@ def generate_launch_description():
                 parameters=[configured_params],
                 remappings=[
                     ("cmd_vel", "cmd_vel_controller"),  # remap input
-                    ("cmd_vel_smoothed", "cmd_vel_nav2_result"),  # remap output
+                    ("cmd_vel_smoothed", "cmd_vel"),             # 差速底盘直接下发 /cmd_vel
                 ],
             ),
             ComposableNode(
