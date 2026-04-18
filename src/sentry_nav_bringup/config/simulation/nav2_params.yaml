@@ -318,7 +318,7 @@ controller_server:
       v_linear_max: 2.5
       v_angular_min: -3.0
       v_angular_max: 3.0
-      curvature_min: 0.8                                # 低曲率阈值，低于此值不减速（全向轮可更高）
+      curvature_min: 0.8                                # 低曲率阈值，低于此值不减速
       curvature_max: 1.5                                # 高曲率阈值，高于此值大幅减速
       reduction_ratio_at_high_curvature: 0.6            # 高曲率时的速度降低比例。 0.6 (即减速 40%)
       curvature_forward_dist: 0.5                       # 前向距离，用于曲率计算
@@ -452,7 +452,7 @@ planner_server:
       max_iterations: 1000000             # 搜索的最大总迭代次数，-1 禁用
       max_on_approach_iterations: 1000    # 一旦在容差范围内，尝试到达目标的最大迭代次数
       max_planning_time: 3.5              # 最大规划时间（秒）
-      cost_travel_multiplier: 3.0         # 代价乘数，值越大路径越居中。全向轮建议 3.0 以确保走通道中央。
+      cost_travel_multiplier: 3.0         # 代价乘数，值越大路径越居中，3.0 保证走通道中央。
       smooth_path: true                   # 2D 节点始终平滑路径
       smoother:
         max_iterations: 1000

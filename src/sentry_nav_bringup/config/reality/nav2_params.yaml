@@ -139,7 +139,7 @@ terrain_analysis:
 terrain_analysis_ext:
   ros__parameters:
     scanVoxelSize: 0.1
-    decayTime: 1.0                      # 点云衰减时间（原 0.2 太短，1.0 兼顾动态响应和自旋覆盖）
+    decayTime: 1.0                      # 点云衰减时间（0.2 太短，1.0 兼顾动态响应和机身旋转覆盖）
     noDecayDis: 0.0
     clearingDis: 10.0
     useSorting: true
