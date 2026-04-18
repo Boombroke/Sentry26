@@ -45,17 +45,17 @@ serial/serial_driver/
 
 | 帧头 | 包名 | 方向 | 大小 | 频率 | 字段列表 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| 0xA1 | IMU | stm32→ros | 11B | ~1000Hz | pitch(float,rad), yaw(float,rad) |
+| 0xA1 | IMU | stm32→ros | 27B | ~1000Hz | pitch(float,rad), yaw(float,rad), chassis_yaw(float,rad), chassis_pitch(float,rad), gimbal_yaw(float,rad), gimbal_pitch(float,rad) |
 | 0xA2 | Status | stm32→ros | 12B | ~10Hz | game_progress(u8), stage_remain_time(u16,s), current_hp(u16), projectile_allowance_17mm(u16), team_colour(u8, 1=red 0=blue), rfid_base(u8) |
 | 0xA3 | HP | stm32→ros | 17B | ~2Hz | ally_1..4_robot_hp, ally_7_robot_hp, ally_outpost_hp, ally_base_hp (均为 u16) |
-| 0xB5 | Nav | ros→stm32 | 15B | 随 cmd_vel | vel_x(float,m/s), vel_y(float,m/s), vel_w(float,rad/s) |
+| 0xB5 | Nav | ros→stm32 | 11B | 随 cmd_vel | vel_x(float,m/s), vel_w(float,rad/s) —— 差速底盘无 vy |
 
 ## 4. ROS 接口
 
 | 话题 | 类型 | 方向 | 说明 |
 | :--- | :--- | :--- | :--- |
-| `/cmd_vel` | geometry_msgs/msg/Twist | Subscription | 接收速度指令，封装为 Nav 包发送至 STM32 |
-| `serial/gimbal_joint_state` | sensor_msgs/msg/JointState | Publication | 发布从 IMU 包解析的云台 pitch/yaw 角度 |
+| `/cmd_vel` | geometry_msgs/msg/TwistStamped | Subscription | 接收差速速度指令（base_footprint 系, 只消费 vx / wz），封装为 Nav 包发送至 STM32 |
+| `serial/gimbal_joint_state` | sensor_msgs/msg/JointState | Publication | 发布从 IMU 包解析的云台 pitch/yaw 角度 + chassis yaw/pitch 姿态（供 TF 链路使用） |
 | `referee/game_status` | rm_interfaces/msg/GameStatus | Publication | 发布从 Status 包解析的游戏阶段及剩余时间 |
 | `referee/robot_status` | rm_interfaces/msg/RobotStatus | Publication | 发布从 Status 包解析的当前血量及剩余弹量 |
 | `referee/all_robot_hp` | rm_interfaces/msg/GameRobotHP | Publication | 发布从 HP 包解析的 7 个己方单位血量值 |
@@ -131,14 +131,14 @@ ros2 launch rm_serial_driver serial_driver.launch.py device_name:=/dev/ttyUSB0
 
 - ROS 端与电控端的结构体必须保持严格的字节对齐，协议变更时两端必须同步更新。
 - CRC16 校验算法两端必须一致（采用查表法，初始值为 0xFFFF）。
-- `cmd_vel` 订阅的是绝对路径话题，接收的是经过 `fake_vel_transform` 转换后的最终速度（body 系并叠加了自旋速度）。
+- `cmd_vel` 订阅的是绝对路径话题，接收的是 Nav2 velocity_smoother 输出的 TwistStamped（`base_footprint` 系）。差速底盘 `chassis_yaw ≡ base_footprint_yaw`，可直接透传至下位机，**无需坐标旋转**。
 - 驱动具备自动重连机制，串口断开后会以 1s 为间隔尝试重新打开设备。
 - 本包特有的 CMake 配置将 C++ 标准设为 C++14（项目其他包通常使用 C++17）。
 - `package.xml` 中保留了部分历史遗留的未使用依赖（如 `auto_nav_interfaces`, `visualization_msgs` 等）。
 
 ## 11. 速度日志
 
-用于调试速度毛刺、突变等问题。启用后在串口发送前记录每帧 `vel_x`, `vel_y`, `vel_w` 到 CSV 文件，便于离线波形分析。
+用于调试速度毛刺、突变等问题。启用后在串口发送前记录每帧 `vel_x`, `vel_w` 到 CSV 文件，便于离线波形分析。
 
 ### 启用方式
 
@@ -163,13 +163,13 @@ ros2 launch rm_serial_driver serial_driver.launch.py enable_vel_log:=true
 ### CSV 格式
 
 ```csv
-timestamp_ns,vel_x,vel_y,vel_w
-1712345678000000000,1.23,-0.45,3.14
+timestamp_ns,vel_x,vel_w
+1712345678000000000,1.23,0.45
 ```
 
 - `timestamp_ns`：ROS 时间（纳秒）
-- `vel_x`, `vel_y`：body 系线速度（m/s），经 fake_vel_transform 旋转 + spin_speed 叠加后的最终值
-- `vel_w`：角速度（rad/s），含 spin_speed
+- `vel_x`：base_footprint 系前向线速度（m/s），直接透传自 Nav2 velocity_smoother
+- `vel_w`：角速度（rad/s）
 
 ### 离线分析
 
@@ -180,12 +180,12 @@ import matplotlib.pyplot as plt
 df = pd.read_csv('/tmp/vel_log_xxx.csv')
 df['t'] = (df['timestamp_ns'] - df['timestamp_ns'].iloc[0]) / 1e9
 
-fig, axes = plt.subplots(3, 1, sharex=True, figsize=(12, 6))
-for i, col in enumerate(['vel_x', 'vel_y', 'vel_w']):
+fig, axes = plt.subplots(2, 1, sharex=True, figsize=(12, 6))
+for i, col in enumerate(['vel_x', 'vel_w']):
     axes[i].plot(df['t'], df[col], linewidth=0.5)
     axes[i].set_ylabel(col)
     axes[i].grid(True, alpha=0.3)
-axes[2].set_xlabel('time (s)')
+axes[1].set_xlabel('time (s)')
 plt.tight_layout()
 plt.savefig('vel_debug.png', dpi=150)
 plt.show()

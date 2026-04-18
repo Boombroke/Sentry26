@@ -7,23 +7,23 @@ sentry_nav 是哨兵机器人自主导航系统的顶层元包。它通过依赖
 - **sentry_nav**: 元包描述文件，定义了整个导航系统的依赖关系。
 - **point_lio**: 基于 Point-LIO 算法的激光惯性里程计，提供高精度、高频的位姿估计。
 - **livox_ros_driver2**: Livox 激光雷达的 ROS2 驱动程序，负责原始数据采集。
-- **odom_bridge**: 里程计桥接节点。合并了原 loam_interface 和 sensor_scan_generation，在单次同步回调中完成 lidar_odom→odom 变换、2D 约束、TF 广播、速度计算和点云转换。
-- **nav2_plugins**: 自定义 Nav2 插件集合，包含强度体素层 (intensity_voxel_layer) 等。
-- **omni_pid_pursuit_controller**: 专为全向轮底盘设计的 PID 路径追踪控制器。
-- **teleop_twist_joy**: 支持 PS4 等标准手柄的远程控制模块。
-- **fake_vel_transform**: 速度矢量在不同坐标系之间的转换工具。
+- **odom_bridge**: 里程计桥接节点。合并了原 loam_interface 和 sensor_scan_generation，在单次同步回调中完成 lidar_odom→odom 变换、2D 约束、`odom → base_footprint` TF 广播、速度计算和点云转换。云台雷达方案下通过每帧 `lookupTransform(lidar_frame → base_frame)` 消化云台旋转对底盘位姿的影响。
+- **nav2_plugins**: 自定义 Nav2 插件集合，包含强度体素层 (intensity_voxel_layer) 和 BackUpFreeSpace 恢复行为等。
 - **ign_sim_pointcloud_tool**: 将 Ignition 仿真环境中的原始数据转换为标准点云格式。
 - **pointcloud_to_laserscan**: 将三维点云数据投影为二维激光扫描数据，兼容传统导航算法。
 - **terrain_analysis**: 基础地形分析模块，用于实时检测环境中的障碍物。
 - **terrain_analysis_ext**: 地形分析扩展模块，提升了机器人在复杂坡道与障碍物环境下的通过性。
 
+> 局部控制器（RPP + RotationShim）由 Nav2 Jazzy apt 提供（`nav2_regulated_pure_pursuit_controller`、`nav2_rotation_shim_controller`），不在本元包内。
+
 ## 系统核心话题
 - **订阅**:
-  - /cmd_vel: 接收上层下发的底盘控制速度。
   - /livox/lidar: 接收激光雷达原始点云数据。
+  - /livox/imu: 接收 IMU 数据。
 - **发布**:
-  - /odom: 发布融合后的机器人里程计信息。
-  - /scan: 发布投影后的二维激光扫描数据。
+  - /odometry: 发布融合后的机器人里程计信息（odom_bridge 差分速度）。
+  - /obstacle_scan: 发布投影后的二维激光扫描数据（供 SLAM toolbox 使用）。
+  - /registered_scan / /lidar_odometry: 供 terrain_analysis / terrain_analysis_ext 使用。
 
 ## 参数说明
 系统参数主要通过 sentry_nav_bringup 包中的 YAML 文件进行统一管理。各子包通过 ROS2 参数服务器读取各自的运行配置。

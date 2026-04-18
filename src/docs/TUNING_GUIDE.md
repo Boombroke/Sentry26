@@ -285,21 +285,21 @@ grep "GICP" /tmp/nav_log.txt
 
 ## 六、速度平滑器 (velocity_smoother)
 
-velocity_smoother 是 Nav2 官方节点，位于 controller_server 和 fake_vel_transform 之间，负责限制加速度和最大速度，防止指令突变。
+velocity_smoother 是 Nav2 官方节点，位于 controller_server 与底盘执行器之间（差速轮足方案下直连 `/cmd_vel`），负责限制加速度和最大速度，防止指令突变。
 
 ### 14. smoothing_frequency（平滑器频率）
 
-**当前值**：仿真 20Hz，实车 40Hz
+**当前值**：仿真 20Hz，实车 30Hz
 
-**核心原则**：必须与 `controller_frequency` 一致，否则高频端指令被丢弃。
+**核心原则（硬约束）**：必须与 `controller_frequency` 一致，否则高频端指令被丢弃。
 
 | 环境 | controller_frequency | smoothing_frequency | 状态 |
 |---|---|---|---|
 | 仿真 | 20 | 20 | ✅ 匹配 |
-| 实车 | 40 | 40 | ✅ 匹配 |
+| 实车 | 30 | 30 | ✅ 匹配 |
 
 **判断标准**：
-- `ros2 topic hz cmd_vel_nav2_result` 应接近 `smoothing_frequency`
+- `ros2 topic hz /cmd_vel` 应接近 `smoothing_frequency`
 - 如果明显低于设定值 → CPU 不足，降低频率
 
 ### 15. feedback 模式
@@ -327,9 +327,9 @@ python3 src/sentry_tools/serial_visualizer.py
 
 ### 16. max_accel / max_decel（加速度限制）
 
-**当前值**：`[4.5, 4.5, 5.0]` / `[-4.5, -4.5, -5.0]`
+**当前值**：`[4.5, 0.0, 5.0]` / `[-4.5, 0.0, -5.0]`
 
-**调优范围**：1.0 ~ 6.0 m/s²
+**调优范围**：1.0 ~ 6.0 m/s²（vy 始终锁 0）
 
 **影响**：
 - 过大 → 底盘实际跟不上（轮子打滑），smoother 形同虚设
@@ -353,9 +353,9 @@ python3 src/sentry_tools/serial_visualizer.py
 
 ### 17. max_velocity（最大速度限制）
 
-**当前值**：`[2.5, 2.5, 3.0]`
+**当前值**：`[2.5, 0.0, 3.0]` —— **vy 必须锁 0**（差速约束）
 
-应与 controller 的 `v_linear_max` / `v_angular_max` 一致或略大。如果 smoother 限速比 controller 小，controller 的指令会被截断。
+应与 controller 的 `desired_linear_vel` / `max_angular_accel * simulate_ahead_time` 一致或略大。如果 smoother 限速比 controller 小，controller 的指令会被截断。
 
 ### 18. deadband_velocity（死区）
 
@@ -366,8 +366,65 @@ python3 src/sentry_tools/serial_visualizer.py
 **影响**：低于死区的速度被归零，消除低速抖动。
 
 **判断标准**：
-- serial_visualizer 中静止时 cmd 在 ±0.02 范围内抖动 → 设 `[0.02, 0.02, 0.05]`
+- serial_visualizer 中静止时 cmd 在 ±0.02 范围内抖动 → 设 `[0.02, 0.0, 0.05]`（vy 永为 0）
 - 没有抖动 → 保持 0
+
+---
+
+## 六-B、差速控制器 (RotationShim + RPP)
+
+Nav2 官方差速默认组合。`controller_plugins: ["RotateShim", "FollowPath"]` 级联：RotationShim 处理大转角原地旋转，RPP 负责路径跟随。
+
+### 19. RotationShim 关键参数
+
+| 参数 | 仿真默认 | 实车默认 | 说明 |
+|---|---|---|---|
+| `angular_dist_threshold` | 0.785 | 0.785 | 路径方向与朝向夹角 ≥ 此值（45°）时先原地转 |
+| `forward_sampling_distance` | 0.5 | 0.5 | 路径前方采样距离，用于判定目标方向 |
+| `rotate_to_heading_angular_vel` | 1.5 | 1.5 | 原地旋转角速度上限 (rad/s) |
+| `max_angular_accel` | 3.2 | 3.2 | 原地旋转角加速度 (rad/s²) |
+| `simulate_ahead_time` | 1.0 | 1.0 | 碰撞检查的预测时间窗 |
+
+**调优方法**：
+- 机器人进入路径时反复小幅振荡 → 增大 `angular_dist_threshold`（如 0.5 → 1.0）减少 RotationShim 接管频次
+- 出了 RotationShim 后 RPP 急转 → 减小 `angular_dist_threshold`（如 0.785 → 0.5）让 RotationShim 对齐得更精确
+
+### 20. RPP 关键参数
+
+| 参数 | 仿真默认 | 实车默认 | 说明 |
+|---|---|---|---|
+| `desired_linear_vel` | 2.0 | 1.0 | 期望线速度 (m/s)，实车起步偏保守 |
+| `lookahead_dist` | 1.2 | 1.2 | 基础前瞻距离 (m) |
+| `min_lookahead_dist` | 0.6 | 0.6 | velocity-scaled lookahead 下限 |
+| `max_lookahead_dist` | 1.5 | 1.5 | velocity-scaled lookahead 上限 |
+| `lookahead_time` | 1.0 | 1.0 | `lookahead = max(min, vx * lookahead_time)` 被限幅 |
+| `use_velocity_scaled_lookahead_dist` | true | true | 开启速度相关的 lookahead 自适应 |
+| `use_regulated_linear_velocity_scaling` | true | true | 开启曲率与接近减速 |
+| `regulated_linear_scaling_min_radius` | 0.5 | 0.5 | 曲率半径小于此值开始降速 |
+| `regulated_linear_scaling_min_speed` | 0.3 | 0.3 | 曲率降速的速度下限 |
+| `approach_velocity_scaling_dist` | 0.8 | 0.8 | 接近目标开始减速的距离 |
+| `min_approach_linear_velocity` | 0.3 | 0.3 | 接近段最小线速度 |
+| `use_rotate_to_heading` | true | true | 终端是否对齐目标朝向 |
+| `rotate_to_heading_min_angle` | 0.5 | 0.5 | 触发终端旋转的最小角度差 (rad) |
+| `max_angular_accel` | 3.2 | 3.2 | 角加速度上限 |
+| `allow_reversing` | false | false | 差速不允许倒车 |
+| `use_collision_detection` | true | true | 开启基于 carrot 的碰撞预测 |
+| `max_allowed_time_to_collision_up_to_carrot` | 1.5 | 1.5 | 碰撞预测时间窗 (s) |
+
+**调优流程**：
+1. **线速度**：先用 `desired_linear_vel` 把期望速度定在硬件能吃到的值（仿真 2.0，实车首轮 1.0）。
+2. **路径跟随**：若直线段频繁震荡，增大 `lookahead_dist`；若弯道切内拐角严重，减小 `lookahead_dist` 或增大 `regulated_linear_scaling_min_radius`。
+3. **高曲率降速**：观察仿真中 U 弯是否擦墙，若需更激进减速减小 `regulated_linear_scaling_min_radius`。
+4. **终端对齐**：若机器人到点后还在原地小幅旋转，减小 `rotate_to_heading_min_angle`；若到点后就停、没做终端对齐，增大该值让 RPP 仅在真正偏离时才旋转。
+5. **RotationShim 与 RPP 交接**：开启 `headless` 仿真观察日志行 `Rotating shim active` 频率，若频率太高说明 `angular_dist_threshold` 偏小。
+
+### 21. 终端参数（general_goal_checker）
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `xy_goal_tolerance` | 0.15 | 到点距离容差 (m) |
+| `yaw_goal_tolerance` | 6.28 | 保持 2π 让 RPP 的 `use_rotate_to_heading` 做对齐；不设小值可避免与 RPP 内部对齐逻辑冲突 |
+| `stateful` | True | 到点后保持状态，避免振荡 |
 
 ---
 

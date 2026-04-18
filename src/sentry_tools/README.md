@@ -258,7 +258,7 @@ python3 src/sentry_tools/serial_visualizer.py
 |---|---|
 | 左1 | 云台 pitch/yaw 滚动曲线（10s 窗口） |
 | 左2 | Vx 对比：命令（实线）vs 实际（虚线） |
-| 左3 | Vy 对比：命令（实线）vs 实际（虚线） |
+| 左3 | Vy 对比：命令（实线）vs 实际（虚线）—— 差速下应恒为 0 |
 | 左4 | Vw 对比：命令（实线）vs 实际（虚线） |
 | 右上 | 比赛阶段 + 倒计时进度条 |
 | 右中 | 自身 HP + 弹量 / 导航命令速度 / 实际速度 / 跟踪误差 / 最终下发速度 |
@@ -269,15 +269,14 @@ python3 src/sentry_tools/serial_visualizer.py
 
 | Topic | 用途 |
 |---|---|
-| `cmd_vel_nav2_result` | 导航命令速度（world 系，fake_vel_transform 之前，无自旋） |
-| `cmd_vel` | 最终下发速度（body 系 + spin_speed，fake_vel_transform 之后） |
-| `odometry` | 实际速度（world 系，odom_bridge 位置差分） |
+| `cmd_vel` | Nav2 下发速度（TwistStamped, base_footprint 系，差速链路直通） |
+| `odometry` | 实际速度（base_footprint 系，odom_bridge 位置差分） |
 | `serial/gimbal_joint_state` | 云台关节状态 |
 | `referee/game_status` | 比赛阶段 + 倒计时 |
 | `referee/robot_status` | 血量 + 弹量 |
 | `referee/all_robot_hp` | 全队血量 |
 
-> ⚠️ 速度对比只能用 `cmd_vel_nav2_result`（world 系）vs `odometry`（world 系）。不能用 `cmd_vel`（body 系+自旋 3.14 rad/s），详见 AGENTS.md 第 4 节。
+> 差速轮足方案：`cmd_vel` 与 `odometry` 的 twist 均在 base_footprint 系，`chassis_yaw ≡ base_footprint_yaw`，**可直接对比**。
 
 **完整联调 4 终端：**
 

@@ -29,26 +29,26 @@
 
 | 模式 | 启动文件 | 核心参数 | 用途 |
 |:---|:---|:---|:---|
-| 仿真导航 | `rm_navigation_simulation_launch.py` | `slam:=False` | Gazebo 仿真环境中的自主导航 |
+| 仿真一键 | `rm_simulation_all_launch.py` | `world` / `slam` | **推荐**：Gazebo + 导航栈一键启动 |
+| 仿真导航栈 | `rm_navigation_simulation_launch.py` | `slam:=False` | 单独启动导航栈（Gazebo 已在运行时使用） |
 | 仿真建图 | `rm_navigation_simulation_launch.py` | `slam:=True` | 在仿真中构建 2D 栅格地图和保存 PCD |
 | 实车导航 | `rm_navigation_reality_launch.py` | `slam:=False` | 物理机器人的自主导航 |
 | 实车建图 | `rm_navigation_reality_launch.py` | `slam:=True` | 物理机器人构建地图 |
 | 行为树决策 | `sentry_behavior_launch.py` | `target_tree` | 比赛战术逻辑（独立启动） |
 | 多机器人仿真 | `rm_multi_navigation_simulation_launch.py` | `robots` | 多机同场景仿真（实验性） |
-| 手柄遥控 | 内嵌于导航 launch | 默认开启 | PS4 手柄控制 |
 
 ### Launch 层级关系
 
 ```
-仿真模式:
-  bringup_sim.launch.py (Gazebo 仿真器)
-  └── rm_navigation_simulation_launch.py
+仿真模式（推荐一键启动）:
+  rm_simulation_all_launch.py
+  ├── bringup_sim.launch.py (Gazebo 仿真器，自动 unpause)
+  └── rm_navigation_simulation_launch.py (延时 15s 拉起)
       ├── ign_sim_pointcloud_tool (仿真专用点云格式转换)
       ├── bringup_launch.py
       │   ├── [slam=True]  → slam_launch.py
       │   ├── [slam=False] → localization_launch.py
       │   └── navigation_launch.py (始终启动)
-      ├── joy_teleop_launch.py (手柄控制)
       └── rviz_launch.py (可视化，可选)
 
 实车模式:
@@ -59,7 +59,6 @@
   │   ├── [slam=True]  → slam_launch.py
   │   ├── [slam=False] → localization_launch.py
   │   └── navigation_launch.py (始终启动)
-  ├── joy_teleop_launch.py
   └── rviz_launch.py (可选)
 
 行为树决策 (独立):
@@ -81,7 +80,7 @@ Nav2 bt_navigator (导航 BT)
     │  决定 "怎么去"
     │  ComputePathToPose → FollowPath
     v
-omni_pid_pursuit_controller (局部控制)
+RotationShimController + RegulatedPurePursuitController (局部控制，差速)
 ```
 
 - **游戏策略层** (`sentry_behavior/behavior_trees/`): BTCPP_format="4"，根据裁判系统、视觉识别等信息决定巡逻路线和战术切换。
@@ -97,6 +96,17 @@ omni_pid_pursuit_controller (局部控制)
 - 先验点云文件 (PCD) 已放置在 `sentry_nav_bringup/pcd/simulation/` 目录
 
 ### 启动步骤
+
+**推荐：一键启动（Gazebo + 导航栈）**
+
+```bash
+# 自动启动 Gazebo、unpause、延时 15s 后拉起导航栈
+QT_QPA_PLATFORM=xcb ros2 launch sentry_nav_bringup rm_simulation_all_launch.py world:=rmuc_2026 slam:=False
+```
+
+---
+
+**分步启动（调试用）**
 
 **第 1 步：启动 Gazebo 仿真器（必须先启动）**
 
@@ -122,10 +132,10 @@ gz service -s /world/default/control \
 
 ```bash
 # 导航模式（使用已有地图）
-ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_2026 slam:=False
+ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmuc_2026 slam:=False
 
 # 建图模式
-ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_2026 slam:=True
+ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmuc_2026 slam:=True
 ```
 
 ### 完整参数列表
@@ -410,25 +420,11 @@ ros2 launch sentry_nav_bringup rm_multi_navigation_simulation_launch.py \
 
 ## 7. 辅助工具
 
-### 7.1 手柄遥控
+### 7.1 地图坐标拾取工具
 
-导航 launch 文件默认内嵌启动手柄控制节点。也可独立启动：
+使用 matplotlib 可视化地图并交互式拾取坐标（用于设定行为树中的目标点），详见 `sentry_tools/sentry_toolbox.py` 标签页 2。
 
-```bash
-ros2 launch sentry_nav_bringup joy_teleop_launch.py
-```
-
-PS4 手柄键位映射在 `nav2_params.yaml` 的 `teleop_twist_joy_node:` 段配置。
-
-### 7.2 地图坐标拾取工具
-
-使用 matplotlib 可视化地图并交互式拾取坐标（用于设定行为树中的目标点）：
-
-```bash
-ros2 launch location map_visualizer_launch.py
-```
-
-### 7.3 独立模块启动
+### 7.2 独立模块启动
 
 以下模块可独立启动，用于调试或单元测试：
 
@@ -438,7 +434,6 @@ ros2 launch location map_visualizer_launch.py
 | 里程计桥接 | 已集成到 navigation_launch.py 中 (odom_bridge composable node) |
 | GICP 重定位 | `ros2 launch small_gicp_relocalization small_gicp_relocalization_launch.py` |
 | Livox 驱动 | `ros2 launch livox_ros_driver2 msg_MID360_launch.py` |
-| 速度变换 | `ros2 launch fake_vel_transform fake_vel_transform_launch.py` |
 | 里程计插值 | `ros2 launch odom_interpolator odom_interpolator_launch.py` |
 | 机器人描述 | `ros2 launch sentry_robot_description robot_description_launch.py` |
 | 串口驱动 | `ros2 launch serial_driver serial_driver.launch.py` |
@@ -451,46 +446,51 @@ ros2 launch location map_visualizer_launch.py
 - 仿真：`sentry_nav_bringup/config/simulation/nav2_params.yaml`
 - 实车：`sentry_nav_bringup/config/reality/nav2_params.yaml`
 
-### 8.1 全局规划器
+### 8.1 全局规划器 - SmacPlanner2D
 
-**仿真使用 SmacPlannerHybrid，实车使用 ThetaStarPlanner**（实车配置中 SmacPlannerHybrid 已注释保留）。
-
-#### SmacPlannerHybrid (仿真)
+差速轮足方案下仿真和实车均使用 SmacPlanner2D（8 方向无运动学约束栅格搜索），差速底盘靠 RotationShim 处理大转角。
 
 | 参数 | 默认值 | 说明 |
 |:---|:---|:---|
-| `motion_model_for_search` | `DUBIN` | 运动模型。虽然是全向底盘，Dubin 可生成更自然的路径 |
-| `minimum_turning_radius` | `0.05` | 最小转弯半径 (m)，设为极小值模拟全向移动 |
-| `angle_quantization_bins` | `64` | 角度搜索离散化精度 |
-| `cost_travel_multiplier` | `2.0` | 路径长度代价权重 |
+| `tolerance` | `0.5` | 目标附近搜索容差 (m) |
+| `allow_unknown` | `true` | 未知区域是否视为可通行 |
+| `cost_travel_multiplier` | `3.0` | 路径长度代价权重（鼓励走通道中央） |
 | `max_iterations` | `1000000` | 最大搜索迭代次数 |
-| `lookup_table_size` | `20.0` | 查找表大小 |
+| `max_planning_time` | `2.0` | 单次规划最长耗时 (s) |
 | `smoother.max_iterations` | `1000` | 路径平滑迭代次数 |
 | `smoother.w_smooth` | `0.3` | 平滑权重 |
 | `smoother.w_data` | `0.2` | 数据保真权重 |
 
-#### ThetaStarPlanner (实车)
+> 备选：若 SmacPlanner2D 折线经 smoother 后仍不满意窄过道表现，可切换 SmacPlannerHybrid + DUBIN 运动模型（需同时调大 `minimum_turning_radius`）。
 
-| 参数 | 默认值 | 说明 |
-|:---|:---|:---|
-| `how_many_corners` | `8` | 搜索方向数量 (4 或 8) |
-| `w_euc_cost` | `1.0` | 欧几里得距离代价权重 |
-| `w_traversal_cost` | `2.0` | 代价地图穿越代价权重 |
-| `terminal_checking_interval` | `5000` | 终端检查间隔 |
+### 8.2 局部控制器 - RotationShim + RegulatedPurePursuit
 
-### 8.2 局部控制器 - OmniPidPursuitController
+Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"]`：
 
-仿真和实车均使用此控制器：
-
+**RotateShim**：
 | 参数 | 仿真 | 实车 | 说明 |
 |:---|:---|:---|:---|
-| `lookahead_dist` | `2.0` | `2.0` | 前瞻距离 (m) |
-| `v_linear_max` | `2.5` | `2.5` | 最大线速度 (m/s) |
-| `v_angular_max` | `3.0` | `3.0` | 最大角速度 (rad/s) |
-| `curvature_max` | `1.0` | `1.0` | 触发减速的最大曲率阈值 |
-| `reduction_ratio` | `0.5` | `0.5` | 高曲率时速度缩减比例 |
-| `enable_rotation` | `false` | `false` | 是否旋转到目标朝向（全向底盘不需要） |
-| `target_frame` | `gimbal_yaw_fake` | `gimbal_yaw_fake` | 控制器参考坐标系 |
+| `angular_dist_threshold` | `0.785` | `0.785` | 45° 以上先原地旋转 |
+| `forward_sampling_distance` | `0.5` | `0.5` | 路径方向采样距离 |
+| `rotate_to_heading_angular_vel` | `1.5` | `1.5` | 原地旋转角速度 (rad/s) |
+| `max_angular_accel` | `3.2` | `3.2` | 角加速度上限 |
+| `simulate_ahead_time` | `1.0` | `1.0` | 碰撞检查预测窗 |
+| `primary_controller` | `nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController` | 同左 | 委托的主控制器 |
+
+**FollowPath (RPP)**：
+| 参数 | 仿真 | 实车 | 说明 |
+|:---|:---|:---|:---|
+| `desired_linear_vel` | `2.0` | `1.0` | 期望线速度 (m/s) |
+| `lookahead_dist` | `1.2` | `1.2` | 基础前瞻距离 |
+| `min_lookahead_dist` | `0.6` | `0.6` | velocity-scaled lookahead 下限 |
+| `max_lookahead_dist` | `1.5` | `1.5` | velocity-scaled lookahead 上限 |
+| `use_regulated_linear_velocity_scaling` | `true` | `true` | 启用曲率 + 接近减速 |
+| `regulated_linear_scaling_min_radius` | `0.5` | `0.5` | 触发曲率降速的半径 |
+| `regulated_linear_scaling_min_speed` | `0.3` | `0.3` | 曲率降速速度下限 |
+| `use_rotate_to_heading` | `true` | `true` | 终端对齐朝向 |
+| `rotate_to_heading_min_angle` | `0.5` | `0.5` | 终端旋转触发角度 |
+| `allow_reversing` | `false` | `false` | 差速不倒车 |
+| `transform_tolerance` | `0.1` | `0.1` | TF 容差 |
 
 ### 8.3 代价地图 (Costmap2D)
 
@@ -519,14 +519,19 @@ ros2 launch location map_visualizer_launch.py
 
 ### 8.4 速度平滑器 (Velocity Smoother)
 
+差速约束下 **vy 必须锁 0**，防止异常 vy 被下游 DiffDrive 插件 / rm_serial_driver 误消费。
+
 | 参数 | 默认值 | 说明 |
 |:---|:---|:---|
-| `smoothing_frequency` | `20.0` | 平滑处理频率 (Hz) |
-| `max_velocity` | `[2.5, 2.5, 3.0]` | 最大速度 [vx, vy, vθ] (m/s, m/s, rad/s) |
-| `min_velocity` | `[-2.5, -2.5, -3.0]` | 最小速度（反向） |
-| `max_accel` | `[4.5, 4.5, 5.0]` | 最大加速度 [ax, ay, aθ] |
-| `max_decel` | `[-4.5, -4.5, -5.0]` | 最大减速度 |
+| `smoothing_frequency` | 仿真 `20.0` / 实车 `30.0` | 必须与 `controller_frequency` 一致 |
+| `enable_stamped_cmd_vel` | `true` | Jazzy 要求：三个节点（controller_server / behavior_server / velocity_smoother）必须一致 |
+| `max_velocity` | `[2.5, 0.0, 3.0]` | 最大速度 [vx, vy, vθ]，**vy 锁 0** |
+| `min_velocity` | `[-2.5, 0.0, -3.0]` | 最小速度（反向），**vy 锁 0** |
+| `max_accel` | `[4.5, 0.0, 5.0]` | 最大加速度 [ax, ay, aθ] |
+| `max_decel` | `[-4.5, 0.0, -5.0]` | 最大减速度 |
 | `feedback` | `OPEN_LOOP` | 反馈模式。`OPEN_LOOP` 不依赖里程计反馈 |
+
+> velocity_smoother 的输出直接 remap 到 `/cmd_vel`（差速底盘 `chassis_yaw ≡ base_footprint_yaw`，无需坐标旋转）。
 
 ### 8.5 恢复行为插件
 
@@ -719,11 +724,12 @@ ros2 launch location map_visualizer_launch.py
 | | `max_fitness_error` | `5.0` | `1.0` | 仿真误差大 |
 | | `max_iterations` | `50` | `20` | 仿真需更多迭代 |
 | | `num_threads` | `4` | `8` | 实车算力更强 |
-| **Nav2** | `controller_frequency` | `20.0` | `60.0` | 实车需要更高控制频率 |
+| **Nav2** | `controller_frequency` | `20.0` | `30.0` | 实车需要更高控制频率 |
 | | `costmap update_frequency` | `10.0` | `30.0` | 实车实时性要求更高 |
-| | `planner plugin` | `SmacPlannerHybrid` | `ThetaStarPlanner` | 不同规划策略 |
-| | `robot_radius` | `0.2` | `0.24` | 实车尺寸略大 |
-| | `inflation_radius` | `0.7` | `0.5` | 实车场地较小 |
+| | `planner plugin` | `SmacPlanner2D` | `SmacPlanner2D` | 差速方案仿真/实车统一 |
+| | `desired_linear_vel (RPP)` | `2.0` | `1.0` | 实车起步偏保守 |
+| | `robot_radius` | `0.25` | `0.30` | 实车尺寸略大 |
+| | `inflation_radius` | `1.0` | `1.0` | 差速方案统一 |
 | **地形** | `vehicleHeight` | `0.5` | `0.55` | 实车高度不同 |
 | | `minDyObsDis` | `0.3` | `0.5` | 实车动态障碍检测距离更大 |
 
@@ -733,16 +739,16 @@ ros2 launch location map_visualizer_launch.py
 
 ### 场景 1: 机器人频繁撞墙
 
-- 增大 `inflation_radius`（如 0.5 → 0.8）
+- 增大 `inflation_radius`（如 0.7 → 1.0）
 - 增大 `robot_radius`（确保覆盖实际外形）
-- 降低 `v_linear_max`（减速增加反应时间）
+- 降低 `desired_linear_vel`（RPP 期望线速度），同步检查 velocity_smoother 的 `max_velocity[0]`
 - 检查 `costmap update_frequency` 是否足够高
 
 ### 场景 2: 路径规划失败 / 找不到路径
 
 - 减小 `inflation_radius`（给规划器留出更多通行空间）
 - 检查静态地图是否准确反映实际环境
-- 增大 `SmacPlannerHybrid.max_iterations` 或降低 `cost_travel_multiplier`
+- 增大 `SmacPlanner2D.max_iterations` 或降低 `cost_travel_multiplier`
 - 确认 `robot_radius` 不大于最窄通道宽度的一半
 
 ### 场景 3: 重定位不收敛
