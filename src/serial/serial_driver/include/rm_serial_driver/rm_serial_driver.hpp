@@ -4,7 +4,7 @@
 #include <tf2_ros/transform_broadcaster.h>
 
 #include <geometry_msgs/msg/transform_stamped.hpp>
-#include <geometry_msgs/msg/twist.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
 #include <rclcpp/publisher.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/subscription.hpp>
@@ -37,7 +37,7 @@ public:
 private:
   void getParams();
   void receiveLoop();
-  void sendNavData(const geometry_msgs::msg::Twist::SharedPtr msg);
+  void sendNavData(const geometry_msgs::msg::TwistStamped::SharedPtr msg);
   void reopenPort();
 
   void handleImuPacket(const ReceiveImuPacket & pkt);
@@ -49,7 +49,7 @@ private:
   std::unique_ptr<drivers::serial_driver::SerialPortConfig> device_config_;
   std::unique_ptr<drivers::serial_driver::SerialDriver> serial_driver_;
 
-  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_sub_;
 
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
   rclcpp::Publisher<rm_interfaces::msg::GameStatus>::SharedPtr game_status_pub_;
