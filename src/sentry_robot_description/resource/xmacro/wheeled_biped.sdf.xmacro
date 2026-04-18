@@ -14,6 +14,8 @@
     <xmacro_define_value name="wheel_radius" value="0.076" />
     <xmacro_define_value name="wheel_width" value="0.04" />
     <xmacro_define_value name="wheel_separation" value="0.28" />
+    <xmacro_define_value name="half_wheel_sep" value="0.14" />
+    <xmacro_define_value name="neg_half_wheel_sep" value="-0.14" />
 
     <xmacro_define_value name="gimbal_yaw_height" value="0.18" />
     <xmacro_define_value name="gimbal_pitch_height" value="0.08" />
@@ -23,8 +25,15 @@
          用无摩擦 caster 作为被动支撑点，和真实轮足表现等价（都是
          vx/wz 差速） -->
     <xmacro_define_value name="caster_radius" value="0.025" />
-    <xmacro_define_value name="caster_offset_x" value="0.14" />
-    <xmacro_define_value name="caster_z" value="${-wheel_radius + caster_radius}" />
+    <!-- caster 位置硬编码：
+         caster_offset_x_front = 0.14（底盘中心到前 caster 的 x 距离）
+         caster_offset_x_rear  = -0.14（对称到后方）
+         caster_z = -(wheel_radius - caster_radius) = -(0.076 - 0.025) = -0.051
+                    使 caster 触地点与两驱动轮触地点齐平
+         xmacro 对嵌套负号表达式解析不稳定，故硬编码 -->
+    <xmacro_define_value name="caster_offset_x_front" value="0.14" />
+    <xmacro_define_value name="caster_offset_x_rear" value="-0.14" />
+    <xmacro_define_value name="caster_z" value="-0.051" />
 
     <!--wheeled biped robot model-->
     <model name="wheeled_biped">
@@ -90,7 +99,7 @@
 
         <!--left drive wheel-->
         <joint name="left_wheel_joint" type="revolute">
-            <pose relative_to="chassis">0 ${wheel_separation / 2} 0 -1.5708 0 0</pose>
+            <pose relative_to="chassis">0 ${half_wheel_sep} 0 -1.5708 0 0</pose>
             <parent>chassis</parent>
             <child>left_wheel</child>
             <axis>
@@ -151,7 +160,7 @@
 
         <!--right drive wheel-->
         <joint name="right_wheel_joint" type="revolute">
-            <pose relative_to="chassis">0 -${wheel_separation / 2} 0 -1.5708 0 0</pose>
+            <pose relative_to="chassis">0 ${neg_half_wheel_sep} 0 -1.5708 0 0</pose>
             <parent>chassis</parent>
             <child>right_wheel</child>
             <axis>
@@ -212,7 +221,7 @@
 
         <!--front caster（被动球形支撑轮，低摩擦，防止底盘倒立摆翻倒）-->
         <joint name="front_caster_joint" type="fixed">
-            <pose relative_to="chassis">${caster_offset_x} 0 ${caster_z} 0 0 0</pose>
+            <pose relative_to="chassis">${caster_offset_x_front} 0 ${caster_z} 0 0 0</pose>
             <parent>chassis</parent>
             <child>front_caster</child>
         </joint>
@@ -255,7 +264,7 @@
 
         <!--rear caster-->
         <joint name="rear_caster_joint" type="fixed">
-            <pose relative_to="chassis">-${caster_offset_x} 0 ${caster_z} 0 0 0</pose>
+            <pose relative_to="chassis">${caster_offset_x_rear} 0 ${caster_z} 0 0 0</pose>
             <parent>chassis</parent>
             <child>rear_caster</child>
         </joint>
