@@ -1,5 +1,7 @@
 # sentry_tools — 哨兵机器人调试工具集
 
+> **Maintainer**: Boombroke <boombroke@icloud.com>
+
 ## 快速开始
 
 ```bash
@@ -12,6 +14,64 @@ python3 src/sentry_tools/serial_visualizer.py
 ```
 
 依赖：`pip install pyserial`（PyQt5/pyqtgraph PyOpenGL/numpy/pyyaml 随 ROS2 Jazzy 自带）
+
+---
+
+## 仿真 vs 实车：工具使用区别
+
+| 场景 | 工具箱 (sentry_toolbox.py) | 数据可视化 (serial_visualizer.py) |
+|---|---|---|
+| **仿真** | 通常不启动（Gazebo DiffDrive 插件直接消费 cmd_vel，不需要 mock 串口；地图拾取/重力标定仍可用） | 需 `--ros-args -r __ns:=/red_standard_robot1` 进入 namespace |
+| **实车** | 建议启动：串口诊断 + 连通性检测 + 重力标定（首次安装 LiDAR） | 直接运行，话题在根 namespace |
+| **联调** | 启动串口 Mock 模拟下位机，配合 serial_driver 测试 ROS 端协议解析 | 同时订阅 Mock 发出的 imu/status/hp 和 Nav2 的 cmd_vel，验证双向链路 |
+
+### 仿真下推荐启动流程
+
+仿真阶段一般**只启动 serial_visualizer.py**，用于可视化 Nav2 下发的 cmd_vel 和 odometry 对比。`sentry_toolbox.py` 的 5 个标签页中：
+
+- **串口 Mock**：仿真不需要（没有真实串口，Gazebo 直接提供传感器数据）
+- **地图拾取与编辑**：仿真建图后用它编辑 .pgm 地图（修补碰撞漏洞、画临时墙等），**常用**
+- **连通性检测**：仿真下跑一遍能检查 Nav2 是否全线 active，**常用**
+- **串口诊断**：仿真无串口，**不适用**
+- **重力标定**：仿真 IMU 数据已是理想值，**不适用**
+
+```bash
+# 典型仿真调试
+ros2 launch sentry_nav_bringup rm_simulation_all_launch.py world:=rmuc_2026 slam:=True headless:=true &
+sleep 30
+python3 src/sentry_tools/serial_visualizer.py --ros-args -r __ns:=/red_standard_robot1
+# 另起终端看地图/调试连通性
+python3 src/sentry_tools/sentry_toolbox.py
+```
+
+### 实车下推荐启动流程
+
+实车阶段**五个工具都可能用到**：
+
+- **首次部署**：用工具箱 → 重力标定（LiDAR 安装后）→ 串口诊断（确认下位机通信）→ 连通性检测（一键自检整套 ROS 节点+TF）
+- **建图阶段**：地图拾取与编辑（保存建图后修补）
+- **日常导航**：serial_visualizer.py 实时看 Nav2 指令 vs 底盘实际速度
+- **协议调试**：串口 Mock（用 `socat` 虚拟串口对脱离硬件测 rm_serial_driver）
+
+```bash
+# 典型实车部署
+ros2 launch sentry_nav_bringup rm_sentry_launch.py slam:=True &
+sleep 10
+python3 src/sentry_tools/sentry_toolbox.py     # 诊断 + 重力标定
+# 另起终端
+python3 src/sentry_tools/serial_visualizer.py  # 实时速度可视化
+```
+
+### 关键差异小结
+
+| 差异项 | 仿真 | 实车 |
+|---|---|---|
+| namespace | `red_standard_robot1` / `blue_standard_robot1` | 根 namespace 或项目指定 |
+| 串口设备 | 无（Gazebo 直通 cmd_vel） | `/dev/ttyACM*` 或虚拟串口对 |
+| IMU 来源 | Gazebo gpu_lidar 关联的 imu sensor | Mid360 内置 BMI088 |
+| Gravity 标定 | 不需要（默认 `[0, 0, -9.810]`） | 每次更换雷达必须重做 |
+| cmd_vel 流向 | ROS → `ros_gz_bridge` → gz DiffDrive 插件 | ROS → `rm_serial_driver` → 串口 → 下位机电机 |
+| TF 来源 | Gazebo JointStatePublisher + robot_state_publisher | 下位机上报 joint_state + robot_state_publisher |
 
 ---
 
@@ -34,9 +94,11 @@ python3 src/sentry_tools/serial_visualizer.py
 
 | 标签页 | 帧头 | 默认周期 | 可调字段 |
 |---|---|---|---|
-| IMU | 0xA1 | 20ms | pitch, yaw（滑块 ±3.14） |
+| IMU | 0xA1 | 1ms | pitch, yaw（历史兼容）+ gimbal_pitch/yaw + chassis_pitch/yaw（2026 差速轮足新增） |
 | Status | 0xA2 | 100ms | 比赛阶段(下拉)、剩余时间、血量、弹量、红蓝队(单选)、RFID(勾选) |
 | HP | 0xA3 | 500ms | 7 个己方血量（1/2/3/4/7号 + 前哨 + 基地） |
+
+> IMU 包二进制布局从 2026-04-18 起从 11B 扩展到 27B，下位机固件需用新版 `navigation_auto.h` 重编以匹配 ROS 端解析。
 
 **控件是动态生成的**——修改 `protocol.yaml` 并重新生成后，新字段会自动出现。
 
@@ -119,7 +181,7 @@ ros2 launch serial_driver serial_driver.launch.py device_name:=/dev/pts/4
 | 串口设备 | `/dev/ttyACM*`, `/dev/ttyUSB*` | ✅ 存在 / ❌ 无设备 |
 | 关键节点 | serial_driver, controller_server, planner_server, bt_navigator, behavior_server, odom_bridge 等 | ✅ 运行中 / ❌ 未检测到 |
 | Topic 状态 | gimbal_joint_state, cmd_vel, odometry, obstacle_scan, terrain_map, referee/* | ✅ 有发布者 / ⚠️ 频率低 / ❌ 无发布者 |
-| TF 链路 | map→odom, odom→chassis, chassis→gimbal_yaw | ✅ 正常 / ❌ 断开 |
+| TF 链路 | map→odom→base_footprint→chassis→gimbal_yaw→gimbal_pitch→front_mid360（6 层差速轮足 TF） | ✅ 正常 / ❌ 断开 |
 
 **底部汇总**：`总览: 12/15 正常  ⚠️ 1 警告  ❌ 2 异常`
 
@@ -145,9 +207,10 @@ ros2 launch serial_driver serial_driver.launch.py device_name:=/dev/pts/4
 
 | 现象 | 看哪里 | 修复 |
 |---|---|---|
-| 机器人不动 | `/cmd_vel` topic + controller_server | 启动导航 launch |
+| 机器人不动 | `/cmd_vel` 是否 TwistStamped 单类型 + velocity_smoother 是否 active | 启动导航 launch；检查 `ros2 topic info /cmd_vel` 类型非混合 |
 | 导航无路径 | planner_server + obstacle_scan + terrain_map | `fix_nav2_deps.sh` + 启动 launch |
-| 定位漂移 | `odom→chassis` TF + odometry topic | 检查 point_lio 节点 |
+| 定位漂移 | `odom→base_footprint` TF + odometry topic | 检查 point_lio 节点 |
+| RPP 原地旋转不前进 | SLAM unknown costmap 导致 RPP 误报碰撞 | `nav2_params.yaml` 确认 `use_collision_detection: false` |
 | 裁判系统异常 | 串口设备 + `referee/*` topic | `fix_serial_permission.sh` |
 | 行为树不执行 | sentry_behavior_server + referee topic | `fix_build.sh` |
 | 所有都红 | 全部 | `setup_env.sh`（一键修复按钮）|

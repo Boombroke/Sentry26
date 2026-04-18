@@ -90,6 +90,8 @@ class SerialVisualizerNode(Node):
         self.create_subscription(JointState, 'serial/gimbal_joint_state', self._on_gimbal, 10)
         # 差速方案下 cmd_vel 即最终指令（base_footprint 系 ≡ chassis yaw）
         self.create_subscription(TwistStamped, 'cmd_vel', self._on_cmd_vel, 10)
+        # 订阅 velocity_smoother 前的原始 controller 输出用于诊断对比
+        self.create_subscription(TwistStamped, 'cmd_vel_controller', self._on_final_cmd_vel, 10)
         self.create_subscription(GameStatus, 'referee/game_status', self._on_game_status, 10)
         self.create_subscription(RobotStatus, 'referee/robot_status', self._on_robot_status, 10)
         self.create_subscription(GameRobotHP, 'referee/all_robot_hp', self._on_all_robot_hp, 10)
@@ -115,15 +117,16 @@ class SerialVisualizerNode(Node):
             self.shared.cmd_count += 1; self.shared.last_rx['cmd_vel'] = now
 
     def _on_final_cmd_vel(self, msg):
+        """controller_server 原始输出 (cmd_vel_controller)，未经 velocity_smoother"""
         now = time.monotonic()
         with self.shared.lock:
             self.shared.final_cmd_t.append(now)
-            self.shared.final_cmd_vx.append(float(msg.linear.x))
-            self.shared.final_cmd_vy.append(float(msg.linear.y))
-            self.shared.final_cmd_vw.append(float(msg.angular.z))
-            self.shared.latest_final_vx = float(msg.linear.x)
-            self.shared.latest_final_vy = float(msg.linear.y)
-            self.shared.latest_final_vw = float(msg.angular.z)
+            self.shared.final_cmd_vx.append(float(msg.twist.linear.x))
+            self.shared.final_cmd_vy.append(float(msg.twist.linear.y))
+            self.shared.final_cmd_vw.append(float(msg.twist.angular.z))
+            self.shared.latest_final_vx = float(msg.twist.linear.x)
+            self.shared.latest_final_vy = float(msg.twist.linear.y)
+            self.shared.latest_final_vw = float(msg.twist.angular.z)
             self.shared.last_rx['final_cmd'] = now
 
     def _on_game_status(self, msg):

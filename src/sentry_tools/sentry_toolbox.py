@@ -64,14 +64,17 @@ EXPECTED_TOPICS = [
 
 EXPECTED_TF = [
     ('map', 'odom', '重定位'),
-    ('odom', 'chassis', '里程计'),
-    ('chassis', 'gimbal_yaw', '云台'),
+    ('odom', 'base_footprint', '里程计'),
+    ('base_footprint', 'chassis', '底盘挂载'),
+    ('chassis', 'gimbal_yaw', '云台 yaw'),
+    ('gimbal_yaw', 'gimbal_pitch', '云台 pitch'),
+    ('gimbal_pitch', 'front_mid360', 'LiDAR'),
 ]
 
 SCRIPTS_DIR = pathlib.Path(__file__).resolve().parent.parent / 'scripts'
 LIDAR_CONFIG_SEARCH_PATHS = [
     pathlib.Path(__file__).resolve().parent.parent / 'sentry_nav_bringup' / 'config' / 'reality' / 'mid360_user_config.json',
-    pathlib.Path(__file__).resolve().parent.parent / 'sentry_nav' / 'livox_ros_driver2' / 'config' / 'MID360_config.json',
+    pathlib.Path(__file__).resolve().parent.parent / 'third_party' / 'livox_ros_driver2' / 'config' / 'MID360_config.json',
 ]
 DEFAULT_LIDAR_IP = '192.168.1.150'
 
