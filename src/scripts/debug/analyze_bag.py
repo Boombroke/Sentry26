@@ -41,6 +41,17 @@ if BAG_PATH is None or not os.path.isdir(BAG_PATH):
     print("用法: python3 analyze_bag.py <bag_dir>")
     sys.exit(1)
 
+# 若没 metadata.yaml（录制被 Ctrl+C 中断），自动 reindex
+if not os.path.exists(os.path.join(BAG_PATH, 'metadata.yaml')):
+    print(f"缺 metadata.yaml，自动 reindex...")
+    import subprocess
+    r = subprocess.run(['ros2', 'bag', 'reindex', BAG_PATH],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"reindex 失败: {r.stderr}")
+        sys.exit(1)
+    print("reindex 完成")
+
 print(f"分析 bag: {BAG_PATH}")
 
 reader = rosbag2_py.SequentialReader()
