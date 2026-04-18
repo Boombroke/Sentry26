@@ -382,10 +382,10 @@ Nav2 官方差速默认组合。`controller_plugins: ["RotateShim", "FollowPath"
 
 | 参数 | 仿真默认 | 实车默认 | 说明 |
 |---|---|---|---|
-| `angular_dist_threshold` | 0.785 | 0.785 | 路径方向与朝向夹角 ≥ 此值（45°）时先原地转 |
+| `angular_dist_threshold` | 0.785 | 0.785 | 路径方向与朝向夹角 ≥ 此值（45°）时先原地转；贴墙/出生位狭窄场景不要放大到 90° |
 | `forward_sampling_distance` | 0.5 | 0.5 | 路径前方采样距离，用于判定目标方向 |
-| `rotate_to_heading_angular_vel` | 1.5 | 1.5 | 原地旋转角速度上限 (rad/s) |
-| `max_angular_accel` | 3.2 | 3.2 | 原地旋转角加速度 (rad/s²) |
+| `rotate_to_heading_angular_vel` | 1.2 | 1.2 | 原地旋转角速度上限 (rad/s) |
+| `max_angular_accel` | 2.5 | 2.5 | 原地旋转角加速度 (rad/s²) |
 | `simulate_ahead_time` | 1.0 | 1.0 | 碰撞检查的预测时间窗 |
 
 **调优方法**：
@@ -396,7 +396,7 @@ Nav2 官方差速默认组合。`controller_plugins: ["RotateShim", "FollowPath"
 
 | 参数 | 仿真默认 | 实车默认 | 说明 |
 |---|---|---|---|
-| `desired_linear_vel` | 2.0 | 1.0 | 期望线速度 (m/s)，实车起步偏保守 |
+| `desired_linear_vel` | 1.5 | 1.0 | 期望线速度 (m/s)，仿真先压住起步侧撞风险 |
 | `lookahead_dist` | 1.2 | 1.2 | 基础前瞻距离 (m) |
 | `min_lookahead_dist` | 0.6 | 0.6 | velocity-scaled lookahead 下限 |
 | `max_lookahead_dist` | 1.5 | 1.5 | velocity-scaled lookahead 上限 |
@@ -407,26 +407,34 @@ Nav2 官方差速默认组合。`controller_plugins: ["RotateShim", "FollowPath"
 | `regulated_linear_scaling_min_speed` | 0.3 | 0.3 | 曲率降速的速度下限 |
 | `approach_velocity_scaling_dist` | 0.8 | 0.8 | 接近目标开始减速的距离 |
 | `min_approach_linear_velocity` | 0.3 | 0.3 | 接近段最小线速度 |
-| `use_rotate_to_heading` | true | true | 终端是否对齐目标朝向 |
-| `rotate_to_heading_min_angle` | 0.5 | 0.5 | 触发终端旋转的最小角度差 (rad) |
+| `use_rotate_to_heading` | false | false | 哨兵底盘不要求终端对齐目标朝向 |
+| `rotate_to_heading_min_angle` | 0.785 | 0.785 | 触发终端旋转的最小角度差 (rad) |
 | `max_angular_accel` | 3.2 | 3.2 | 角加速度上限 |
 | `allow_reversing` | false | false | 差速不允许倒车 |
-| `use_collision_detection` | true | true | 开启基于 carrot 的碰撞预测 |
+| `use_collision_detection` | `slam:=True` 时 false，`slam:=False` 时 true | 同左 | 由 launch 按模式自动切换碰撞预测 |
 | `max_allowed_time_to_collision_up_to_carrot` | 1.5 | 1.5 | 碰撞预测时间窗 (s) |
 
 **调优流程**：
-1. **线速度**：先用 `desired_linear_vel` 把期望速度定在硬件能吃到的值（仿真 2.0，实车首轮 1.0）。
+1. **线速度**：先用 `desired_linear_vel` 把期望速度定在硬件能吃到的值（仿真建议先 1.5，实车首轮 1.0）。
 2. **路径跟随**：若直线段频繁震荡，增大 `lookahead_dist`；若弯道切内拐角严重，减小 `lookahead_dist` 或增大 `regulated_linear_scaling_min_radius`。
 3. **高曲率降速**：观察仿真中 U 弯是否擦墙，若需更激进减速减小 `regulated_linear_scaling_min_radius`。
-4. **终端对齐**：若机器人到点后还在原地小幅旋转，减小 `rotate_to_heading_min_angle`；若到点后就停、没做终端对齐，增大该值让 RPP 仅在真正偏离时才旋转。
-5. **RotationShim 与 RPP 交接**：开启 `headless` 仿真观察日志行 `Rotating shim active` 频率，若频率太高说明 `angular_dist_threshold` 偏小。
+4. **终端朝向**：哨兵默认不做底盘终端对齐；如果某个任务确实要求车头朝向目标，再单独打开 `use_rotate_to_heading` 并重新验证贴障风险。
+5. **RotationShim 与 RPP 交接**：开启 `headless` 仿真观察日志行 `Rotating shim active` 频率；如果起步贴墙/侧扫障碍，优先减小 `angular_dist_threshold`，让机器人先原地对齐再给前进。
+6. **碰撞预测**：导航模式应确认 launch 已把 `use_collision_detection` 打开；SLAM 模式若 unknown 太多导致误报，再保留关闭。
+
+### 20-B. 差速恢复策略
+
+- 差速底盘的 recovery 不能依赖 `vy` 逃逸，所有兜底动作都必须落在 `vx + wz` 语义内。
+- `BackUpFreeSpace` 应把“自由空间方向”转换成差速可执行的 `vx + wz` 后退弧线；若后向投影不足，宁可失败交给下一个 recovery，也不要发无效侧移命令。
+- `BackUp` 不宜设置成 1.5m / 1.0m/s 这种激进值；贴障场景应使用短距离、低速后退，例如 `0.6m / 0.2m/s`，并配合清图与重规划。
+- 恢复顺序建议优先 `Spin → BackUp`，先补观察再立即脱困，不要把清图/等待放在第一次实际退出动作之前。
 
 ### 21. 终端参数（general_goal_checker）
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
 | `xy_goal_tolerance` | 0.15 | 到点距离容差 (m) |
-| `yaw_goal_tolerance` | 6.28 | 保持 2π 让 RPP 的 `use_rotate_to_heading` 做对齐；不设小值可避免与 RPP 内部对齐逻辑冲突 |
+| `yaw_goal_tolerance` | 6.28 | 哨兵默认不关心底盘终端 yaw，保持 2π 避免额外朝向约束 |
 | `stateful` | True | 到点后保持状态，避免振荡 |
 
 ---

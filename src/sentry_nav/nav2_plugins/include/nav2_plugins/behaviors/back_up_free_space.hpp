@@ -16,10 +16,12 @@
 #ifndef PB_NAV2_PLUGINS__BEHAVIORS__BACK_UP_FREE_SPACE_HPP_
 #define PB_NAV2_PLUGINS__BEHAVIORS__BACK_UP_FREE_SPACE_HPP_
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "angles/angles.h"
 #include "nav2_behaviors/plugins/drive_on_heading.hpp"
 #include "nav2_msgs/action/back_up.hpp"
 #include "nav2_msgs/srv/get_costmap.hpp"
@@ -79,6 +81,10 @@ protected:
   std::vector<geometry_msgs::msg::Point> gatherFreePoints(
     const nav2_msgs::msg::Costmap & costmap, geometry_msgs::msg::Pose2D pose, float radius);
 
+  bool isArcCollisionFree(
+    double remaining_distance, const geometry_msgs::msg::Twist & cmd_vel,
+    geometry_msgs::msg::Pose2D pose);
+
   float findBestDirection(
     const nav2_msgs::msg::Costmap & costmap, geometry_msgs::msg::Pose2D pose, float start_angle,
     float end_angle, float radius, float angle_increment);
@@ -89,11 +95,16 @@ protected:
   rclcpp::Client<nav2_msgs::srv::GetCostmap>::SharedPtr costmap_client_;
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>>
     marker_pub_;
-  double twist_x_, twist_y_;
+  geometry_msgs::msg::PoseStamped last_pose_;
+  double twist_x_{0.0}, twist_y_{0.0}, twist_theta_{0.0};
+  double distance_traveled_{0.0};
 
   // parameters
   std::string service_name_;
   double max_radius_;
+  double min_backward_projection_;
+  double max_angular_vel_;
+  double turn_gain_;
   bool visualize_;
 };
 

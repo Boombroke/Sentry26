@@ -29,11 +29,19 @@ void BackUpFreeSpace::onConfigure()
   nav2_util::declare_parameter_if_not_declared(node, "max_radius", rclcpp::ParameterValue(1.0));
   nav2_util::declare_parameter_if_not_declared(
     node, "service_name", rclcpp::ParameterValue("local_costmap/get_costmap"));
+  nav2_util::declare_parameter_if_not_declared(
+    node, "min_backward_projection", rclcpp::ParameterValue(0.2));
+  nav2_util::declare_parameter_if_not_declared(
+    node, "max_angular_vel", rclcpp::ParameterValue(1.0));
+  nav2_util::declare_parameter_if_not_declared(node, "turn_gain", rclcpp::ParameterValue(1.5));
   nav2_util::declare_parameter_if_not_declared(node, "visualize", rclcpp::ParameterValue(false));
 
   node->get_parameter("global_frame", global_frame_);
   node->get_parameter("max_radius", max_radius_);
   node->get_parameter("service_name", service_name_);
+  node->get_parameter("min_backward_projection", min_backward_projection_);
+  node->get_parameter("max_angular_vel", max_angular_vel_);
+  node->get_parameter("turn_gain", turn_gain_);
   node->get_parameter("visualize", visualize_);
 
   costmap_client_ = node->create_client<nav2_msgs::srv::GetCostmap>(service_name_);
@@ -84,14 +92,27 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onRun(
   pose.y = initial_pose_.pose.position.y;
   pose.theta = tf2::getYaw(initial_pose_.pose.orientation);
 
-  // Find the best direction to back up
+  // Search for the safest escape heading, then project it onto the robot's backward
+  // axis because a differential base can't execute lateral vy.
   float best_angle = findBestDirection(costmap, pose, -M_PI, M_PI, max_radius_, M_PI / 32.0);
+  const float relative_angle = angles::shortest_angular_distance(pose.theta, best_angle);
+  const float backward_projection = std::max(0.0f, -std::cos(relative_angle));
 
-  // Calculate move command
-  twist_x_ = std::cos(best_angle) * command->speed;
-  twist_y_ = std::sin(best_angle) * command->speed;
-  command_x_ = command->target.x;
+  if (backward_projection < min_backward_projection_) {
+    RCLCPP_WARN(
+      logger_,
+      "No sufficiently free backward sector found (best=%.3f, relative=%.3f), refusing blind backup",
+      best_angle, relative_angle);
+    return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED};
+  }
+
+  twist_x_ = -std::fabs(command->speed) * backward_projection;
+  twist_y_ = 0.0;
+  twist_theta_ = std::clamp(
+    static_cast<double>(turn_gain_ * relative_angle), -max_angular_vel_, max_angular_vel_);
+  command_x_ = -std::fabs(command->target.x);
   command_time_allowance_ = command->time_allowance;
+  distance_traveled_ = 0.0;
 
   end_time_ = clock_->now() + command_time_allowance_;
 
@@ -100,8 +121,11 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onRun(
     RCLCPP_ERROR(logger_, "Initial robot pose is not available.");
     return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED};
   }
+  last_pose_ = initial_pose_;
   RCLCPP_WARN(
-    logger_, "backing up %f meters towards free space at angle %f", command_x_, best_angle);
+    logger_,
+    "backing up %.3f meters with speed %.3f and wz %.3f, free-space angle %.3f, relative angle %.3f, projection %.3f",
+    std::fabs(command_x_), twist_x_, twist_theta_, best_angle, relative_angle, backward_projection);
 
   return nav2_behaviors::ResultStatus{nav2_behaviors::Status::SUCCEEDED};
 }
@@ -127,12 +151,18 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onCycleUpdate()
 
   float diff_x = initial_pose_.pose.position.x - current_pose.pose.position.x;
   float diff_y = initial_pose_.pose.position.y - current_pose.pose.position.y;
-  float distance = hypot(diff_x, diff_y);
+  (void)diff_x;
+  (void)diff_y;
 
-  feedback_->distance_traveled = distance;
+  const double step_dx = current_pose.pose.position.x - last_pose_.pose.position.x;
+  const double step_dy = current_pose.pose.position.y - last_pose_.pose.position.y;
+  distance_traveled_ += std::hypot(step_dx, step_dy);
+  last_pose_ = current_pose;
+
+  feedback_->distance_traveled = distance_traveled_;
   action_server_->publish_feedback(feedback_);
 
-  if (distance >= std::fabs(command_x_)) {
+  if (distance_traveled_ >= std::fabs(command_x_)) {
     stopRobot();
     return nav2_behaviors::ResultStatus{nav2_behaviors::Status::SUCCEEDED};
   }
@@ -142,21 +172,57 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onCycleUpdate()
   cmd_vel->header.frame_id = robot_base_frame_;
   cmd_vel->twist.linear.y = twist_y_;
   cmd_vel->twist.linear.x = twist_x_;
+  cmd_vel->twist.angular.z = twist_theta_;
 
   geometry_msgs::msg::Pose2D pose;
   pose.x = current_pose.pose.position.x;
   pose.y = current_pose.pose.position.y;
   pose.theta = tf2::getYaw(current_pose.pose.orientation);
 
-  if (!isCollisionFree(distance, cmd_vel->twist, pose)) {
+  if (!isArcCollisionFree(std::fabs(command_x_) - distance_traveled_, cmd_vel->twist, pose)) {
     stopRobot();
-    RCLCPP_WARN(logger_, "Collision Ahead - Exiting DriveOnHeading");
+    RCLCPP_WARN(logger_, "Collision Ahead - Exiting BackUpFreeSpace");
     return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED};
   }
 
   vel_pub_->publish(std::move(cmd_vel));
 
   return nav2_behaviors::ResultStatus{nav2_behaviors::Status::RUNNING};
+}
+
+bool BackUpFreeSpace::isArcCollisionFree(
+  double remaining_distance, const geometry_msgs::msg::Twist & cmd_vel, geometry_msgs::msg::Pose2D pose)
+{
+  if (remaining_distance <= 0.0) {
+    return true;
+  }
+
+  const int max_cycle_count = static_cast<int>(cycle_frequency_ * simulate_ahead_time_);
+  if (max_cycle_count <= 0) {
+    return true;
+  }
+
+  const double dt = 1.0 / cycle_frequency_;
+  double simulated_distance = 0.0;
+  bool fetch_data = true;
+
+  for (int i = 0; i < max_cycle_count; ++i) {
+    pose.theta = angles::normalize_angle(pose.theta + cmd_vel.angular.z * dt);
+    pose.x += cmd_vel.linear.x * std::cos(pose.theta) * dt;
+    pose.y += cmd_vel.linear.x * std::sin(pose.theta) * dt;
+    simulated_distance += std::fabs(cmd_vel.linear.x) * dt;
+
+    if (!local_collision_checker_->isCollisionFree(pose, fetch_data)) {
+      return false;
+    }
+    fetch_data = false;
+
+    if (simulated_distance >= remaining_distance) {
+      break;
+    }
+  }
+
+  return true;
 }
 
 float BackUpFreeSpace::findBestDirection(
@@ -224,6 +290,18 @@ float BackUpFreeSpace::findBestDirection(
       last_unsafe_angle = -1.0f;
     }
   }
+
+  if (first_safe_angle != -1.0f && last_unsafe_angle == -1.0f) {
+    last_unsafe_angle = end_angle;
+  }
+
+  if (
+    last_unsafe_angle - first_safe_angle > final_unsafe_angle - final_safe_angle &&
+    first_safe_angle != -1.0f && last_unsafe_angle != -1.0f) {
+    final_safe_angle = first_safe_angle;
+    final_unsafe_angle = last_unsafe_angle;
+  }
+
   best_angle = (final_safe_angle + final_unsafe_angle) / 2.0f;
 
   if (visualize_) {

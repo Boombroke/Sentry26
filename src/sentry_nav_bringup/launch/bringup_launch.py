@@ -52,7 +52,13 @@ def generate_launch_description():
     log_level = LaunchConfiguration("log_level")
 
     # Create our own temporary YAML files that include substitutions
-    param_substitutions = {"use_sim_time": use_sim_time, "yaml_filename": map_yaml_file}
+    param_substitutions = {
+        "use_sim_time": use_sim_time,
+        "yaml_filename": map_yaml_file,
+        "controller_server.ros__parameters.FollowPath.use_collision_detection": PythonExpression(
+            ["not ", slam]
+        ),
+    }
 
     # Only it applies when `namespace` is not empty.
     # '<robot_namespace>' keyword shall be replaced by 'namespace' launch argument

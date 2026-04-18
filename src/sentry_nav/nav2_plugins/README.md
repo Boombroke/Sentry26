@@ -16,17 +16,19 @@
 
 #### 2.1.1 BackUpFreeSpace
 
-`BackUpFreeSpace` 插件是一个用于在机器人的导航过程中执行后退行为的插件，主要功能：
+`BackUpFreeSpace` 插件是一个用于在机器人的导航过程中执行后退脱困的插件，主要功能：
 
-1. **动态调整半径**：通过调整搜索的半径范围，机器人在限定的范围内找到足够的自由空间后退。
-2. **退回到自由空间**：机器人根据当前的代价图，找出最接近的自由空间并退回到该位置。
+1. **搜索自由退出扇区**：在给定半径内扫描 costmap，找到最长连续安全扇区作为退出方向。
+2. **差速可执行脱困**：将自由空间方向投影到机体后向，输出 `vx + wz` 的后退回摆弧线，不依赖 `vy`。
+3. **保守失败策略**：若后向投影不足，直接失败交给下一个 recovery，而不是发送无效侧移命令。
 
 **Parameters:**
 
-- `robot_radius`: 机器人半径，用于确定搜索自由空间时的范围（default：0.1 m）。
 - `max_radius`: 搜索自由空间时的最大半径范围（default：1.0 m）。
 - `service_name`: 获取代价图的服务名称（default："local_costmap/get_costmap"）。
-- `free_threshold`: 定义自由空间的阈值，即自由空间中足够数量的点才能视为有效（default：5）。
+- `min_backward_projection`: 自由空间方向在机体后向上的最小投影，低于该值则拒绝盲退（default：0.2）。
+- `max_angular_vel`: recovery 回摆的最大角速度（default：1.0 rad/s）。
+- `turn_gain`: 将自由空间夹角转换为角速度的比例系数（default：1.5）。
 - `visualize`: 是否启用可视化功能。启用后会在 RViz 中显示自由空间和目标位置（default：false）。
 
 **Example:**
@@ -60,10 +62,11 @@ ros__parameters:
    min_rotational_vel: 0.4
    rotational_acc_lim: 3.2
    # params for nav2_behaviors_plugins/BackUpFreeSpace
-   robot_radius: 0.2
-   max_radius: 3.5
+   max_radius: 2.0
    service_name: "global_costmap/get_costmap"
-   free_threshold: 5
+   min_backward_projection: 0.2
+   max_angular_vel: 1.0
+   turn_gain: 1.5
    visualize: True
 ```
 
@@ -94,7 +97,7 @@ local_costmap:
       width: 5
       height: 5
       resolution: 0.05
-      robot_radius: 0.2
+      robot_radius: 0.46
       plugins: ["static_layer", "intensity_voxel_layer", "inflation_layer"]
       intensity_voxel_layer:
         plugin: nav2_costmap_2d_plugins::IntensityVoxelLayer
@@ -110,7 +113,7 @@ local_costmap:
         z_voxels: 16
         min_obstacle_height: 0.0
         max_obstacle_height: 2.0
-        min_obstacle_intensity: 0.1
+        min_obstacle_intensity: 0.05
         max_obstacle_intensity: 2.0
         observation_sources: terrain_map
         terrain_map:
@@ -125,8 +128,8 @@ local_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 4.0
-        inflation_radius: 0.7
+        cost_scaling_factor: 8.0
+        inflation_radius: 0.90
       always_send_full_costmap: False
 ```
 

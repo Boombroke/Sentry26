@@ -31,6 +31,9 @@
       <ReactiveFallback name="RecoveryFallback">
         <GoalUpdated/>
         <RoundRobin name="RecoveryActions">
+          <Spin spin_dist="1.57"/>
+          <BackUp backup_dist="0.6"
+                  backup_speed="0.2"/>
           <Sequence name="ClearAndWait">
             <ClearEntireCostmap name="ClearLocalCostmap-Subtree"
                                 service_name="local_costmap/clear_entirely_local_costmap"/>
@@ -38,11 +41,9 @@
                                 service_name="global_costmap/clear_entirely_global_costmap"/>
             <Wait wait_duration="1"/>
           </Sequence>
-          <BackUp backup_dist="1.5"
-                  backup_speed="1.0"/>
           <Sequence name="BackUpThenClear">
-            <BackUp backup_dist="1.5"
-                    backup_speed="1.0"/>
+            <BackUp backup_dist="0.6"
+                    backup_speed="0.2"/>
             <ClearEntireCostmap name="ClearLocalCostmap-PostBackup"
                                 service_name="local_costmap/clear_entirely_local_costmap"/>
             <ClearEntireCostmap name="ClearGlobalCostmap-PostBackup"

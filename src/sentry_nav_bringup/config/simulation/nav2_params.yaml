@@ -286,8 +286,8 @@ controller_server:
     controller_plugins: ["RotateShim", "FollowPath"]
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.3                 # 5s 内走不到 0.3m 视为 stuck, 触发 BT recovery
-      movement_time_allowance: 5.0                  # 仿真里 1.5s 太激进, 撞一下就触发 recovery 死循环
+      required_movement_radius: 0.2                 # 更早判定“顶住障碍没走开”，让 recovery 接管
+      movement_time_allowance: 3.0
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
@@ -296,31 +296,31 @@ controller_server:
     RotateShim:
       plugin: "nav2_rotation_shim_controller::RotationShimController"
       primary_controller: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      angular_dist_threshold: 1.571                     # 90°，只在大转角/倒退时原地旋转
+      angular_dist_threshold: 0.785                     # 45° 起就先原地对齐，避免高速前进同时急转扫侧墙
       forward_sampling_distance: 0.5
-      rotate_to_heading_angular_vel: 2.0
-      max_angular_accel: 4.0
+      rotate_to_heading_angular_vel: 1.2
+      max_angular_accel: 2.5
       simulate_ahead_time: 1.0
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 2.5                           # 降到 2.5，物理稳后再推高
-      lookahead_dist: 1.0
-      min_lookahead_dist: 0.5
+      desired_linear_vel: 1.5                           # 降速，优先解决贴墙/出生即扫障碍
+      lookahead_dist: 1.2
+      min_lookahead_dist: 0.6
       max_lookahead_dist: 1.5
       lookahead_time: 1.0
       use_velocity_scaled_lookahead_dist: true
       transform_tolerance: 0.1
-      min_approach_linear_velocity: 0.5
-      approach_velocity_scaling_dist: 0.6
-      use_collision_detection: false
+      min_approach_linear_velocity: 0.3
+      approach_velocity_scaling_dist: 0.8
+      use_collision_detection: false                    # launch 会在 slam:=False 的导航模式下自动改成 true
       max_allowed_time_to_collision_up_to_carrot: 1.5
       use_regulated_linear_velocity_scaling: true
       regulated_linear_scaling_min_radius: 0.5
-      regulated_linear_scaling_min_speed: 0.4
+      regulated_linear_scaling_min_speed: 0.3
       use_rotate_to_heading: false                      # 不强制到点对齐 yaw
       rotate_to_heading_min_angle: 0.785
-      max_angular_accel: 4.0
-      rotate_to_heading_angular_vel: 2.0
+      max_angular_accel: 2.5
+      rotate_to_heading_angular_vel: 1.2
       allow_reversing: false
       max_robot_pose_search_dist: 10.0
 
@@ -510,6 +510,9 @@ behavior_server:
     # params for nav2_behaviors_plugins::BackUpFreeSpace
     service_name: "global_costmap/get_costmap"
     max_radius: 2.0
+    min_backward_projection: 0.2
+    max_angular_vel: 1.0
+    turn_gain: 1.5
     visualize: false
 
 waypoint_follower:
@@ -530,12 +533,12 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [2.5, 0.0, 3.0]                     # 差速底盘 vy 锁 0（双保险）
-    min_velocity: [-2.5, 0.0, -3.0]
+    max_velocity: [1.5, 0.0, 1.5]                     # 仿真先收紧上限，避免贴边场景高速硬拐
+    min_velocity: [-1.5, 0.0, -1.5]
     # 对齐实车：实测平地线加速度 ~2.5 m/s² (理论 a_max=2F/m=2*(2.4/0.06)/28≈2.86).
     # 仿真物理能跑更高, 但调好的 Nav2 参数要能直迁实车, 所以这里按实车上限.
-    max_accel: [2.5, 0.0, 5.0]
-    max_decel: [-2.5, 0.0, -5.0]
+    max_accel: [1.5, 0.0, 2.5]
+    max_decel: [-1.5, 0.0, -2.5]
     odom_topic: "odometry"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
