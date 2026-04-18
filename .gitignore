@@ -1,6 +1,9 @@
 build/
 install/
 log/
+logs/
+!logs/README.md
+!logs/.gitkeep
 .claude/worktrees/
 .vscode/
 AGENTS.md

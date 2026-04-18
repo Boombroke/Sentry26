@@ -201,7 +201,32 @@ python3 src/sentry_tools/serial_visualizer.py
 
 详见 [sentry_tools/README.md](../sentry_tools/README.md)。
 
-## 7. 常见问题
+## 7. Debug 与日志
+
+所有 launch 日志位于 `~/.ros/log/<timestamp>/`，每次启动一个目录。
+
+```bash
+# 实时跟随最新 launch 的合流日志
+bash src/scripts/debug/tail_log.sh
+
+# 跟随指定节点（按名字模糊匹配）
+bash src/scripts/debug/tail_log.sh pointlio
+bash src/scripts/debug/tail_log.sh controller_server
+
+# 跨所有节点日志搜关键字
+bash src/scripts/debug/grep_log.sh error
+bash src/scripts/debug/grep_log.sh "TF lookup"
+
+# 归档到项目 logs/ 目录便于对比调参
+bash src/scripts/debug/archive_log.sh baseline
+# 改参数重跑...
+bash src/scripts/debug/archive_log.sh tuned
+diff logs/*-baseline/launch.log logs/*-tuned/launch.log | head
+```
+
+详见 [logs/README.md](../../logs/README.md)。
+
+## 8. 常见问题
 
 - **编译错误**：确认 `small_gicp` v1.0.0 已安装并位于系统路径；rosdep 已安装 `ros-jazzy-nav2-regulated-pure-pursuit-controller` 和 `ros-jazzy-nav2-rotation-shim-controller`。
 
