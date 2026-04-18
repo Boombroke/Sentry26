@@ -53,7 +53,7 @@ ros__parameters:
       plugin: "nav2_behaviors/AssistedTeleop"
    local_frame: odom
    global_frame: map
-   robot_base_frame: gimbal_yaw_fake
+   robot_base_frame: base_footprint
    transform_tolerance: 0.1
    simulate_ahead_time: 2.0
    max_rotational_vel: 1.0
@@ -89,7 +89,7 @@ local_costmap:
       update_frequency: 10.0
       publish_frequency: 5.0
       global_frame: odom
-      robot_base_frame: gimbal_yaw_fake
+      robot_base_frame: base_footprint
       rolling_window: true
       width: 5
       height: 5
