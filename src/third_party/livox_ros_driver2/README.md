@@ -4,7 +4,7 @@ Livox ROS Driver 2 is the 2nd-generation driver package used to connect LiDAR pr
 
 ## ATTENTION
 
-本仓库为深圳北理莫斯科大学北极熊战队内部修改版，非原版 livox_ros_driver2 。
+该功能包由深圳北理莫斯科大学北极熊战队版本基础上二次修改，非原版 livox_ros_driver2 。
 
 相较于原版，修改了消息发布机制和 ```MID360_config.json``` 的 ip
 

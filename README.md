@@ -7,9 +7,6 @@
 
 RoboMaster 2026 赛季哨兵机器人自主导航系统。基于 ROS2 Jazzy + Nav2 + BehaviorTree.CPP，支持差速轮足底盘、Livox Mid360 激光雷达、Gazebo Harmonic 仿真。
 
-> **Maintainer**: Boombroke <boombroke@icloud.com>
-> **Based on**: [SMBU-PolarBear-Robotics-Team/pb2025_sentry_nav](https://github.com/SMBU-PolarBear-Robotics-Team/pb2025_sentry_nav) by Lihan Chen, 2026 差速轮足架构迁移由 Boombroke 主导。
-
 ## 系统架构
 
 ```mermaid
@@ -229,7 +226,7 @@ python3 src/sentry_tools/serial_visualizer.py
 
 ## 致谢
 
-本项目基于 [深圳北理莫斯科大学 PolarBear 战队 pb2025_sentry_nav](https://github.com/SMBU-PolarBear-Robotics-Team/pb2025_sentry_nav) 重构。2026 赛季差速轮足架构迁移由 Boombroke 主导，原 Mecanum 全向底盘的感知、定位、行为树等模块设计归功于原作者 Lihan Chen 等。
+本项目基于 [深圳北理莫斯科大学 PolarBear 战队 pb2025_sentry_nav](https://github.com/SMBU-PolarBear-Robotics-Team/pb2025_sentry_nav) 重构。
 
 ## 许可证
 
