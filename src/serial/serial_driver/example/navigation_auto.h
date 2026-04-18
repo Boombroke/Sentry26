@@ -20,12 +20,16 @@
 #define SEND_HP_INTERVAL       500
 
 
-// 0xA1 — 11 bytes, ~1000Hz
+// 0xA1 — 27 bytes, ~1000Hz
 typedef struct
 {
   uint8_t  header;
 float    pitch;
 float    yaw;
+float    gimbal_pitch;
+float    gimbal_yaw;
+float    chassis_pitch;
+float    chassis_yaw;
 uint16_t checksum;
 } __attribute__((packed)) SendImuPacket;
 

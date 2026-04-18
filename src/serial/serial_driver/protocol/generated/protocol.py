@@ -47,16 +47,24 @@ HEADER_NAV = 0xB5
 class ImuPacket:
     pitch: float = 0.0
     yaw: float = 0.0
+    gimbal_pitch: float = 0.0
+    gimbal_yaw: float = 0.0
+    chassis_pitch: float = 0.0
+    chassis_yaw: float = 0.0
 
 
 ImuPacket.HEADER = 0xA1
-ImuPacket.STRUCT_FORMAT = '<Bff'
-ImuPacket.TOTAL_SIZE = 11
+ImuPacket.STRUCT_FORMAT = '<Bffffff'
+ImuPacket.TOTAL_SIZE = 27
 ImuPacket.FREQUENCY_HZ = 1000
 ImuPacket.DIRECTION = 'stm32_to_ros'
 ImuPacket.FIELDS_META = [
-    {'name': 'pitch', 'type': 'float', 'unit': 'rad', 'desc': '云台 pitch'},
-    {'name': 'yaw', 'type': 'float', 'unit': 'rad', 'desc': '云台 yaw'},
+    {'name': 'pitch', 'type': 'float', 'unit': 'rad', 'desc': '云台 pitch（历史字段，保留兼容）'},
+    {'name': 'yaw', 'type': 'float', 'unit': 'rad', 'desc': '云台 yaw（历史字段，保留兼容）'},
+    {'name': 'gimbal_pitch', 'type': 'float', 'unit': 'rad', 'desc': '云台 pitch'},
+    {'name': 'gimbal_yaw', 'type': 'float', 'unit': 'rad', 'desc': '云台 yaw'},
+    {'name': 'chassis_pitch', 'type': 'float', 'unit': 'rad', 'desc': '底盘 pitch'},
+    {'name': 'chassis_yaw', 'type': 'float', 'unit': 'rad', 'desc': '底盘 yaw'},
 ]
 
 @dataclass

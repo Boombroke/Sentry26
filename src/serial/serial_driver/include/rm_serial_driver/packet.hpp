@@ -15,12 +15,16 @@ constexpr uint8_t HEADER_HP        = 0xA3;
 constexpr uint8_t HEADER_NAV_TX    = 0xB5;
 
 
-// 0xA1 — 11 bytes, ~1000Hz
+// 0xA1 — 27 bytes, ~1000Hz
 struct ReceiveImuPacket
 {
   uint8_t  header = HEADER_IMU;
-float    pitch;                     //云台 pitch
-float    yaw;                       //云台 yaw
+float    pitch;                     //云台 pitch（历史字段，保留兼容）
+float    yaw;                       //云台 yaw（历史字段，保留兼容）
+float    gimbal_pitch;              //云台 pitch
+float    gimbal_yaw;                //云台 yaw
+float    chassis_pitch;             //底盘 pitch
+float    chassis_yaw;               //底盘 yaw
 uint16_t checksum = 0;
 } __attribute__((packed));
 
