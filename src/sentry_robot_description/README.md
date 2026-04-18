@@ -20,8 +20,9 @@ SMBU PolarBear Team robot description package for RoboMaster 2025.
 
     TF 链（6 层）：`map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → front_mid360`
 
-    仿真放置基准：模型显式使用 `placement_frame="base_footprint"`。Gazebo spawn 时 `-z`
-    应填写平台面高度，也就是 `base_footprint` 的世界坐标高度；如果误填成车体中心高度，轮子会穿进地面。
+    仿真放置注意：不要把 Gazebo spawn 的 `-z` 简单理解成“平台面高度”。
+    当前项目以 `gz_world.yaml` 中各世界实测稳定的 `z_pose` 为准，其中 `rmuc_2026`
+    的轮足模型已验证需要 `0.72`，否则轮子会卡进地图。
 
 ## 2. Quick Start
 
