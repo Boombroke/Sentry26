@@ -54,9 +54,13 @@
             <inertial>
                 <pose>0 0 ${chassis_z / 2} 0 0 0</pose>
                 <mass>15.0</mass>
+                <!-- 大幅提高惯量抑制俯仰/侧倾摇摆：
+                     iyy（pitch 惯量）从 0.25 → 1.5，让前后摇摆衰减快 6 倍
+                     ixx（roll）从 0.15 → 0.8
+                     izz（yaw）保持 0.30 避免旋转过重 -->
                 <inertia>
-                    <ixx>0.15</ixx>
-                    <iyy>0.25</iyy>
+                    <ixx>0.8</ixx>
+                    <iyy>1.5</iyy>
                     <izz>0.30</izz>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
@@ -150,10 +154,20 @@
                 <surface>
                     <friction>
                         <ode>
-                            <mu>0.9</mu>
-                            <mu2>0.9</mu2>
+                            <!-- mu=纵向（驱动方向）摩擦，mu2=侧向摩擦
+                                 差速车希望侧向高摩擦防打滑，实车轮足
+                                 有类似行为 -->
+                            <mu>1.0</mu>
+                            <mu2>2.0</mu2>
                         </ode>
                     </friction>
+                    <!-- 接触软化，吸收冲击避免 IMU az 爆飞 -->
+                    <contact>
+                        <ode>
+                            <kp>1e6</kp>
+                            <kd>100</kd>
+                        </ode>
+                    </contact>
                 </surface>
             </collision>
         </link>
@@ -211,10 +225,20 @@
                 <surface>
                     <friction>
                         <ode>
-                            <mu>0.9</mu>
-                            <mu2>0.9</mu2>
+                            <!-- mu=纵向（驱动方向）摩擦，mu2=侧向摩擦
+                                 差速车希望侧向高摩擦防打滑，实车轮足
+                                 有类似行为 -->
+                            <mu>1.0</mu>
+                            <mu2>2.0</mu2>
                         </ode>
                     </friction>
+                    <!-- 接触软化，吸收冲击避免 IMU az 爆飞 -->
+                    <contact>
+                        <ode>
+                            <kp>1e6</kp>
+                            <kd>100</kd>
+                        </ode>
+                    </contact>
                 </surface>
             </collision>
         </link>
@@ -254,8 +278,8 @@
                 <surface>
                     <friction>
                         <ode>
-                            <mu>0.0</mu>
-                            <mu2>0.0</mu2>
+                            <mu>0.01</mu>
+                            <mu2>0.01</mu2>
                         </ode>
                     </friction>
                 </surface>
@@ -297,8 +321,8 @@
                 <surface>
                     <friction>
                         <ode>
-                            <mu>0.0</mu>
-                            <mu2>0.0</mu2>
+                            <mu>0.01</mu>
+                            <mu2>0.01</mu2>
                         </ode>
                     </friction>
                 </surface>
