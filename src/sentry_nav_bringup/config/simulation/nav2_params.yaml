@@ -38,7 +38,7 @@ point_lio:
       lidar_type: 2                                     # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR
       scan_line: 32
       timestamp_unit: 2                                 # the unit of time/t field in the PointCloud2 rostopic: 0-second, 1-milisecond, 2-microsecond, 3-nanosecond.
-      blind: 0.5
+      blind: 0.35                                       # 仿真 LiDAR 已固定下俯，缩小近距裁剪以保留低矮底座
 
     mapping:
       imu_en: True
@@ -60,8 +60,8 @@ point_lio:
       plane_thr: 0.1                                    # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 81.0
       ivox_grid_resolution: 0.5
-      gravity: [ 0.0, -4.9, -8.487047153776548 ]        # gravity to be aligned # rpy = [0, pi/6, 0]
-      gravity_init: [ 0.0, -4.9, -8.487047153776548 ]   # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
+      gravity: [ 4.905, 0.0, -8.495709211125344 ]       # gravity to be aligned # fixed lidar mount rpy = [0, +pi/6, pi]
+      gravity_init: [ 4.905, 0.0, -8.495709211125344 ]  # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
       extrinsic_T: [ 0.0, 0.0, 0.0 ]
       extrinsic_R: [ 1.0, 0.0, 0.0,
                      0.0, 1.0, 0.0,

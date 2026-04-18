@@ -47,6 +47,7 @@
 
     <xmacro_define_value name="gimbal_yaw_height" value="0.18" />
     <xmacro_define_value name="gimbal_pitch_height" value="0.08" />
+    <xmacro_define_value name="front_lidar_mount_pitch" value="0.523598775598299" />
 
     <!--wheeled robot model-->
     <model name="wheeled_biped" canonical_link="chassis" placement_frame="base_footprint">
@@ -487,8 +488,10 @@
             </collision>
         </link>
 
-        <!--LiDAR (Livox Mid360) mounted on gimbal_pitch, rotates with gimbal-->
-        <xmacro_block name="livox" prefix="front_" parent="gimbal_pitch" pose="-0.05 0 0.05 0 0 ${pi}" update_rate="50" samples="1875"/>
+        <!--LiDAR (Livox Mid360) mounted on gimbal_pitch, rotates with gimbal.
+             Simulation keeps a fixed 30 deg downward pitch so near low bases enter the lower VFOV.
+             Point-LIO simulation gravity must stay consistent with this mount angle. -->
+        <xmacro_block name="livox" prefix="front_" parent="gimbal_pitch" pose="-0.05 0 0.05 0 ${front_lidar_mount_pitch} ${pi}" update_rate="50" samples="1875"/>
 
         <!--industrial camera mounted on gimbal_pitch-->
         <xmacro_block name="industrial_camera" prefix="front_" parent="gimbal_pitch" pose="0.08 0 0.02 0 0 0" update_rate="30" horizontal_fov="1" width="1920" height="1080"/>

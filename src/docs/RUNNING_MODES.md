@@ -557,11 +557,11 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `preprocess.lidar_type` | `2` (Velodyne) | `1` (Livox) | LiDAR 类型: 1=Livox, 2=Velodyne, 3=Ouster |
 | `preprocess.scan_line` | `32` | `4` | 扫描线数（MID360 实际为 4 线） |
 | `preprocess.timestamp_unit` | `2` (微秒) | `3` (纳秒) | 时间戳单位: 0=秒, 1=毫秒, 2=微秒, 3=纳秒 |
-| `preprocess.blind` | `0.5` | `0.2` | 盲区半径 (m)，过滤近距离噪声 |
+| `preprocess.blind` | `0.35` | `0.2` | 盲区半径 (m)，过滤近距离噪声；仿真需兼顾低矮近障 |
 | `mapping.acc_norm` | `9.81` | `1.0` | 加速度单位：1.0=g, 9.81=m/s² |
 | `mapping.satu_acc` | `30.0` | `4.0` | IMU 加速度计饱和值 |
-| `mapping.gravity` | `[0, -4.9, -8.49]` | `[2.64, 0, -9.68]` | **重力向量，必须匹配 LiDAR 安装倾角** |
-| `mapping.gravity_init` | `[0, -4.9, -8.49]` | `[2.64, 0, -9.68]` | 初始重力估计 |
+| `mapping.gravity` | `[4.91, 0, -8.50]` | `[2.64, 0, -9.68]` | **重力向量，必须匹配 LiDAR 安装倾角** |
+| `mapping.gravity_init` | `[4.91, 0, -8.50]` | `[2.64, 0, -9.68]` | 初始重力估计 |
 | `mapping.extrinsic_T` | `[0, 0, 0]` | `[-0.011, -0.023, 0.044]` | LiDAR-IMU 外参平移 (m) |
 | `mapping.lidar_meas_cov` | `0.001` | `0.01` | LiDAR 测量协方差 |
 | `filter_size_surf` | `0.2` | `0.2` | 表面特征降采样步长 (m) |
@@ -569,7 +569,7 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `publish.tf_send_en` | `False` | `False` | TF 发布（禁用，由 odom_bridge 处理） |
 | `pcd_save.pcd_save_en` | `False` | `False` | 退出时保存 PCD（SLAM 模式自动设为 True） |
 
-> **调参警告**：`gravity` 向量必须精确匹配 LiDAR 的物理安装角度。仿真中 LiDAR 倾斜约 30° (`rpy=[0, pi/6, 0]`)，故重力分量为 `[0, -4.9, -8.49]`。实车需通过实际标定获得。错误的重力向量会导致里程计快速发散。
+> **调参警告**：`gravity` 向量必须精确匹配 LiDAR 的物理安装角度。仿真中 wheeled_biped 的 Mid360 相对 `gimbal_pitch` 固定下俯约 30°（`rpy=[0, +pi/6, pi]`），故重力分量为 `[4.905, 0, -8.496]`。实车需通过实际标定获得。错误的重力向量会导致里程计快速发散。
 
 ### 9.2 Small GICP 重定位
 

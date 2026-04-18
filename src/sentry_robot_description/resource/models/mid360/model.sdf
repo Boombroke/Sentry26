@@ -90,7 +90,7 @@
 						</vertical>
 					</scan>
 					<range>
-						<min>0.15</min>
+						<min>0.1</min>
 						<max>15.0</max>
 					</range>
 				</ray>
@@ -103,4 +103,3 @@
 		</link>
 	</model>
 </sdf>
-
