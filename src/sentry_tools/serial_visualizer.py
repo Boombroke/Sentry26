@@ -88,8 +88,8 @@ class SerialVisualizerNode(Node):
         super().__init__('serial_visualizer')
         self.shared = shared
         self.create_subscription(JointState, 'serial/gimbal_joint_state', self._on_gimbal, 10)
-        self.create_subscription(TwistStamped, 'cmd_vel_nav2_result', self._on_cmd_vel, 10)
-        self.create_subscription(Twist, 'cmd_vel', self._on_final_cmd_vel, 10)
+        # 差速方案下 cmd_vel 即最终指令（base_footprint 系 ≡ chassis yaw）
+        self.create_subscription(TwistStamped, 'cmd_vel', self._on_cmd_vel, 10)
         self.create_subscription(GameStatus, 'referee/game_status', self._on_game_status, 10)
         self.create_subscription(RobotStatus, 'referee/robot_status', self._on_robot_status, 10)
         self.create_subscription(GameRobotHP, 'referee/all_robot_hp', self._on_all_robot_hp, 10)
