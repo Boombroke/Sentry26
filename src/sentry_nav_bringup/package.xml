@@ -25,7 +25,8 @@
   <exec_depend>odom_bridge</exec_depend>
   <exec_depend>terrain_analysis</exec_depend>
   <exec_depend>terrain_analysis_ext</exec_depend>
-  <exec_depend>omni_pid_pursuit_controller</exec_depend>
+  <exec_depend>nav2_regulated_pure_pursuit_controller</exec_depend>
+  <exec_depend>nav2_rotation_shim_controller</exec_depend>
   <exec_depend>small_gicp_relocalization</exec_depend>
   <exec_depend>pointcloud_to_laserscan</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
