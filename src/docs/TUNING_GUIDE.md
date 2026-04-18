@@ -177,7 +177,7 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 - 过小 → 自身点云泄漏，轨迹上出现虚假障碍物
 - 过大 → 丢失近距离真实障碍物
 
-> 先确认仿真 LiDAR 安装角和 `mapping.gravity` 一致，再调 `blind`。`blind` 只能压自身点，不能补传感器 FOV 盲区。
+> 先确认 `gimbal_pitch → front_mid360` 的传感器安装外参与实际一致，再调 `blind`。`blind` 只能压自身点，不能补传感器 FOV 盲区；也不要再用 `mapping.gravity` 去表达安装角。
 
 **调优方法**：
 ```bash

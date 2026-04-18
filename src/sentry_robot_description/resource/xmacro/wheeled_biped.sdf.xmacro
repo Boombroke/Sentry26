@@ -13,15 +13,16 @@
          - caster ball 摩擦 mu=0.01 (极低), 仅提供静态支撑防翻, 不阻碍转向
          - Nav2 视角: 两轮差速 = 原地零回转半径, 与实车轮足一致
          - 实车部署: DiffDrive plugin 对接下位机平衡器, caster 纯仿真 workaround
+         - 为减少 LiDAR 自遮挡, 仿真 chassis 盒体仅保留实车尺寸的 65%; 运动学 footprint 不变
     -->
     <!-- chassis 底在 base_footprint 之上的高度 = leg_len + wheel_radius = 0.28m
          几何约束: base_footprint 贴地 (world z=0) → chassis 底 z=chassis_height
                    → wheel_center z=chassis_height-leg_len=0.06 → 轮底 z=0 ✓
          任何偏差都会让 base_footprint 穿地或 wheel 悬空 -->
     <xmacro_define_value name="chassis_height" value="0.28" />
-    <xmacro_define_value name="chassis_length" value="0.648" />
-    <xmacro_define_value name="chassis_width" value="0.650" />
-    <xmacro_define_value name="chassis_z" value="0.12" />
+    <xmacro_define_value name="chassis_length" value="0.4212" />
+    <xmacro_define_value name="chassis_width" value="0.4225" />
+    <xmacro_define_value name="chassis_z" value="0.078" />
 
     <xmacro_define_value name="wheel_radius" value="0.060" />
     <xmacro_define_value name="wheel_width" value="0.04" />
@@ -31,7 +32,8 @@
     <xmacro_define_value name="half_wheel_sep" value="0.325" />
     <xmacro_define_value name="neg_half_wheel_sep" value="-0.325" />
 
-    <!-- caster ball: 前后各一个, x=±0.28 (底盘长 0.648m 内缩 0.044m)
+    <!-- caster ball: 前后各一个, x=±0.28.
+         为保持 2 轮+2 支撑点的俯仰稳定性, caster offset 不随缩小 chassis 一起改.
          caster_radius=0.030, ball 中心 z=-(leg_len+wheel_radius-caster_radius) 与轮底齐平 -->
     <xmacro_define_value name="caster_offset" value="0.28" />
     <xmacro_define_value name="neg_caster_offset" value="-0.28" />
@@ -47,7 +49,12 @@
 
     <xmacro_define_value name="gimbal_yaw_height" value="0.18" />
     <xmacro_define_value name="gimbal_pitch_height" value="0.08" />
+    <!-- Sensor-only extrinsics: chassis / gimbal stay mechanically upright.
+         Any tilted / inverted Mid360 installation must be expressed only here,
+         in gimbal_pitch -> front_mid360, never by changing base/gimbal DOF semantics. -->
+    <xmacro_define_value name="front_lidar_mount_roll" value="0.0" />
     <xmacro_define_value name="front_lidar_mount_pitch" value="0.523598775598299" />
+    <xmacro_define_value name="front_lidar_mount_yaw" value="${pi}" />
 
     <!--wheeled robot model-->
     <model name="wheeled_biped" canonical_link="chassis" placement_frame="base_footprint">
@@ -80,20 +87,20 @@
             <child>chassis</child>
         </joint>
 
-        <!--chassis body (28kg, 0.648x0.650x0.12)-->
+        <!--chassis body (simulation self-occlusion workaround: 28kg, 0.4212x0.4225x0.078)-->
         <link name="chassis">
             <inertial>
                 <pose>0 0 ${chassis_z / 2} 0 0 0</pose>
                 <mass>28.0</mass>
-                <!-- 28kg 箱体理论惯量（m/12*(a²+b²)）:
-                     ixx (roll)  = 28/12*(0.650²+0.12²) = 1.02
-                     iyy (pitch) = 28/12*(0.648²+0.12²) = 1.01
-                     izz (yaw)   = 28/12*(0.648²+0.650²) = 1.97
-                     三角不等式验证: 1.05+1.05=2.10>1.97 ✓ -->
+                <!-- 28kg 箱体理论惯量（车体盒子缩到 65%，仅降低 LiDAR 自遮挡）:
+                     ixx (roll)  ~= 28/12*(0.4225²+0.078²) = 0.43
+                     iyy (pitch) ~= 28/12*(0.4212²+0.078²) = 0.43
+                     izz (yaw)   ~= 28/12*(0.4212²+0.4225²) = 0.83
+                     三角不等式验证: 0.44+0.44=0.88>0.84 ✓ -->
                 <inertia>
-                    <ixx>1.05</ixx>
-                    <iyy>1.05</iyy>
-                    <izz>1.97</izz>
+                    <ixx>0.44</ixx>
+                    <iyy>0.44</iyy>
+                    <izz>0.84</izz>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
                     <iyz>0</iyz>
@@ -489,9 +496,10 @@
         </link>
 
         <!--LiDAR (Livox Mid360) mounted on gimbal_pitch, rotates with gimbal.
-             Simulation keeps a fixed 30 deg downward pitch so near low bases enter the lower VFOV.
-             Point-LIO simulation gravity must stay consistent with this mount angle. -->
-        <xmacro_block name="livox" prefix="front_" parent="gimbal_pitch" pose="-0.05 0 0.05 0 ${front_lidar_mount_pitch} ${pi}" update_rate="50" samples="1875"/>
+             Only the sensor frame is allowed to be tilted / inverted; chassis and gimbal
+             remain upright in TF semantics. Simulation keeps a fixed 30 deg downward sensor
+             pitch so near low bases enter the lower VFOV. -->
+        <xmacro_block name="livox" prefix="front_" parent="gimbal_pitch" pose="-0.05 0 0.05 ${front_lidar_mount_roll} ${front_lidar_mount_pitch} ${front_lidar_mount_yaw}" update_rate="50" samples="1875"/>
 
         <!--industrial camera mounted on gimbal_pitch-->
         <xmacro_block name="industrial_camera" prefix="front_" parent="gimbal_pitch" pose="0.08 0 0.02 0 0 0" update_rate="30" horizontal_fov="1" width="1920" height="1080"/>

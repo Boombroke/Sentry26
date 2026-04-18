@@ -498,6 +498,9 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `height` | `5.0` | `5.0` | 滚动窗口高度 (m) |
 | `resolution` | `0.05` | `0.05` | 分辨率 (m/像素) |
 | `robot_radius` | `0.46` | `0.46` | 0.648×0.650 轮足底盘外接圆半径 (m) |
+
+> 注：仿真模型中的 `chassis` 盒体已缩到实车的 65% 以减少 LiDAR 自遮挡，但 Nav2 的
+> `robot_radius` 仍保持 `0.46`，故规划和避障依旧按更保守的实车 footprint 执行。
 | `inflation_radius` | `0.90` | `0.90` | 车身 0.46 + 额外缓冲 0.44 (m) |
 | `cost_scaling_factor` | `8.0` | `8.0` | 陡峭梯度，推路径远离贴边 |
 
@@ -560,8 +563,8 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `preprocess.blind` | `0.35` | `0.2` | 盲区半径 (m)，过滤近距离噪声；仿真需兼顾低矮近障 |
 | `mapping.acc_norm` | `9.81` | `1.0` | 加速度单位：1.0=g, 9.81=m/s² |
 | `mapping.satu_acc` | `30.0` | `4.0` | IMU 加速度计饱和值 |
-| `mapping.gravity` | `[4.91, 0, -8.50]` | `[2.64, 0, -9.68]` | **重力向量，必须匹配 LiDAR 安装倾角** |
-| `mapping.gravity_init` | `[4.91, 0, -8.50]` | `[2.64, 0, -9.68]` | 初始重力估计 |
+| `mapping.gravity` | `[0, 0, -9.81]` | `[2.64, 0, -9.68]` | Point-LIO 的重力状态初值，不是 Mid360 安装角参数 |
+| `mapping.gravity_init` | `[0, 0, -9.81]` | `[2.64, 0, -9.68]` | 初始重力估计，不是 Mid360 安装角参数 |
 | `mapping.extrinsic_T` | `[0, 0, 0]` | `[-0.011, -0.023, 0.044]` | LiDAR-IMU 外参平移 (m) |
 | `mapping.lidar_meas_cov` | `0.001` | `0.01` | LiDAR 测量协方差 |
 | `filter_size_surf` | `0.2` | `0.2` | 表面特征降采样步长 (m) |
@@ -569,7 +572,7 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `publish.tf_send_en` | `False` | `False` | TF 发布（禁用，由 odom_bridge 处理） |
 | `pcd_save.pcd_save_en` | `False` | `False` | 退出时保存 PCD（SLAM 模式自动设为 True） |
 
-> **调参警告**：`gravity` 向量必须精确匹配 LiDAR 的物理安装角度。仿真中 wheeled_biped 的 Mid360 相对 `gimbal_pitch` 固定下俯约 30°（`rpy=[0, +pi/6, pi]`），故重力分量为 `[4.905, 0, -8.496]`。实车需通过实际标定获得。错误的重力向量会导致里程计快速发散。
+> **调参警告**：不要把仿真 LiDAR 的安装角直接写进 Point-LIO `gravity`。在 `imu_en=true` 时，Point-LIO 会用 IMU 初始化阶段的 `mean_acc` 自动对齐机体系姿态；仿真保持 `[0, 0, -9.81]` 即可。把安装角硬编码进 `gravity` 会导致姿态基准错误，表现为 `y/z` 漂移和异常角速度。
 
 ### 9.2 Small GICP 重定位
 
@@ -711,7 +714,7 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | | `lid_topic` | `velodyne_points` | `livox/lidar` | 话题名不同 |
 | | `scan_line` | `32` | `4` | 仿真模拟的扫描线数不同 |
 | | `timestamp_unit` | `2` (微秒) | `3` (纳秒) | 时间戳格式不同 |
-| | `gravity` | `[0, -4.9, -8.49]` | `[2.64, 0, -9.68]` | LiDAR 安装角度不同 |
+| | `gravity` | `[0, 0, -9.81]` | `[2.64, 0, -9.68]` | 仿真保持标准世界重力；实车为历史静态标定值 |
 | | `acc_norm` | `9.81` | `1.0` | 加速度单位不同 |
 | **GICP** | `max_dist_sq` | `9.0` | `3.0` | 仿真点云稀疏 |
 | | `min_inlier_ratio` | `0.1` | `0.3` | 仿真匹配率低 |
@@ -756,7 +759,7 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 
 ### 场景 4: Point-LIO 里程计发散
 
-- **首先检查 `gravity` 向量**是否匹配 LiDAR 实际安装角度
+- **首先检查传感器安装外参**（`gimbal_pitch → front_mid360` 的 TF / 模型定义）是否与实物一致，不要先改 `gravity`
 - 确认 `lidar_type` 和 `timestamp_unit` 设置正确
 - 检查 IMU 数据质量，调整 `satu_acc` / `satu_gyro`
 - 增大 `lidar_meas_cov`（降低 LiDAR 测量信任度）

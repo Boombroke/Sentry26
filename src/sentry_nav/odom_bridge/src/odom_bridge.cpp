@@ -10,6 +10,50 @@
 namespace odom_bridge
 {
 
+namespace
+{
+
+tf2::Transform projectToPlanarBase(const tf2::Transform & transform)
+{
+  tf2::Transform projected = transform;
+  const auto & origin = transform.getOrigin();
+  tf2::Quaternion q = transform.getRotation();
+  q.normalize();
+
+  double roll;
+  double pitch;
+  double yaw;
+  tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+
+  projected.setOrigin(tf2::Vector3(origin.x(), origin.y(), 0.0));
+  tf2::Quaternion q_2d;
+  q_2d.setRPY(0.0, 0.0, yaw);
+  projected.setRotation(q_2d);
+  return projected;
+}
+
+double normalizedYawDelta(const tf2::Quaternion & from, const tf2::Quaternion & to)
+{
+  tf2::Quaternion q_from = from;
+  tf2::Quaternion q_to = to;
+  q_from.normalize();
+  q_to.normalize();
+
+  double from_roll;
+  double from_pitch;
+  double from_yaw;
+  tf2::Matrix3x3(q_from).getRPY(from_roll, from_pitch, from_yaw);
+
+  double to_roll;
+  double to_pitch;
+  double to_yaw;
+  tf2::Matrix3x3(q_to).getRPY(to_roll, to_pitch, to_yaw);
+
+  return std::atan2(std::sin(to_yaw - from_yaw), std::cos(to_yaw - from_yaw));
+}
+
+}  // namespace
+
 OdomBridgeNode::OdomBridgeNode(const rclcpp::NodeOptions & options)
 : Node("odom_bridge", options),
   base_frame_to_lidar_initialized_(false),
@@ -111,20 +155,9 @@ void OdomBridgeNode::lidarOdometryAndPointCloudCallback(
     getTransform(lidar_frame_, robot_base_frame_, pose_stamp);
 
   tf2::Transform tf_odom_to_chassis = tf_odom_to_lidar * tf_lidar_to_chassis;
-  const tf2::Transform tf_odom_to_robot_base = tf_odom_to_lidar * tf_lidar_to_robot_base;
-
-  {
-    const auto & origin = tf_odom_to_chassis.getOrigin();
-    tf2::Quaternion q = tf_odom_to_chassis.getRotation();
-    double roll;
-    double pitch;
-    double yaw;
-    tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
-    tf_odom_to_chassis.setOrigin(tf2::Vector3(origin.x(), origin.y(), 0.0));
-    tf2::Quaternion q_2d;
-    q_2d.setRPY(0.0, 0.0, yaw);
-    tf_odom_to_chassis.setRotation(q_2d);
-  }
+  const tf2::Transform tf_odom_to_robot_base_raw = tf_odom_to_lidar * tf_lidar_to_robot_base;
+  const tf2::Transform tf_odom_to_robot_base = projectToPlanarBase(tf_odom_to_robot_base_raw);
+  tf_odom_to_chassis = projectToPlanarBase(tf_odom_to_chassis);
 
   publishTransform(tf_odom_to_chassis, odom_frame_, base_frame_, pose_stamp);
   publishOdometry(tf_odom_to_robot_base, odom_frame_, robot_base_frame_, pose_stamp);
@@ -202,8 +235,9 @@ void OdomBridgeNode::publishOdometry(
       const tf2::Vector3 v_world =
         (transform.getOrigin() - previous_transform_.getOrigin()) / dt;
 
-      // 归一化 quaternion 再构造旋转矩阵, 避免链式 tf2::Transform 乘法累积
-      // 浮点误差后 Matrix3x3 非正交, R.transpose() * v 放大向量模长 (观测到 |v_body| > |v_world|).
+      // 对外语义固定为地面移动底盘: pose 已在调用侧压成 z=0, roll=0, pitch=0.
+      // 这里再按平面 yaw 把世界系速度投到底盘系, 避免传感器自身 roll/pitch 通过
+      // odometry 回灌成虚假的 vy / wx / wy.
       tf2::Quaternion q = transform.getRotation();
       q.normalize();
       const tf2::Matrix3x3 R(q);
@@ -212,15 +246,13 @@ void OdomBridgeNode::publishOdometry(
       // body 速度 sanity check: 差速底盘物理上限 ~3 m/s, >10 m/s 必然是 LIO 位姿抖动,
       // 丢弃避免 velocity_smoother 把污染值当反馈回灌给 controller.
       if (std::abs(v_body.x()) < 10.0 && std::abs(v_body.y()) < 10.0) {
-        const tf2::Quaternion q_diff = q * previous_transform_.getRotation().inverse();
-        const tf2::Vector3 w_axis_angle = q_diff.getAxis() * q_diff.getAngle() / dt;
-
         out.twist.twist.linear.x = v_body.x();
         out.twist.twist.linear.y = v_body.y();
-        out.twist.twist.linear.z = v_body.z();
-        out.twist.twist.angular.x = w_axis_angle.x();
-        out.twist.twist.angular.y = w_axis_angle.y();
-        out.twist.twist.angular.z = w_axis_angle.z();
+        out.twist.twist.linear.z = 0.0;
+        out.twist.twist.angular.x = 0.0;
+        out.twist.twist.angular.y = 0.0;
+        out.twist.twist.angular.z =
+          normalizedYawDelta(previous_transform_.getRotation(), q) / dt;
       }
     }
 

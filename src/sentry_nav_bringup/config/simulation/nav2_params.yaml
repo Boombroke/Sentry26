@@ -60,8 +60,8 @@ point_lio:
       plane_thr: 0.1                                    # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 81.0
       ivox_grid_resolution: 0.5
-      gravity: [ 4.905, 0.0, -8.495709211125344 ]       # gravity to be aligned # fixed lidar mount rpy = [0, +pi/6, pi]
-      gravity_init: [ 4.905, 0.0, -8.495709211125344 ]  # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
+      gravity: [ 0.0, 0.0, -9.81 ]                      # Point-LIO state gravity anchor; IMU init will align body frame from measured mean_acc
+      gravity_init: [ 0.0, 0.0, -9.81 ]                 # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
       extrinsic_T: [ 0.0, 0.0, 0.0 ]
       extrinsic_R: [ 1.0, 0.0, 0.0,
                      0.0, 1.0, 0.0,

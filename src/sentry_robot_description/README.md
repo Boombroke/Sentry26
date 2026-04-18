@@ -20,8 +20,15 @@ SMBU PolarBear Team robot description package for RoboMaster 2025.
 
     TF 链（6 层）：`map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → front_mid360`
 
-    仿真中的 Mid360 相对 `gimbal_pitch` 额外固定下俯约 30°，用于覆盖近场低矮底座；因此
-    `config/simulation/nav2_params.yaml` 里的 Point-LIO `gravity / gravity_init` 必须与该安装角同步。
+    Mid360 允许相对 `gimbal_pitch` 存在固定安装外参（例如下俯、侧装、倒装）；这些姿态只应写在
+    `gimbal_pitch → front_mid360` 这一层，不改变底盘或云台的机械语义。当前仿真额外固定下俯约 30°，
+    用于覆盖近场低矮底座。
+
+    注意这只是传感器安装外参；Point-LIO 仿真的 `gravity / gravity_init` 仍保持标准 `[0, 0, -9.81]`，
+    实际机体系姿态由 IMU 初始化阶段用 `mean_acc` 自动对齐，不能再拿 `gravity` 表达 Mid360 安装角。
+
+    为减少 LiDAR 被自车挡住，仿真 `chassis` 盒体尺寸已缩到实车的 65%。这个缩小只作用于
+    Gazebo 里的车体盒子，不改变两驱动轮布局；导航侧仍保留更保守的 `robot_radius`。
 
     仿真放置注意：不要把 Gazebo spawn 的 `-z` 简单理解成“平台面高度”。
     当前项目以 `gz_world.yaml` 中各世界实测稳定的 `z_pose` 为准，其中 `rmuc_2026`
