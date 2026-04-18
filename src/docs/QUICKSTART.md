@@ -1,59 +1,44 @@
 # 快速部署与上手指南
 
+> **Maintainer**: Boombroke <boombroke@icloud.com>
 > 如需了解系统各模块的详细架构设计，请参阅 [系统架构详解](ARCHITECTURE.md)。
+> 参数调优见 [参数调优指南](TUNING_GUIDE.md)。
 
 ## 0. 一键配置（推荐）
-如果你使用全新的 Ubuntu 24.04 系统，可以直接运行一键配置脚本完成所有环境安装和编译：
+
+全新的 Ubuntu 24.04 系统可直接运行一键配置脚本：
+
 ```bash
-bash scripts/setup_env.sh
+bash src/scripts/setup_env.sh
 ```
 
-该脚本会依次执行以下步骤：
+脚本会依次执行：
 1. **安装 ROS2 Jazzy**: 添加官方 APT 源，安装 `ros-jazzy-desktop` 和 `ros-dev-tools`
-2. **安装 Gazebo Harmonic**: 通过 `ros-jazzy-ros-gz` 安装仿真器
+2. **安装 Gazebo Harmonic**: 通过 `ros-jazzy-ros-gz` 安装
 3. **安装系统依赖**: Eigen3、OpenMP、PCL、Nav2、SLAM Toolbox、serial-driver 等
-4. **编译安装 small_gicp v1.0.0**: 从 GitHub 克隆并编译（需要 C++17）
-5. **初始化 rosdep**: 配置 ROS 包依赖管理
-6. **创建工作空间并编译**: 在 `~/sentry_ws` 下创建工作空间并执行 `colcon build`
-7. **配置 bashrc（可选）**: 询问是否将工作空间环境写入 `~/.bashrc`
+4. **安装差速控制器 apt 包**: `ros-jazzy-nav2-regulated-pure-pursuit-controller`、`ros-jazzy-nav2-rotation-shim-controller`
+5. **编译安装 small_gicp v1.0.0**: 从 GitHub 克隆并编译（需要 C++17）
+6. **初始化 rosdep**
+7. **编译工作空间**: `colcon build --symlink-install`
+8. **配置 bashrc（可选）**
 
-如果你希望手动逐步配置，请继续阅读以下章节。
+如果希望手动逐步配置，继续阅读下面章节。
 
 ## 1. 环境要求
-- Ubuntu 24.04
-- ROS2 Jazzy
-- Gazebo Harmonic (仿真可选)
-- 配套仿真包: rmu_gazebo_simulator (已包含在 src/simulator 中)
 
-## 2. Docker 部署 (最快方式)
-Docker 是快速体验本项目的推荐方式。
+| 项 | 版本 |
+|---|---|
+| Ubuntu | 24.04 LTS |
+| ROS2 | Jazzy |
+| Gazebo | Harmonic (gz-sim 8) |
+| C++ | C++17 |
+| Python | 3.12+ |
+| 硬件（实车） | Livox Mid360 + 差速轮足底盘 + BMI088 IMU |
 
-### Docker 安装
-请参考 Docker 官方文档安装 Docker Engine 和 Docker Compose。
+## 2. 源码编译部署
 
-### 允许 Docker 访问显示器
-在宿主机执行：
-```bash
-xhost +local:docker
-```
+### 2.1 安装 small_gicp（重定位依赖）
 
-### 运行容器
-使用以下命令启动容器：
-```bash
-docker run -it --rm \
-  --name sentry_nav_container \
-  --net=host \
-  --privileged \
-  -e DISPLAY=$DISPLAY \
-  -v /tmp/.X11-unix:/tmp/.X11-unix \
-  sentry_nav:latest
-```
-注意：镜像名可能需要根据实际构建的标签进行更新。
-
-## 3. 源码编译部署
-
-### 3.1 安装依赖
-本项目依赖 small_gicp 进行点云配准，请先编译安装：
 ```bash
 sudo apt install -y libeigen3-dev libomp-dev
 git clone https://github.com/koide3/small_gicp.git
@@ -62,106 +47,186 @@ cmake .. -DCMAKE_BUILD_TYPE=Release && make -j
 sudo make install
 ```
 
-### 3.2 创建工作空间
+### 2.2 安装 xmacro（机器人模型解析）
+
 ```bash
-mkdir -p ~/sentry_ws/src
-cd ~/sentry_ws
-# 将本项目的 src/ 内容链接到工作空间
-ln -sf <path_to_sentry>/src/* src/
+pip3 install xmacro --break-system-packages
 ```
 
-### 3.3 安装 ROS 依赖
+### 2.3 安装 Nav2 差速控制器
+
 ```bash
-rosdep install -r --from-paths src --ignore-src --rosdistro $ROS_DISTRO -y
+sudo apt install -y ros-jazzy-nav2-regulated-pure-pursuit-controller \
+                    ros-jazzy-nav2-rotation-shim-controller
 ```
 
-### 3.4 编译
+### 2.4 安装 ROS 依赖
+
+```bash
+cd <path_to_sentry26>
+rosdep install -r --from-paths src --ignore-src --rosdistro jazzy -y
+```
+
+### 2.5 编译
+
 ```bash
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+source install/setup.bash
 ```
-说明：推荐使用 --symlink-install 选项，修改参数文件后无需重新编译。
 
-## 4. 仿真模式
+> 推荐始终带 `--symlink-install`，yaml/xmacro 修改后无需重新编译。
 
-> **Wayland 用户注意**: 如果使用 Wayland 桌面环境（Ubuntu 24.04 默认），Gazebo GUI 的 Play 按钮可能无法点击。解决方法：
-> - 方法 1：启动 Gazebo 前设置 `export QT_QPA_PLATFORM=xcb`
-> - 方法 2：使用命令行 unpause：`gz service -s /world/default/control --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 5000 --req 'pause: false'`
+## 3. 仿真模式
 
-### 4.0 仿真启动（三步）
+> **Wayland 用户注意**：Ubuntu 24.04 默认 Wayland，Gazebo GUI 的 Play 按钮可能无法点击。前面加 `QT_QPA_PLATFORM=xcb` 环境变量即可解决。
 
-**步骤 1：启动 Gazebo**（可选 `headless:=true` 无 GUI）
+### 3.1 一键仿真（推荐）
+
+仿真端最省心，一行命令拉起 Gazebo + 延时 15s 自动 unpause + 延时 25s 启动导航栈：
+
 ```bash
-# Wayland 环境下加 QT_QPA_PLATFORM=xcb
+# 首次跑（无先验地图，启用 slam_toolbox 实时建图）
+QT_QPA_PLATFORM=xcb ros2 launch sentry_nav_bringup rm_simulation_all_launch.py \
+  world:=rmuc_2026 slam:=True headless:=true
+
+# 有图后切换到定位模式
+QT_QPA_PLATFORM=xcb ros2 launch sentry_nav_bringup rm_simulation_all_launch.py \
+  world:=rmuc_2026 slam:=False
+```
+
+可选参数：`headless:=false`（启动 GUI）、`use_rviz:=True`（启动 RViz）、`nav_delay:=25.0`（Gazebo→Nav2 延时秒数）。
+
+### 3.2 分步仿真（调试用）
+
+```bash
+# 终端 1：启动 Gazebo（可加 headless:=true 无 GUI）
 QT_QPA_PLATFORM=xcb ros2 launch rmu_gazebo_simulator bringup_sim.launch.py
+
+# 终端 2：unpause Gazebo（等 10s 让机器人 spawn 完）
+gz service -s /world/default/control \
+  --reqtype gz.msgs.WorldControl \
+  --reptype gz.msgs.Boolean \
+  --timeout 5000 --req 'pause: false'
+
+# 终端 3：启动导航栈
+ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py \
+  world:=rmuc_2026 slam:=True
 ```
 
-**步骤 2：Unpause Gazebo 仿真**（等待机器人 spawn 完成后执行）
+### 3.3 保存建图结果
+
+建图完成后：
+
 ```bash
-gz service -s /world/default/control --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 5000 --req 'pause: false'
+# 保存 2D 占据栅格（slam_toolbox）
+ros2 run nav2_map_server map_saver_cli -f <map_name> \
+  --ros-args -r __ns:=/red_standard_robot1
+
+# 保存 PCD 点云（关闭 Point-LIO 节点时自动保存到 ~/.ros 或 PCD/ 目录）
 ```
 
-**步骤 3：等待 ~10 秒后启动导航**
+### 3.4 发一个 Nav Goal 验证
+
 ```bash
-# slam 建图模式
-ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_2026 slam:=True
-
-# 或者使用已有地图的定位模式
-ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_2026 slam:=False
+ros2 action send_goal /red_standard_robot1/navigate_to_pose \
+  nav2_msgs/action/NavigateToPose \
+  "{pose: {header: {frame_id: map}, pose: {position: {x: 2.0, y: 0.0}, orientation: {w: 1.0}}}}"
 ```
 
+差速车会**先原地旋转到目标方向**（RotationShim 触发），然后直线前进（RPP 跟随）。`SUCCEEDED` 意味着到达 xy_goal_tolerance 内。
 
-### 4.1 单机器人导航
+### 3.5 可用仿真世界
+
+| 世界 | 说明 |
+|---|---|
+| `rmuc_2026` | 2026 对抗赛场地 |
+| `rmul_2026` | 2026 联盟赛场地 |
+| `rmuc_2025` | 2025 对抗赛场地（保留） |
+| `empty_world` | 空地面调试 |
+
+## 4. 实车模式
+
+**实车端零代码改动，只需配置即可**。Stage A-H 已确保所有源码参数默认值适配差速轮足。
+
+### 4.1 一键启动
+
 ```bash
-ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmul_2026 slam:=False
+# 首次（建图）
+ros2 launch sentry_nav_bringup rm_sentry_launch.py slam:=True
+
+# 有图后导航
+ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
 ```
 
-### 4.2 单机器人建图
-```bash
-ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py slam:=True
-```
-保存地图：
-```bash
-ros2 run nav2_map_server map_saver_cli -f <MAP_NAME> --ros-args -r __ns:=/red_standard_robot1
-```
+`rm_sentry_launch.py` 自动启动：
+- rm_serial_driver 串口通信
+- Point-LIO 激光惯性里程计
+- small_gicp_relocalization 全局重定位
+- Nav2 栈（RPP + RotationShim + velocity_smoother）
+- robot_state_publisher + LiDAR 驱动
+- sentry_behavior 行为树
 
-### 4.3 多机器人 (实验性)
-```bash
-ros2 launch sentry_nav_bringup rm_multi_navigation_simulation_launch.py world:=rmuc_2025 robots:="red_standard_robot1={x: 0.0, y: 0.0, yaw: 0.0}; blue_standard_robot1={x: 5.6, y: 1.4, yaw: 3.14};"
-```
+### 4.2 跨团队协作（实车）
 
-## 5. 实车模式
+**下位机固件必须同步升级**：
 
-### 5.0 一键启动（推荐）
-```bash
-ros2 launch sentry_nav_bringup rm_sentry_launch.py
-```
-该脚本自动启动串口驱动、Point-LIO、导航栈和行为树，无需手动逐个启动。
+- 串口协议 imu 包新增 4 字段（`chassis_yaw/pitch` + `gimbal_yaw/pitch`），包大小 11B → 27B
+- 电控端用 `src/serial/serial_driver/example/navigation_auto.h` 重编固件
+- 旧固件会因 CRC 不匹配被丢包
 
-### 5.1 建图
-```bash
-ros2 launch sentry_nav_bringup rm_navigation_reality_launch.py slam:=True use_robot_state_pub:=True
+**实车机械参数**（在 `src/sentry_robot_description/resource/xmacro/wheeled_biped.sdf.xmacro` 头部）：
+
+```xml
+<xmacro_define_value name="wheel_radius" value="0.076" />
+<xmacro_define_value name="wheel_separation" value="0.28" />
+<xmacro_define_value name="gimbal_yaw_height" value="0.18" />
+<xmacro_define_value name="gimbal_pitch_height" value="0.08" />
 ```
 
-### 5.2 导航
-```bash
-ros2 launch sentry_nav_bringup rm_navigation_reality_launch.py world:=<YOUR_WORLD_NAME> slam:=False use_robot_state_pub:=True
-```
+按实车尺寸修改这 4 个值即可（不需改 SDF 结构）。
 
-## 6. 行为树决策
-启动行为树节点以实现自主决策：
+## 5. 行为树决策
+
 ```bash
 ros2 launch sentry_behavior sentry_behavior_launch.py
 ```
 
-## 7. 手柄控制
-- 默认开启 PS4 手柄支持。
-- 键位映射：详见 sentry_nav_bringup/config/simulation/nav2_params.yaml 中 teleop_twist_joy_node 部分。
+行为树 XML 定义在：
+- `src/sentry_nav_bringup/behavior_trees/` —— Nav2 行为树（navigate_to_pose 等）
+- `src/sentry_behavior/behavior_trees/` —— 战术决策（rmul.xml / RMUC.xml 等）
 
-## 8. 常见问题
-- **编译错误**: 请确保 small_gicp (>= v1.0.0) 已正确安装并位于系统路径中。
-- **仿真器无法启动**: 请检查 Gazebo Harmonic 是否已正确安装并能独立运行。
-- **Gazebo Play 按钮无响应**: Wayland 环境下的已知问题，设置 `QT_QPA_PLATFORM=xcb` 后重启 Gazebo，或使用命令行 unpause（见第 4.0 节）。
-- **Point-LIO 报 `lidar loop back, clear buffer`**: 仿真启动时序问题。确保先启动 Gazebo 并 unpause，等仿真时钟稳定后再启动导航栈。通常 IMU 初始化完成后会自行恢复。
-- **RViz 中无法显示**: 请检查 namespace 是否与启动参数中的机器人名称一致。
-- **先验点云**: point_lio 和 small_gicp 需要先验点云文件，由于文件体积较大，不包含在基础仓库中，请自行准备。
-- **重定位后机器人在 RViz 中位置异常**: 请确认先验 PCD 地图与 2D 占用栅格地图使用相同的坐标原点。
+## 6. 调试工具
+
+```bash
+# 统一工具箱（串口 Mock / 地图拾取 / 连通性检测 / 重力标定）
+python3 src/sentry_tools/sentry_toolbox.py
+
+# 串口数据实时可视化（需 ROS 环境）
+source install/setup.bash
+python3 src/sentry_tools/serial_visualizer.py
+```
+
+详见 [sentry_tools/README.md](../sentry_tools/README.md)。
+
+## 7. 常见问题
+
+- **编译错误**：确认 `small_gicp` v1.0.0 已安装并位于系统路径；rosdep 已安装 `ros-jazzy-nav2-regulated-pure-pursuit-controller` 和 `ros-jazzy-nav2-rotation-shim-controller`。
+
+- **仿真 Gazebo Play 按钮无响应**：Wayland 已知问题，用 `QT_QPA_PLATFORM=xcb` 或命令行 unpause（见 3.2）。
+
+- **Point-LIO 报 `imu loop back, clear deque`**：仿真启动时序问题。先起 Gazebo 并 unpause，等仿真时钟稳定（~10s）再起导航栈。IMU 初始化完成后会自动恢复。`rm_simulation_all_launch.py` 已处理此时序。
+
+- **Nav Goal accepted 但机器人不动**：
+  - 检查 RPP 的 `use_collision_detection`：SLAM 模式下若 costmap 大面积 unknown 会误报碰撞，本项目已在 `nav2_params.yaml` 中关闭（建图完成后可重开）。
+  - 检查 `/<ns>/cmd_vel` topic 是否单类型（`TwistStamped`，无混合）：`ros2 topic info /red_standard_robot1/cmd_vel`。
+
+- **RViz 中无法显示**：检查 namespace 与启动参数的机器人名称一致。
+
+- **先验 PCD/2D 地图缺失**：仓库不含大地图文件，首次运行用 `slam:=True` 自行建图，或从团队内部 Google Drive/百度网盘下载。
+
+- **实车底盘不响应 cmd_vel**：
+  - 下位机固件是否升级（imu 包 27B）
+  - `ros2 topic info /cmd_vel` 的 subscriber 是否有 `rm_serial_driver_node`
+  - `/cmd_vel` 类型须为 `geometry_msgs/msg/TwistStamped`（Jazzy Nav2 统一）
+
+- **重定位后机器人在 RViz 中位置异常**：确认先验 PCD 与 2D 占据栅格在同一坐标原点（从同一出生点建图）。
