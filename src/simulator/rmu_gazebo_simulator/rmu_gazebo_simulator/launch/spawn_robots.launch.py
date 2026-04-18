@@ -82,11 +82,16 @@ def generate_launch_description():
             ],
         )
 
+        # rmua19_robot_base 管理 gimbal/shooter/light_bar，但其内置
+        # chassis_controller 订阅 Twist 会与 Nav2 TwistStamped 的 /cmd_vel
+        # 产生类型冲突。差速方案下 cmd_vel 直通 Gazebo DiffDrive 插件，
+        # 此处把 robot_base 的 cmd_vel 订阅 remap 到废弃话题避开冲突。
         robot_base = Node(
             package="rmoss_gz_base",
             executable="rmua19_robot_base",
             namespace=robot["name"],
             parameters=[robot_config, {"robot_name": robot["name"]}],
+            remappings=[("cmd_vel", "_unused_chassis_cmd_vel")],
         )
 
         robot_state_publisher = Node(

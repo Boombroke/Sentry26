@@ -1,7 +1,7 @@
-# Differential drive cmd_vel (ROS → Gazebo)
+# Differential drive cmd_vel (ROS → Gazebo, 用 TwistStamped 匹配 Jazzy Nav2 输出)
 - ros_topic_name: "/<robot_name>/cmd_vel"
   gz_topic_name: "/model/<robot_name>/cmd_vel"
-  ros_type_name: "geometry_msgs/msg/Twist"
+  ros_type_name: "geometry_msgs/msg/TwistStamped"
   gz_type_name: "ignition.msgs.Twist"
   direction: "ROS_TO_GZ"
 
