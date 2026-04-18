@@ -434,7 +434,6 @@ ros2 launch sentry_nav_bringup rm_multi_navigation_simulation_launch.py \
 | 里程计桥接 | 已集成到 navigation_launch.py 中 (odom_bridge composable node) |
 | GICP 重定位 | `ros2 launch small_gicp_relocalization small_gicp_relocalization_launch.py` |
 | Livox 驱动 | `ros2 launch livox_ros_driver2 msg_MID360_launch.py` |
-| 里程计插值 | `ros2 launch odom_interpolator odom_interpolator_launch.py` |
 | 机器人描述 | `ros2 launch sentry_robot_description robot_description_launch.py` |
 | 串口驱动 | `ros2 launch serial_driver serial_driver.launch.py` |
 

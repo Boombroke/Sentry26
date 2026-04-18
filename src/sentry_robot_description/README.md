@@ -12,15 +12,13 @@ SMBU PolarBear Team robot description package for RoboMaster 2025.
 
 本项目使用 [xmacro](https://github.com/gezp/xmacro) 格式描述机器人关节信息，可以更灵活的组合已有模型。
 
-当前机器人描述文件基于 [rmua19_standard_robot](https://github.com/robomaster-oss/rmoss_gz_resources/tree/humble/resource/models/rmua19_standard_robot) 进行二次编辑，加入了工业相机和激光雷达等传感器。
+当前机器人描述文件为 2026 赛季差速轮足底盘定制，不再基于旧 Mecanum 全向模板。
 
-- [simulation_robot](./resource/xmacro/simulation_robot.sdf.xmacro)
+- [wheeled_biped](./resource/xmacro/wheeled_biped.sdf.xmacro)
 
-    搭载云台相机 industrial_camera 和激光雷达 rplidar_a2 和 Livox mid360，其中相机与 gimbal_pitch 轴固连，mid360 倾斜侧放与 chassis 固连。
+    差速底盘（左右两个驱动轮）+ 独立云台 yaw/pitch 关节。Livox mid360（含 LiDAR + IMU）与 industrial_camera 均挂在 gimbal_pitch，随云台旋转。底盘朝向即运动方向（车头始终朝前）。
 
-    ![sentry](https://raw.githubusercontent.com/LihanChen2004/picx-images-hosting/master/sentry_description.1sf3yc69kr.webp)
-
-    ![frames](https://raw.githubusercontent.com/LihanChen2004/picx-images-hosting/master/frames.5xaq4wriyy.webp)
+    TF 链（6 层）：`map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → front_mid360`
 
 ## 2. Quick Start
 
@@ -107,7 +105,7 @@ robot_urdf_xml = urdf_generator.to_string()
 ```bash
 source install/setup.bash
 
-xmacro4sdf src/sentry_robot_description/resource/xmacro/simulation_robot.sdf.xmacro > src/sentry_robot_description/resource/xmacro/simulation_robot.sdf
+xmacro4sdf src/sentry_robot_description/resource/xmacro/wheeled_biped.sdf.xmacro > src/sentry_robot_description/resource/xmacro/wheeled_biped.sdf
 ```
 
 ## 3. Subscribed Topics
