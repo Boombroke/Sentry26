@@ -1,0 +1,13 @@
+material rmuc_2026/floor
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+        texture rmuc_2026_floor.png
+      }
+    }
+  }
+}
