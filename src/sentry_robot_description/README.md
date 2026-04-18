@@ -138,11 +138,11 @@ None.
 
     是否使用仿真时间。
 
-- `robot_name` (str, default: "simulation_robot")
+- `robot_name` (str, default: "wheeled_biped")
 
     机器人 XMacro 描述文件的**名字（无需后缀）**。描述文件应位于 `package://sentry_robot_description/resource/xmacro` 目录下。
 
-- `robot_xmacro_file` (str, default: "[simulation_robot.sdf.xmacro](./resource/xmacro/simulation_robot.sdf.xmacro)")
+- `robot_xmacro_file` (str, default: "[wheeled_biped.sdf.xmacro](./resource/xmacro/wheeled_biped.sdf.xmacro)")
 
     机器人 XMacro 描述文件的**绝对路径**。本参数的优先级高于 `robot_name`，即若设置了 `robot_xmacro_file`，则 `robot_name` 参数无效。若未设置 `robot_xmacro_file`，则使用 `robot_name` 参数并自动补全路径作为 `robot_xmacro_file` 的值。
 
