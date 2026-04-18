@@ -1,6 +1,6 @@
 # 日志归档目录
 
-本目录保存 `archive_log.sh` 归档的 ROS2 launch 日志，方便对比历次运行。
+本目录同时保存 `archive_log.sh` 归档的 ROS2 launch 日志，以及 `record_nav_bag.sh` 录制的 Nav Goal rosbag。
 **已加入 `.gitignore`，不随仓库提交**。
 
 ## 日志来源层级
@@ -49,6 +49,14 @@ bash src/scripts/debug/archive_log.sh nav_goal_test
 bash src/scripts/debug/archive_log.sh slam_build
 ```
 
+### 录制 / 分析 / 清理 Nav Goal rosbag
+
+```bash
+bash src/scripts/debug/record_nav_bag.sh [label] [duration] [goal_x] [goal_y]
+python3 src/scripts/debug/analyze_bag.py [bag_dir]     # 省略则取 logs/ 最新
+bash src/scripts/debug/clean_logs.sh [--keep N|--all]  # 省略则列出
+```
+
 ## 典型 Debug 流程
 
 ### 情景 1：Nav Goal 被拒 / 不动
@@ -91,6 +99,7 @@ bash src/scripts/debug/archive_log.sh tuned
 # 对比
 diff logs/*-baseline/launch.log logs/*-tuned/launch.log | head -60
 ```
+
 
 ## 日志文件说明
 

@@ -68,7 +68,7 @@ point_lio:
                      0.0, 0.0, 1.0 ]
 
     odometry:
-      publish_odometry_without_downsample: True
+      publish_odometry_without_downsample: False    # True 会以 IMU 频率发 odom (数十 kHz 重复戳), 饿死 odom_bridge 同步
 
     publish:
       path_en: False                                    # False: close the path output
@@ -102,8 +102,8 @@ terrain_analysis:
     considerDrop: False                 # 考虑凹下去的地面,开启则将相对于地面点的高度取绝对值
     limitGroundLift: False
     maxGroundLift: 0.3
-    clearDyObs: True                    # 清除动态物体的话，有动态物体走过的地方就走不了了
-    minDyObsDis: 0.3                    # 以下参数都是在 clear_dy_obs 的情况下才有用的
+    clearDyObs: False                   # 关闭：高速动态障碍需要保留在 costmap 中用于避障
+    minDyObsDis: 0.5                    # 以下参数都是在 clear_dy_obs 的情况下才有用的
     minDyObsAngle: 0.0
     minDyObsRelZ: -0.3
     absDyObsRelZThre: 0.2
@@ -112,32 +112,32 @@ terrain_analysis:
     minDyObsPointNum: 1
     noDataObstacle: False               # treat no data as obstacle
     noDataBlockSkipNum: 0
-    minBlockPointNum: 10
-    vehicleHeight: 0.5                  # 小于车辆高度的点才会进行处理
+    minBlockPointNum: 5                  # 体素内最少点数（原 10，低矮/薄障碍物容易漏检）
+    vehicleHeight: 0.70                  # 车整体高度 ~0.66m (chassis 底 0.28 + chassis 0.12 + gimbal 0.26)
     voxelPointUpdateThre: 100
     voxelTimeUpdateThre: 0.5
     minRelZ: -1.5                       # min_rel_z 以及 max_rel_z 限制了有效点云点的Z值范围，用于对天花板和地板进行处理
-    maxRelZ: 0.5
+    maxRelZ: 1.0
     disRatioZ: 0.2                      # Z 值的最大最小范围由这两个值决定，但是并不等于这两个值，是有一个比例关系的，距离机器人越远，限定范围就越大，这其中考虑了坡度
 
 terrain_analysis_ext:
   ros__parameters:
     scanVoxelSize: 0.1
-    decayTime: 0.2
+    decayTime: 1.0                      # 点云衰减时间（0.2 太短，1.0 兼顾动态响应和机身旋转覆盖）
     noDecayDis: 0.0
-    clearingDis: 20.0
+    clearingDis: 10.0
     useSorting: true
     quantileZ: 0.2
-    vehicleHeight: 1.0
+    vehicleHeight: 0.8                  # 只保留离地面估计值 0.8m 以内的点作为障碍物
     voxelPointUpdateThre: 100
     voxelTimeUpdateThre: 0.2
     lowerBoundZ: -1.5
-    upperBoundZ: 0.5
+    upperBoundZ: 1.0
     disRatioZ: 0.2
-    checkTerrainConn: False
+    checkTerrainConn: True
     terrainUnderVehicle: -0.75
     terrainConnThre: 0.5
-    ceilingFilteringThre: 2.0
+    ceilingFilteringThre: 0.8           # 高差超过 1m 的体素视为天花板（原 2.0 太宽松）
     localTerrainMapRadius: 4.0
 
 small_gicp_relocalization:
@@ -156,9 +156,9 @@ small_gicp_relocalization:
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # [x, y, z, roll, pitch, yaw]
     max_iterations: 50
     accumulated_count_threshold: 20
-    min_range: 0.3
+    min_range: 0.5
     min_inlier_ratio: 0.3
-    max_fitness_error: 1.5
+    max_fitness_error: 1.0
     enable_periodic_relocalization: true
     relocalization_interval: 5.0
     max_correction_distance: 5.0
@@ -265,7 +265,7 @@ bt_navigator:
     global_frame: map
     robot_base_frame: base_footprint
     odom_topic: odometry
-    bt_loop_duration: 100
+    bt_loop_duration: 10
     default_server_timeout: 100
     wait_for_service_timeout: 1000
     default_nav_to_pose_bt_xml: $(find-pkg-share sentry_nav_bringup)/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
@@ -286,13 +286,13 @@ controller_server:
     controller_plugins: ["RotateShim", "FollowPath"]
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 5.0
+      required_movement_radius: 0.3                 # 5s 内走不到 0.3m 视为 stuck, 触发 BT recovery
+      movement_time_allowance: 5.0                  # 仿真里 1.5s 太激进, 撞一下就触发 recovery 死循环
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.15
-      yaw_goal_tolerance: 6.28                          # 终端对齐由 RPP use_rotate_to_heading 完成
+      yaw_goal_tolerance: 6.28                          # 哨兵由云台瞄准，底盘朝向无所谓
     RotateShim:
       plugin: "nav2_rotation_shim_controller::RotationShimController"
       primary_controller: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
@@ -337,7 +337,7 @@ local_costmap:
       width: 5
       height: 5
       resolution: 0.05
-      robot_radius: 0.2
+      robot_radius: 0.46                                  # 0.648×0.650 底盘外接圆半径 ~0.460
       plugins: ["static_layer", "intensity_voxel_layer", "inflation_layer"]
       intensity_voxel_layer:
         plugin: nav2_costmap_2d_plugins::IntensityVoxelLayer
@@ -353,13 +353,11 @@ local_costmap:
         z_voxels: 16
         min_obstacle_height: 0.0
         max_obstacle_height: 2.0
-        min_obstacle_intensity: 0.2
+        min_obstacle_intensity: 0.05
         max_obstacle_intensity: 2.0
         observation_sources: terrain_map
         terrain_map:
           data_type: PointCloud2
-          # '<robot_namespace>' keyword shall be replaced with 'namespace' where user defined.
-          # It doesn't need to start with '/'
           topic: <robot_namespace>/terrain_map
           sensor_frame: front_mid360
           min_obstacle_height: 0.0
@@ -371,8 +369,8 @@ local_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 1.5
-        inflation_radius: 1.0
+        cost_scaling_factor: 8.0                            # 陡峭梯度, 把 RPP 推向走廊中心
+        inflation_radius: 0.90                              # 车身 0.46 + 缓冲 0.44, 防擦角
       always_send_full_costmap: False
 
 global_costmap:
@@ -383,8 +381,9 @@ global_costmap:
       publish_frequency: 2.0
       global_frame: map
       robot_base_frame: base_footprint
-      robot_radius: 0.2
+      robot_radius: 0.46                                  # 与 local_costmap 一致
       resolution: 0.05
+      track_unknown_space: true
       plugins: ["static_layer", "intensity_voxel_layer", "inflation_layer"]
       intensity_voxel_layer:
         plugin: nav2_costmap_2d_plugins::IntensityVoxelLayer
@@ -400,13 +399,11 @@ global_costmap:
         z_voxels: 16
         min_obstacle_height: 0.0
         max_obstacle_height: 2.0
-        min_obstacle_intensity: 0.2
+        min_obstacle_intensity: 0.05
         max_obstacle_intensity: 2.0
         observation_sources: terrain_map_ext
         terrain_map_ext:
           data_type: PointCloud2
-          # '<robot_namespace>' keyword shall be replaced with 'namespace' where user defined.
-          # It doesn't need to start with '/'
           topic: <robot_namespace>/terrain_map_ext
           sensor_frame: front_mid360
           min_obstacle_height: 0.0
@@ -418,8 +415,8 @@ global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 1.5
-        inflation_radius: 1.0
+        cost_scaling_factor: 8.0                            # 陡峭梯度, 把 RPP 推向走廊中心
+        inflation_radius: 0.90                              # 车身 0.46 + 缓冲 0.44, 防擦角
       always_send_full_costmap: False
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
@@ -443,16 +440,28 @@ planner_server:
     expected_planner_frequency: 10.0
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_smac_planner::SmacPlanner2D"
-      tolerance: 0.5                      # 如果无法到达精确位置的规划容差，单位：米
-      allow_unknown: true                 # 允许在未知空间中行驶
-      downsample_costmap: false           # 是否对地图进行下采样
-      downsampling_factor: 1              # 代价地图层分辨率的倍数
-      max_iterations: 1000000             # 搜索的最大总迭代次数，-1 禁用
-      max_on_approach_iterations: 1000    # 一旦在容差范围内，尝试到达目标的最大迭代次数
-      max_planning_time: 3.5              # 最大规划时间（秒）
-      cost_travel_multiplier: 3.0         # 代价乘数，值越大路径越居中，3.0 保证走通道中央。
-      smooth_path: true                   # 2D 节点始终平滑路径
+      # SmacPlannerHybrid: 支持 Dubins/ReedsShepp 曲线, 感知朝向, 规划出差速车可跟的弧形路径
+      # 比 SmacPlanner2D (点规划, 朝向切线估计) 更适合 RPP 跟随
+      plugin: "nav2_smac_planner::SmacPlannerHybrid"
+      tolerance: 0.5
+      allow_unknown: true
+      downsample_costmap: false
+      downsampling_factor: 1
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 1.5
+      motion_model_for_search: "DUBIN"        # 差速可原地转, Dubins 足够; 需要倒车规划用 REEDS_SHEPP
+      angle_quantization_bins: 72             # 5° 量化
+      minimum_turning_radius: 0.25            # 最小转弯半径, 差速底盘可以很小, 0.25m 足够
+      reverse_penalty: 2.1
+      change_penalty: 0.0                     # 差速车转向代价低
+      non_straight_penalty: 1.2
+      cost_penalty: 2.0                       # 远离障碍的偏好
+      retrospective_penalty: 0.015
+      analytic_expansion_ratio: 3.5
+      analytic_expansion_max_length: 3.0
+      use_quadratic_cost_penalty: false
+      smooth_path: true
       smoother:
         max_iterations: 1000
         w_smooth: 0.3
@@ -478,7 +487,7 @@ behavior_server:
     global_costmap_topic: global_costmap/costmap_raw
     local_footprint_topic: local_costmap/published_footprint
     global_footprint_topic: global_costmap/published_footprint
-    cycle_frequency: 10.0
+    cycle_frequency: 20.0
     behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
     spin:
       plugin: "nav2_behaviors::Spin"
@@ -521,10 +530,12 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [3.0, 0.0, 3.0]                     # 差速底盘 vy 锁 0（双保险）
-    min_velocity: [-3.0, 0.0, -3.0]
-    max_accel: [6.0, 0.0, 6.0]                        # 加速度温和化，让仿真物理跟得上
-    max_decel: [-6.0, 0.0, -6.0]
+    max_velocity: [2.5, 0.0, 3.0]                     # 差速底盘 vy 锁 0（双保险）
+    min_velocity: [-2.5, 0.0, -3.0]
+    # 对齐实车：实测平地线加速度 ~2.5 m/s² (理论 a_max=2F/m=2*(2.4/0.06)/28≈2.86).
+    # 仿真物理能跑更高, 但调好的 Nav2 参数要能直迁实车, 所以这里按实车上限.
+    max_accel: [2.5, 0.0, 5.0]
+    max_decel: [-2.5, 0.0, -5.0]
     odom_topic: "odometry"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

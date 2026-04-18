@@ -101,10 +101,14 @@ void OdomBridgeNode::lidarOdometryAndPointCloudCallback(
   tf2::fromMsg(odometry_msg->pose.pose, tf_lidar_odom_to_lidar);
   const tf2::Transform tf_odom_to_lidar = tf_odom_to_lidar_odom_ * tf_lidar_odom_to_lidar;
 
+  // 用 odometry_msg 的时间戳查 TF (保证与位姿同一时刻, 避免 approximate sync
+  // 带来的几毫秒偏差在云台高速旋转时放大成虚假位移)
+  const rclcpp::Time pose_stamp(odometry_msg->header.stamp, RCL_ROS_TIME);
+
   const tf2::Transform tf_lidar_to_chassis =
-    getTransform(lidar_frame_, base_frame_, pcd_msg->header.stamp);
+    getTransform(lidar_frame_, base_frame_, pose_stamp);
   const tf2::Transform tf_lidar_to_robot_base =
-    getTransform(lidar_frame_, robot_base_frame_, pcd_msg->header.stamp);
+    getTransform(lidar_frame_, robot_base_frame_, pose_stamp);
 
   tf2::Transform tf_odom_to_chassis = tf_odom_to_lidar * tf_lidar_to_chassis;
   const tf2::Transform tf_odom_to_robot_base = tf_odom_to_lidar * tf_lidar_to_robot_base;
@@ -122,8 +126,8 @@ void OdomBridgeNode::lidarOdometryAndPointCloudCallback(
     tf_odom_to_chassis.setRotation(q_2d);
   }
 
-  publishTransform(tf_odom_to_chassis, odom_frame_, base_frame_, pcd_msg->header.stamp);
-  publishOdometry(tf_odom_to_robot_base, odom_frame_, robot_base_frame_, pcd_msg->header.stamp);
+  publishTransform(tf_odom_to_chassis, odom_frame_, base_frame_, pose_stamp);
+  publishOdometry(tf_odom_to_robot_base, odom_frame_, robot_base_frame_, pose_stamp);
 
   sensor_msgs::msg::PointCloud2 sensor_scan;
   pcl_ros::transformPointCloud(
@@ -133,7 +137,7 @@ void OdomBridgeNode::lidarOdometryAndPointCloudCallback(
   registered_scan_pub_->publish(registered_scan_in_odom);
   {
     nav_msgs::msg::Odometry lidar_odom_out;
-    lidar_odom_out.header.stamp = pcd_msg->header.stamp;
+    lidar_odom_out.header.stamp = pose_stamp;
     lidar_odom_out.header.frame_id = odom_frame_;
     lidar_odom_out.child_frame_id = lidar_frame_;
     const auto & origin = tf_odom_to_lidar.getOrigin();
@@ -192,23 +196,32 @@ void OdomBridgeNode::publishOdometry(
     // 否则仿真环境下 wall_time 和 sim_time 不同步会爆飞速度值
     const double dt = (stamp - previous_stamp_).seconds();
 
-    if (dt > 1e-6 && dt < 1.0) {  // 合理 dt 范围, 避免 divide by zero 或跳变
-      const auto linear_velocity = (transform.getOrigin() - previous_transform_.getOrigin()) / dt;
-      const tf2::Quaternion q_diff =
-        transform.getRotation() * previous_transform_.getRotation().inverse();
-      const auto angular_velocity = q_diff.getAxis() * q_diff.getAngle() / dt;
+    // dt 窗口收紧: 低于 1ms 是重复戳; 高于 0.1s 是 LIO burst 空窗, 跨多帧差分会爆飞.
+    // 两种情况都保持 twist=0, 让 Nav2 velocity_smoother 用上一拍反馈, 不输出虚假速度.
+    if (dt > 1e-3 && dt < 0.1) {
+      const tf2::Vector3 v_world =
+        (transform.getOrigin() - previous_transform_.getOrigin()) / dt;
 
-      // 在 base_footprint 本体系下输出速度（消除机器人朝向影响）
-      const tf2::Matrix3x3 R(transform.getRotation());
-      const tf2::Vector3 v_world(linear_velocity.x(), linear_velocity.y(), linear_velocity.z());
+      // 归一化 quaternion 再构造旋转矩阵, 避免链式 tf2::Transform 乘法累积
+      // 浮点误差后 Matrix3x3 非正交, R.transpose() * v 放大向量模长 (观测到 |v_body| > |v_world|).
+      tf2::Quaternion q = transform.getRotation();
+      q.normalize();
+      const tf2::Matrix3x3 R(q);
       const tf2::Vector3 v_body = R.transpose() * v_world;
 
-      out.twist.twist.linear.x = v_body.x();
-      out.twist.twist.linear.y = v_body.y();
-      out.twist.twist.linear.z = v_body.z();
-      out.twist.twist.angular.x = angular_velocity.x();
-      out.twist.twist.angular.y = angular_velocity.y();
-      out.twist.twist.angular.z = angular_velocity.z();
+      // body 速度 sanity check: 差速底盘物理上限 ~3 m/s, >10 m/s 必然是 LIO 位姿抖动,
+      // 丢弃避免 velocity_smoother 把污染值当反馈回灌给 controller.
+      if (std::abs(v_body.x()) < 10.0 && std::abs(v_body.y()) < 10.0) {
+        const tf2::Quaternion q_diff = q * previous_transform_.getRotation().inverse();
+        const tf2::Vector3 w_axis_angle = q_diff.getAxis() * q_diff.getAngle() / dt;
+
+        out.twist.twist.linear.x = v_body.x();
+        out.twist.twist.linear.y = v_body.y();
+        out.twist.twist.linear.z = v_body.z();
+        out.twist.twist.angular.x = w_axis_angle.x();
+        out.twist.twist.angular.y = w_axis_angle.y();
+        out.twist.twist.angular.z = w_axis_angle.z();
+      }
     }
 
     previous_transform_ = transform;

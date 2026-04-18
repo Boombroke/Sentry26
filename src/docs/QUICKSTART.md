@@ -170,8 +170,8 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
 **实车机械参数**（在 `src/sentry_robot_description/resource/xmacro/wheeled_biped.sdf.xmacro` 头部）：
 
 ```xml
-<xmacro_define_value name="wheel_radius" value="0.076" />
-<xmacro_define_value name="wheel_separation" value="0.28" />
+<xmacro_define_value name="wheel_radius" value="0.060" />
+<xmacro_define_value name="wheel_separation" value="0.65" />
 <xmacro_define_value name="gimbal_yaw_height" value="0.18" />
 <xmacro_define_value name="gimbal_pitch_height" value="0.08" />
 ```

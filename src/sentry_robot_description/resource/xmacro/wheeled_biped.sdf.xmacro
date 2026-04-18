@@ -1,47 +1,77 @@
 <?xml version="1.0"?>
-<sdf version="1.7">
+<sdf version="1.8">
 
     <!--include defination-->
     <xmacro_include uri="model://mid360/model.sdf.xmacro" />
     <xmacro_include uri="model://industrial_camera/model.sdf.xmacro" />
 
-    <!--property defination（2026 赛季实车参数：25kg，轮距 0.50m，底盘长 0.35m）
+    <!--property defination（2026 赛季实车参数：28kg，底盘 0.648x0.650m，轮径 0.060m，电机扭矩 2.4N·m）
 
-         为什么 4 轮 skid-steer 而非 2 轮+caster:
-         - 实车是轮足双轮 + 主动平衡控制器, 2 接触点
-         - 仿真里没有平衡控制器, 2 轮 + 2 caster 的 3 接触点在 DART 引擎下
-           数值不稳定（rosbag 显示 IMU az std=12 物理发散）
-         - 工业仿真惯例用 4 轮 skid-steer: 4 接触点稳定, 左右同侧同速驱动
-           形成差速转向, Nav2 视角 (vx, wz) 与轮足完全等价
-         - 实车部署时只需驱动 2 个电机, 前后轮视为同轴（或直接删掉前轮）
+         构型: 2 轮同轴 + 前后 2 caster ball, 模拟轮足平衡控制器
+         - 实车是双轮同轴 + 主动平衡控制器, 可原地自旋 (两轮反向同速 → 车身绕几何中心旋转)
+         - 仿真无平衡控制器, 裸 2 轮会前后摇摆翻倒
+         - caster ball 摩擦 mu=0.01 (极低), 仅提供静态支撑防翻, 不阻碍转向
+         - Nav2 视角: 两轮差速 = 原地零回转半径, 与实车轮足一致
+         - 实车部署: DiffDrive plugin 对接下位机平衡器, caster 纯仿真 workaround
     -->
-    <xmacro_define_value name="chassis_height" value="0.15" />
-    <xmacro_define_value name="chassis_length" value="0.35" />
-    <xmacro_define_value name="chassis_width" value="0.40" />
+    <!-- chassis 底在 base_footprint 之上的高度 = leg_len + wheel_radius = 0.28m
+         几何约束: base_footprint 贴地 (world z=0) → chassis 底 z=chassis_height
+                   → wheel_center z=chassis_height-leg_len=0.06 → 轮底 z=0 ✓
+         任何偏差都会让 base_footprint 穿地或 wheel 悬空 -->
+    <xmacro_define_value name="chassis_height" value="0.28" />
+    <xmacro_define_value name="chassis_length" value="0.648" />
+    <xmacro_define_value name="chassis_width" value="0.650" />
     <xmacro_define_value name="chassis_z" value="0.12" />
 
-    <xmacro_define_value name="wheel_radius" value="0.076" />
+    <xmacro_define_value name="wheel_radius" value="0.060" />
     <xmacro_define_value name="wheel_width" value="0.04" />
 
-    <!-- 4 轮 skid-steer:
-         横向 wheel_separation = 0.50m (左右轮中心距)
-         纵向 wheel_base = 0.22m (前后轮中心距, 底盘长 0.35m 内留 6.5cm 边距) -->
-    <xmacro_define_value name="wheel_separation" value="0.50" />
-    <xmacro_define_value name="half_wheel_sep" value="0.25" />
-    <xmacro_define_value name="neg_half_wheel_sep" value="-0.25" />
-    <xmacro_define_value name="half_wheel_base" value="0.11" />
-    <xmacro_define_value name="neg_half_wheel_base" value="-0.11" />
+    <!-- 2 轮同轴 (车身中线, x=0), 轮距 0.65m 贴车身两侧 -->
+    <xmacro_define_value name="wheel_separation" value="0.65" />
+    <xmacro_define_value name="half_wheel_sep" value="0.325" />
+    <xmacro_define_value name="neg_half_wheel_sep" value="-0.325" />
+
+    <!-- caster ball: 前后各一个, x=±0.28 (底盘长 0.648m 内缩 0.044m)
+         caster_radius=0.030, ball 中心 z=-(leg_len+wheel_radius-caster_radius) 与轮底齐平 -->
+    <xmacro_define_value name="caster_offset" value="0.28" />
+    <xmacro_define_value name="neg_caster_offset" value="-0.28" />
+    <xmacro_define_value name="caster_radius" value="0.030" />
+    <xmacro_define_value name="caster_z" value="-0.25" />
+
+    <!-- 虚拟腿长 leg_len: 模拟轮足连杆展开高度, chassis 底离地 = leg_len + wheel_radius
+         = 0.22 + 0.06 = 0.28m (实车腿展开典型值 0.25~0.35m).
+         wheel joint 在 chassis 坐标系下 z = -leg_len, 相当于 chassis 通过隐式"腿"挂在轮轴上方.
+         物理上 chassis->wheel 是 revolute joint, fixed leg 不需要显式 link. -->
+    <xmacro_define_value name="leg_len" value="0.22" />
+    <xmacro_define_value name="neg_leg_len" value="-0.22" />
 
     <xmacro_define_value name="gimbal_yaw_height" value="0.18" />
     <xmacro_define_value name="gimbal_pitch_height" value="0.08" />
 
     <!--wheeled robot model-->
-    <model name="wheeled_biped">
+    <model name="wheeled_biped" canonical_link="chassis" placement_frame="base_footprint">
 
-        <pose>0 0 ${chassis_height} 0 0 0</pose>
+        <!-- Spawn z controlled by launch -z arg (gz_world.yaml), not here.
+             base_footprint is the model origin; launch must spawn it at world z=0
+             for wheels to touch ground. -->
+        <pose>0 0 0 0 0 0</pose>
 
-        <!--base footprint (ground projection)-->
-        <link name="base_footprint"/>
+        <!--base footprint (ground projection).
+             必须带 inertial (哪怕极小): 空 link 在 gz-sim 会被当作 phantom,
+             base_to_chassis fixed joint 约束失效 → 整个机器人下坠穿地. -->
+        <link name="base_footprint">
+            <inertial>
+                <mass>0.001</mass>
+                <inertia>
+                    <ixx>1e-6</ixx>
+                    <iyy>1e-6</iyy>
+                    <izz>1e-6</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
+                </inertia>
+            </inertial>
+        </link>
 
         <joint name="base_to_chassis" type="fixed">
             <pose relative_to="base_footprint">0 0 ${chassis_height} 0 0 0</pose>
@@ -49,21 +79,20 @@
             <child>chassis</child>
         </joint>
 
-        <!--chassis body (25kg, 0.35x0.40x0.12)-->
+        <!--chassis body (28kg, 0.648x0.650x0.12)-->
         <link name="chassis">
             <inertial>
                 <pose>0 0 ${chassis_z / 2} 0 0 0</pose>
-                <mass>25.0</mass>
-                <!-- 25kg 箱体理论惯量（m/12*(a²+b²)）:
-                     ixx (roll)  = 0.363
-                     iyy (pitch) = 0.285
-                     izz (yaw)   = 0.589
-                     4 轮 skid-steer 物理稳定不需要靠惯量压振, 用接近理论值即可。
-                     三角不等式验证: 0.40+0.60=1.0>0.40 ✓, 0.40+0.40=0.80>0.60 ✓ -->
+                <mass>28.0</mass>
+                <!-- 28kg 箱体理论惯量（m/12*(a²+b²)）:
+                     ixx (roll)  = 28/12*(0.650²+0.12²) = 1.02
+                     iyy (pitch) = 28/12*(0.648²+0.12²) = 1.01
+                     izz (yaw)   = 28/12*(0.648²+0.650²) = 1.97
+                     三角不等式验证: 1.05+1.05=2.10>1.97 ✓ -->
                 <inertia>
-                    <ixx>0.40</ixx>
-                    <iyy>0.40</iyy>
-                    <izz>0.60</izz>
+                    <ixx>1.05</ixx>
+                    <iyy>1.05</iyy>
+                    <izz>1.97</izz>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
                     <iyz>0</iyz>
@@ -104,24 +133,29 @@
         </link>
 
         <!--
-            4 轮布局（俯视）:
-                  [front_left]       [front_right]
-                        |  chassis  |
-                  [rear_left]        [rear_right]
-            左侧两轮 (front_left + rear_left) 由 DiffDrive 同速驱动
-            右侧两轮 (front_right + rear_right) 由 DiffDrive 同速驱动
-            左右不同速 → skid-steer 差速转向
+            2 轮同轴布局（俯视）:
+                     [front_caster]
+                  [left_wheel]  |  [right_wheel]
+                     [rear_caster]
+            左右轮同轴 (x=0) → 两轮反向同速即原地自旋 (与实车轮足平衡一致)
+            前后 caster ball 仅防翻, 摩擦极低不干扰转向
         -->
 
-        <!--front_left wheel-->
-        <joint name="front_left_wheel_joint" type="revolute">
-            <pose relative_to="chassis">${half_wheel_base} ${half_wheel_sep} 0 -1.5708 0 0</pose>
+        <!--left wheel (同轴, x=0, z=-leg_len 模拟虚拟腿)-->
+        <joint name="left_wheel_joint" type="revolute">
+            <pose relative_to="chassis">0 ${half_wheel_sep} ${neg_leg_len} -1.5708 0 0</pose>
             <parent>chassis</parent>
-            <child>front_left_wheel</child>
+            <child>left_wheel</child>
             <axis>
-                <xyz expressed_in="__model__">0 1 0</xyz>
+                <!-- joint pose rpy=-1.5708 0 0 把 joint frame 绕 x 翻 -90°.
+                     翻转后: joint_z = model_y (左右方向) = 正确的轮轴.
+                     用 expressed_in="__model__" 在 gz-sim 里不稳, 直接写 joint 本地 axis. -->
+                <xyz>0 0 1</xyz>
                 <limit>
-                    <effort>200</effort>
+                    <!-- effort: 仿真里 chassis 28kg 压 2 轮 (caster 不承重) → 静摩擦扭矩 ~10N·m/轮.
+                         实车电机 2.4N·m 但配减速箱 + 腿部杠杆, 有效扭矩远大于 2.4.
+                         仿真无减速箱/无腿部力学, 直接设 30N·m 保证能启动 + 有加速余量. -->
+                    <effort>30</effort>
                     <velocity>80</velocity>
                     <lower>-1.79769e+308</lower>
                     <upper>1.79769e+308</upper>
@@ -131,14 +165,15 @@
                 </dynamics>
             </axis>
         </joint>
-        <link name="front_left_wheel">
-            <pose relative_to="front_left_wheel_joint">0 0 0 0 0 0</pose>
+        <link name="left_wheel">
+            <pose relative_to="left_wheel_joint">0 0 0 0 0 0</pose>
             <inertial>
+                <!-- 1kg, r=0.060, w=0.04. ixx=iyy=m/12*(3r²+w²)=0.0010, izz=0.5*m*r²=0.0018 -->
                 <mass>1.0</mass>
                 <inertia>
-                    <ixx>0.003</ixx>
-                    <iyy>0.003</iyy>
-                    <izz>0.0029</izz>
+                    <ixx>0.0010</ixx>
+                    <iyy>0.0010</iyy>
+                    <izz>0.0018</izz>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
                     <iyz>0</iyz>
@@ -166,8 +201,8 @@
                 <surface>
                     <friction>
                         <ode>
-                            <mu>1.0</mu>
-                            <mu2>1.5</mu2>
+                            <mu>1.2</mu>
+                            <mu2>1.0</mu2>
                         </ode>
                     </friction>
                     <contact>
@@ -181,15 +216,16 @@
             </collision>
         </link>
 
-        <!--front_right wheel-->
-        <joint name="front_right_wheel_joint" type="revolute">
-            <pose relative_to="chassis">${half_wheel_base} ${neg_half_wheel_sep} 0 -1.5708 0 0</pose>
+        <!--right wheel (同轴, x=0, z=-leg_len 模拟虚拟腿)-->
+        <joint name="right_wheel_joint" type="revolute">
+            <pose relative_to="chassis">0 ${neg_half_wheel_sep} ${neg_leg_len} -1.5708 0 0</pose>
             <parent>chassis</parent>
-            <child>front_right_wheel</child>
+            <child>right_wheel</child>
             <axis>
-                <xyz expressed_in="__model__">0 1 0</xyz>
+                <!-- 同 left_wheel_joint: joint_z = model_y (轮轴方向) -->
+                <xyz>0 0 1</xyz>
                 <limit>
-                    <effort>200</effort>
+                    <effort>30</effort>
                     <velocity>80</velocity>
                     <lower>-1.79769e+308</lower>
                     <upper>1.79769e+308</upper>
@@ -199,14 +235,14 @@
                 </dynamics>
             </axis>
         </joint>
-        <link name="front_right_wheel">
-            <pose relative_to="front_right_wheel_joint">0 0 0 0 0 0</pose>
+        <link name="right_wheel">
+            <pose relative_to="right_wheel_joint">0 0 0 0 0 0</pose>
             <inertial>
                 <mass>1.0</mass>
                 <inertia>
-                    <ixx>0.003</ixx>
-                    <iyy>0.003</iyy>
-                    <izz>0.0029</izz>
+                    <ixx>0.0010</ixx>
+                    <iyy>0.0010</iyy>
+                    <izz>0.0018</izz>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
                     <iyz>0</iyz>
@@ -234,8 +270,8 @@
                 <surface>
                     <friction>
                         <ode>
-                            <mu>1.0</mu>
-                            <mu2>1.5</mu2>
+                            <mu>1.2</mu>
+                            <mu2>1.0</mu2>
                         </ode>
                     </friction>
                     <contact>
@@ -249,32 +285,20 @@
             </collision>
         </link>
 
-        <!--rear_left wheel-->
-        <joint name="rear_left_wheel_joint" type="revolute">
-            <pose relative_to="chassis">${neg_half_wheel_base} ${half_wheel_sep} 0 -1.5708 0 0</pose>
+        <!--front caster ball (模拟平衡控制器维持前倾支撑, 摩擦极低不干扰转向)-->
+        <joint name="front_caster_joint" type="fixed">
+            <pose relative_to="chassis">${caster_offset} 0 ${caster_z} 0 0 0</pose>
             <parent>chassis</parent>
-            <child>rear_left_wheel</child>
-            <axis>
-                <xyz expressed_in="__model__">0 1 0</xyz>
-                <limit>
-                    <effort>200</effort>
-                    <velocity>80</velocity>
-                    <lower>-1.79769e+308</lower>
-                    <upper>1.79769e+308</upper>
-                </limit>
-                <dynamics>
-                    <damping>0.05</damping>
-                </dynamics>
-            </axis>
+            <child>front_caster</child>
         </joint>
-        <link name="rear_left_wheel">
-            <pose relative_to="rear_left_wheel_joint">0 0 0 0 0 0</pose>
+        <link name="front_caster">
+            <pose relative_to="front_caster_joint">0 0 0 0 0 0</pose>
             <inertial>
-                <mass>1.0</mass>
+                <mass>0.1</mass>
                 <inertia>
-                    <ixx>0.003</ixx>
-                    <iyy>0.003</iyy>
-                    <izz>0.0029</izz>
+                    <ixx>0.00004</ixx>
+                    <iyy>0.00004</iyy>
+                    <izz>0.00004</izz>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
                     <iyz>0</iyz>
@@ -282,34 +306,28 @@
             </inertial>
             <visual name="visual">
                 <geometry>
-                    <cylinder>
-                        <radius>${wheel_radius}</radius>
-                        <length>${wheel_width}</length>
-                    </cylinder>
+                    <sphere><radius>${caster_radius}</radius></sphere>
                 </geometry>
                 <material>
-                    <ambient>0.1 0.1 0.1 1</ambient>
-                    <diffuse>0.15 0.15 0.15 1</diffuse>
+                    <ambient>0.3 0.3 0.1 1</ambient>
+                    <diffuse>0.4 0.4 0.15 1</diffuse>
                 </material>
             </visual>
             <collision name="collision">
                 <geometry>
-                    <cylinder>
-                        <radius>${wheel_radius}</radius>
-                        <length>${wheel_width}</length>
-                    </cylinder>
+                    <sphere><radius>${caster_radius}</radius></sphere>
                 </geometry>
                 <surface>
                     <friction>
                         <ode>
-                            <mu>1.0</mu>
-                            <mu2>1.5</mu2>
+                            <mu>0.001</mu>
+                            <mu2>0.001</mu2>
                         </ode>
                     </friction>
                     <contact>
                         <ode>
-                            <kp>1e7</kp>
-                            <kd>500</kd>
+                            <kp>1e6</kp>
+                            <kd>100</kd>
                             <min_depth>0.001</min_depth>
                         </ode>
                     </contact>
@@ -317,32 +335,20 @@
             </collision>
         </link>
 
-        <!--rear_right wheel-->
-        <joint name="rear_right_wheel_joint" type="revolute">
-            <pose relative_to="chassis">${neg_half_wheel_base} ${neg_half_wheel_sep} 0 -1.5708 0 0</pose>
+        <!--rear caster ball-->
+        <joint name="rear_caster_joint" type="fixed">
+            <pose relative_to="chassis">${neg_caster_offset} 0 ${caster_z} 0 0 0</pose>
             <parent>chassis</parent>
-            <child>rear_right_wheel</child>
-            <axis>
-                <xyz expressed_in="__model__">0 1 0</xyz>
-                <limit>
-                    <effort>200</effort>
-                    <velocity>80</velocity>
-                    <lower>-1.79769e+308</lower>
-                    <upper>1.79769e+308</upper>
-                </limit>
-                <dynamics>
-                    <damping>0.05</damping>
-                </dynamics>
-            </axis>
+            <child>rear_caster</child>
         </joint>
-        <link name="rear_right_wheel">
-            <pose relative_to="rear_right_wheel_joint">0 0 0 0 0 0</pose>
+        <link name="rear_caster">
+            <pose relative_to="rear_caster_joint">0 0 0 0 0 0</pose>
             <inertial>
-                <mass>1.0</mass>
+                <mass>0.1</mass>
                 <inertia>
-                    <ixx>0.003</ixx>
-                    <iyy>0.003</iyy>
-                    <izz>0.0029</izz>
+                    <ixx>0.00004</ixx>
+                    <iyy>0.00004</iyy>
+                    <izz>0.00004</izz>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
                     <iyz>0</iyz>
@@ -350,34 +356,28 @@
             </inertial>
             <visual name="visual">
                 <geometry>
-                    <cylinder>
-                        <radius>${wheel_radius}</radius>
-                        <length>${wheel_width}</length>
-                    </cylinder>
+                    <sphere><radius>${caster_radius}</radius></sphere>
                 </geometry>
                 <material>
-                    <ambient>0.1 0.1 0.1 1</ambient>
-                    <diffuse>0.15 0.15 0.15 1</diffuse>
+                    <ambient>0.3 0.3 0.1 1</ambient>
+                    <diffuse>0.4 0.4 0.15 1</diffuse>
                 </material>
             </visual>
             <collision name="collision">
                 <geometry>
-                    <cylinder>
-                        <radius>${wheel_radius}</radius>
-                        <length>${wheel_width}</length>
-                    </cylinder>
+                    <sphere><radius>${caster_radius}</radius></sphere>
                 </geometry>
                 <surface>
                     <friction>
                         <ode>
-                            <mu>1.0</mu>
-                            <mu2>1.5</mu2>
+                            <mu>0.001</mu>
+                            <mu2>0.001</mu2>
                         </ode>
                     </friction>
                     <contact>
                         <ode>
-                            <kp>1e7</kp>
-                            <kd>500</kd>
+                            <kp>1e6</kp>
+                            <kd>100</kd>
                             <min_depth>0.001</min_depth>
                         </ode>
                     </contact>
@@ -497,13 +497,11 @@
         <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
         </plugin>
 
-        <!--differential drive (skid-steer: 左/右各指定 2 个 joint)
+        <!--differential drive: 2 轮同轴, 两轮反向同速 → 原地自旋
              不显式指定 topic, gz-sim 默认用 /model/<model_name>/cmd_vel -->
         <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
-            <left_joint>front_left_wheel_joint</left_joint>
-            <left_joint>rear_left_wheel_joint</left_joint>
-            <right_joint>front_right_wheel_joint</right_joint>
-            <right_joint>rear_right_wheel_joint</right_joint>
+            <left_joint>left_wheel_joint</left_joint>
+            <right_joint>right_wheel_joint</right_joint>
             <wheel_separation>${wheel_separation}</wheel_separation>
             <wheel_radius>${wheel_radius}</wheel_radius>
             <odom_publish_frequency>0</odom_publish_frequency>

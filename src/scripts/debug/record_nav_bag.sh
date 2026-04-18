@@ -22,10 +22,29 @@ BAG_DIR="$LOGS_DIR/${TS}-${LABEL}"
 echo "录制目标: $BAG_DIR"
 echo "时长: ${DURATION}s"
 echo "Nav Goal: ($GOAL_X, $GOAL_Y)"
+echo "预计体积: ${DURATION}s × (livox/lidar ~3MB/s + 其余 ~0.5MB/s) ≈ $((DURATION * 35 / 10))MB"
 echo ""
 
 NS="/red_standard_robot1"
-TOPICS="$NS/cmd_vel $NS/cmd_vel_controller $NS/odometry $NS/joint_states $NS/plan $NS/local_plan $NS/tf $NS/tf_static $NS/local_costmap/costmap $NS/livox/imu"
+# 速度指令链路 (cmd_vel_controller = RPP 原始, cmd_vel_smoothed = smoother 输出, cmd_vel = 最终)
+TOPICS_CMD="$NS/cmd_vel $NS/cmd_vel_controller $NS/cmd_vel_smoothed"
+
+# 定位 / 里程计 / TF
+TOPICS_POSE="$NS/odometry $NS/aft_mapped_to_init $NS/joint_states $NS/tf $NS/tf_static"
+
+# 规划器 / 控制器 (local_plan 来自 RPP, transformed_global_plan 来自 RPP, received_global_plan 来自 BT)
+TOPICS_NAV="$NS/plan $NS/local_plan $NS/transformed_global_plan $NS/received_global_plan $NS/lookahead_point"
+
+# Costmap (带 _raw 未 inflate, 不带是 inflate 后; 订 _raw 数据量小, 重放自己 inflate)
+TOPICS_COSTMAP="$NS/local_costmap/costmap $NS/global_costmap/costmap $NS/local_costmap/published_footprint"
+
+# 感知输入 (terrain → costmap observation, lidar → SLAM/LIO, imu → LIO)
+TOPICS_SENSE="$NS/terrain_map $NS/terrain_map_ext $NS/obstacle_scan $NS/livox/imu $NS/livox/lidar"
+
+# BT / behavior 状态 (recovery 触发看这几个)
+TOPICS_BT="$NS/behavior_tree_log $NS/navigate_to_pose/_action/status"
+
+TOPICS="$TOPICS_CMD $TOPICS_POSE $TOPICS_NAV $TOPICS_COSTMAP $TOPICS_SENSE $TOPICS_BT"
 
 # 在 bash 子 shell 里跑 ros2 bag, 静默 INFO, 只保留 WARN/ERROR
 ( ros2 bag record --output "$BAG_DIR" -d "$DURATION" --topics $TOPICS 2>&1 | grep -v "INFO" ) &
