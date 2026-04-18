@@ -132,38 +132,32 @@ source install/setup.bash
 
 ## 快速开始
 
-### 仿真模式（推荐一键启动）
+### 仿真模式（两终端启动）
+
+仿真环境下导航栈对启动时序敏感（Gazebo 未 unpause 时没有传感器数据 → Point-LIO 无法初始化），因此**必须分两个终端启动**：
 
 ```bash
-# 一键启动（自动 unpause + 延时 15s 拉起导航栈；首次跑需要 slam:=True 建图）
-QT_QPA_PLATFORM=xcb ros2 launch sentry_nav_bringup rm_simulation_all_launch.py \
-  world:=rmuc_2026 slam:=True headless:=true
-
-# 有图后可切导航模式
-QT_QPA_PLATFORM=xcb ros2 launch sentry_nav_bringup rm_simulation_all_launch.py \
-  world:=rmuc_2026 slam:=False
-```
-
-### 仿真模式（分步启动，调试用）
-
-```bash
-# 终端 1：启动 Gazebo（可选 headless:=true 无 GUI）
+# === 终端 1：启动 Gazebo（可选 headless:=true 无 GUI） ===
 QT_QPA_PLATFORM=xcb ros2 launch rmu_gazebo_simulator bringup_sim.launch.py
 
-# 终端 2：等待机器人 spawn 完成后 unpause
+# 等待机器人 spawn 完成后 unpause Gazebo：
 gz service -s /world/default/control \
-  --reqtype gz.msgs.WorldControl \
-  --reptype gz.msgs.Boolean \
+  --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean \
   --timeout 5000 --req 'pause: false'
 
-# 等待 ~10 秒让仿真时钟稳定
+# 再等 ~10 秒让仿真时钟稳定、传感器数据开始流动
 
-# 终端 3：启动导航
+# === 终端 2：启动导航栈 ===
+# 首次跑（无先验地图，实时 SLAM 建图）：
+ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py \
+  world:=rmuc_2026 slam:=True
+
+# 有图后切换到纯导航模式：
 ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py \
   world:=rmuc_2026 slam:=False
 ```
 
-> **注意**：必须按此顺序启动。Gazebo 未 unpause 时不产生传感器数据，Point-LIO 无法初始化。
+> 两步分离而非一键 launch 的原因：Gazebo spawn 完成到传感器流稳定需要 ~10s，将导航栈一起 TimerAction 容易在慢机器上时序错位（Point-LIO 收不到 IMU 初始化失败），分开手动控制更可靠。
 
 ### 实车模式
 

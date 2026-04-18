@@ -30,9 +30,9 @@
 
 | 模式 | 启动文件 | 核心参数 | 用途 |
 |:---|:---|:---|:---|
-| 仿真一键 | `rm_simulation_all_launch.py` | `world` / `slam` | **推荐**：Gazebo + 导航栈一键启动 |
-| 仿真导航栈 | `rm_navigation_simulation_launch.py` | `slam:=False` | 单独启动导航栈（Gazebo 已在运行时使用） |
-| 仿真建图 | `rm_navigation_simulation_launch.py` | `slam:=True` | 在仿真中构建 2D 栅格地图和保存 PCD |
+| 仿真 Gazebo | `bringup_sim.launch.py`（rmu_gazebo_simulator） | `headless` | 终端 1：启动 Gazebo 仿真器 |
+| 仿真导航栈 | `rm_navigation_simulation_launch.py` | `slam` / `world` | 终端 2：在 Gazebo 就绪后启动 |
+| 仿真建图 | `rm_navigation_simulation_launch.py slam:=True` | `world` | SLAM 实时建图 |
 | 实车导航 | `rm_navigation_reality_launch.py` | `slam:=False` | 物理机器人的自主导航 |
 | 实车建图 | `rm_navigation_reality_launch.py` | `slam:=True` | 物理机器人构建地图 |
 | 行为树决策 | `sentry_behavior_launch.py` | `target_tree` | 比赛战术逻辑（独立启动） |
@@ -41,16 +41,17 @@
 ### Launch 层级关系
 
 ```
-仿真模式（推荐一键启动）:
-  rm_simulation_all_launch.py
-  ├── bringup_sim.launch.py (Gazebo 仿真器，自动 unpause)
-  └── rm_navigation_simulation_launch.py (延时 15s 拉起)
-      ├── ign_sim_pointcloud_tool (仿真专用点云格式转换)
-      ├── bringup_launch.py
-      │   ├── [slam=True]  → slam_launch.py
-      │   ├── [slam=False] → localization_launch.py
-      │   └── navigation_launch.py (始终启动)
-      └── rviz_launch.py (可视化，可选)
+仿真模式（两终端启动，时序敏感不支持一键）:
+  终端 1: bringup_sim.launch.py (Gazebo 仿真器)
+          + 手动 unpause: gz service -s /world/default/control ...
+          + 等待 ~10s 让 /clock 稳定、传感器流启动
+  终端 2: rm_navigation_simulation_launch.py
+          ├── ign_sim_pointcloud_tool (仿真专用点云格式转换)
+          ├── bringup_launch.py
+          │   ├── [slam=True]  → slam_launch.py
+          │   ├── [slam=False] → localization_launch.py
+          │   └── navigation_launch.py (始终启动)
+          └── rviz_launch.py (可视化，可选)
 
 实车模式:
   rm_navigation_reality_launch.py
@@ -96,20 +97,9 @@ RotationShimController + RegulatedPurePursuitController (局部控制，差速)
 - 项目已编译且 `source install/setup.bash`
 - 先验点云文件 (PCD) 已放置在 `sentry_nav_bringup/pcd/simulation/` 目录
 
-### 启动步骤
+### 启动步骤（两终端，时序敏感）
 
-**推荐：一键启动（Gazebo + 导航栈）**
-
-```bash
-# 自动启动 Gazebo、unpause、延时 15s 后拉起导航栈
-QT_QPA_PLATFORM=xcb ros2 launch sentry_nav_bringup rm_simulation_all_launch.py world:=rmuc_2026 slam:=False
-```
-
----
-
-**分步启动（调试用）**
-
-**第 1 步：启动 Gazebo 仿真器（必须先启动）**
+**第 1 步：启动 Gazebo 仿真器（终端 1）**
 
 ```bash
 # Wayland 桌面环境必须设置 QT_QPA_PLATFORM=xcb（可选 headless:=true 无 GUI）

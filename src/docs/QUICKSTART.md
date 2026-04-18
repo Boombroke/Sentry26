@@ -80,37 +80,30 @@ source install/setup.bash
 
 > **Wayland 用户注意**：Ubuntu 24.04 默认 Wayland，Gazebo GUI 的 Play 按钮可能无法点击。前面加 `QT_QPA_PLATFORM=xcb` 环境变量即可解决。
 
-### 3.1 一键仿真（推荐）
+### 3.1 两终端启动（唯一方式）
 
-仿真端最省心，一行命令拉起 Gazebo + 延时 15s 自动 unpause + 延时 25s 启动导航栈：
-
-```bash
-# 首次跑（无先验地图，启用 slam_toolbox 实时建图）
-QT_QPA_PLATFORM=xcb ros2 launch sentry_nav_bringup rm_simulation_all_launch.py \
-  world:=rmuc_2026 slam:=True headless:=true
-
-# 有图后切换到定位模式
-QT_QPA_PLATFORM=xcb ros2 launch sentry_nav_bringup rm_simulation_all_launch.py \
-  world:=rmuc_2026 slam:=False
-```
-
-可选参数：`headless:=false`（启动 GUI）、`use_rviz:=True`（启动 RViz）、`nav_delay:=25.0`（Gazebo→Nav2 延时秒数）。
-
-### 3.2 分步仿真（调试用）
+仿真端时序敏感（Gazebo spawn → unpause → 传感器流稳定大约需要 10s，Point-LIO 收不到 IMU 就初始化失败），因此**必须两终端手动启动**：
 
 ```bash
-# 终端 1：启动 Gazebo（可加 headless:=true 无 GUI）
+# === 终端 1：启动 Gazebo（可加 headless:=true 无 GUI） ===
 QT_QPA_PLATFORM=xcb ros2 launch rmu_gazebo_simulator bringup_sim.launch.py
 
-# 终端 2：unpause Gazebo（等 10s 让机器人 spawn 完）
+# 启动后另开一个终端 unpause Gazebo（等 5~10s 让机器人 spawn 完）：
 gz service -s /world/default/control \
   --reqtype gz.msgs.WorldControl \
   --reptype gz.msgs.Boolean \
   --timeout 5000 --req 'pause: false'
 
-# 终端 3：启动导航栈
+# 再等 ~10 秒让 /clock 稳定，看到 ros2 topic hz /red_standard_robot1/livox/imu 能出数再起下一步
+
+# === 终端 2：启动导航栈 ===
+# 首次跑（SLAM 实时建图）：
 ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py \
   world:=rmuc_2026 slam:=True
+
+# 有图后切换到纯定位模式：
+ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py \
+  world:=rmuc_2026 slam:=False
 ```
 
 ### 3.3 保存建图结果
@@ -214,7 +207,7 @@ python3 src/sentry_tools/serial_visualizer.py
 
 - **仿真 Gazebo Play 按钮无响应**：Wayland 已知问题，用 `QT_QPA_PLATFORM=xcb` 或命令行 unpause（见 3.2）。
 
-- **Point-LIO 报 `imu loop back, clear deque`**：仿真启动时序问题。先起 Gazebo 并 unpause，等仿真时钟稳定（~10s）再起导航栈。IMU 初始化完成后会自动恢复。`rm_simulation_all_launch.py` 已处理此时序。
+- **Point-LIO 报 `imu loop back, clear deque`**：仿真启动时序问题。先起 Gazebo 并 unpause，等仿真时钟稳定（~10s，观察 `/red_standard_robot1/livox/imu` 有 ~150Hz 输出）再起导航栈。IMU 初始化完成后会自动恢复。
 
 - **Nav Goal accepted 但机器人不动**：
   - 检查 RPP 的 `use_collision_detection`：SLAM 模式下若 costmap 大面积 unknown 会误报碰撞，本项目已在 `nav2_params.yaml` 中关闭（建图完成后可重开）。

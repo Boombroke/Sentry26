@@ -37,7 +37,11 @@ python3 src/sentry_tools/serial_visualizer.py
 
 ```bash
 # 典型仿真调试
-ros2 launch sentry_nav_bringup rm_simulation_all_launch.py world:=rmuc_2026 slam:=True headless:=true &
+ros2 launch rmu_gazebo_simulator bringup_sim.launch.py headless:=true &
+sleep 10
+gz service -s /world/default/control --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 5000 --req 'pause: false'
+sleep 10
+ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmuc_2026 slam:=True &
 sleep 30
 python3 src/sentry_tools/serial_visualizer.py --ros-args -r __ns:=/red_standard_robot1
 # 另起终端看地图/调试连通性
