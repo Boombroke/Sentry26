@@ -1,5 +1,6 @@
 # 运行模式与参数详解
 
+> **Maintainer**: Boombroke <boombroke@icloud.com>
 > 本文档详细说明所有运行模式的启动方式、完整参数列表及调优建议。
 > 快速上手请参阅 [快速部署指南](QUICKSTART.md)，系统架构请参阅 [架构详解](ARCHITECTURE.md)。
 
