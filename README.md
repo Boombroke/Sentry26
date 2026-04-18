@@ -5,20 +5,20 @@
 
 # Sentry26 - ROS2 哨兵导航系统
 
-RoboMaster 2026 赛季哨兵机器人自主导航系统。基于 ROS2 Jazzy + Nav2 + BehaviorTree.CPP，支持全向底盘、Livox Mid360 激光雷达、Gazebo Harmonic 仿真。
+RoboMaster 2026 赛季哨兵机器人自主导航系统。基于 ROS2 Jazzy + Nav2 + BehaviorTree.CPP，支持差速轮足底盘、Livox Mid360 激光雷达、Gazebo Harmonic 仿真。
 
 ## 系统架构
 
 ```mermaid
 graph LR
     subgraph 感知层
-        LiDAR[Livox Mid360] --> PL[Point-LIO<br/>激光惯性里程计]
+        LiDAR[Livox Mid360<br/>挂 gimbal_pitch] --> PL[Point-LIO<br/>激光惯性里程计]
         IMU[BMI088 IMU] --> PL
         LiDAR --> TA[terrain_analysis<br/>地形分析]
     end
 
     subgraph 定位层
-        PL --> OB[odom_bridge<br/>TF: odom→chassis]
+        PL --> OB[odom_bridge<br/>TF: odom→base_footprint]
         PCD[先验 PCD 地图] --> GICP[small_gicp<br/>重定位: map→odom]
         OB --> GICP
     end
@@ -27,8 +27,8 @@ graph LR
         GICP --> CM[Nav2 Costmap<br/>IntensityVoxelLayer]
         TA --> CM
         CM --> GP[SmacPlanner2D<br/>全局路径规划]
-        GP --> LP[OmniPidPursuit<br/>局部路径跟踪]
-        LP --> VS[Velocity Smoother]
+        GP --> LP[RotationShim + RPP<br/>差速局部控制]
+        LP --> VS[Velocity Smoother<br/>vy 锁 0]
     end
 
     subgraph 决策层
@@ -37,36 +37,39 @@ graph LR
     end
 
     subgraph 执行层
-        VS -->|TwistStamped| FVT[fake_vel_transform<br/>坐标旋转+自旋叠加]
-        FVT -->|Twist| SER[串口驱动<br/>→ 底盘]
+        VS -->|TwistStamped /cmd_vel<br/>base_footprint 系| SER[Gazebo DiffDrive<br/>/ rm_serial_driver]
     end
 ```
 
 ### 速度指令链路
 
 ```
-controller_server (gimbal_yaw_fake 系, TwistStamped)
-  → velocity_smoother (TwistStamped)
-    → cmd_vel_nav2_result (≈world 系)
-      → fake_vel_transform (旋转到 gimbal_yaw 系 + 叠加 spin_speed)
-        → /cmd_vel (Twist, 最终下发底盘)
+controller_server (base_footprint 系, TwistStamped)
+  → velocity_smoother (vy 锁 0, TwistStamped)
+    → /cmd_vel (TwistStamped, base_footprint ≡ chassis yaw)
+      ├─► Gazebo DiffDrive 插件
+      └─► rm_serial_driver → 串口下发 (vel_x, vel_w)
 ```
 
-### TF 树
+差速底盘 `chassis_yaw ≡ base_footprint_yaw`，无需坐标旋转。
+
+### TF 树（6 层）
 
 ```
 map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → front_mid360
-                                          ↓
-                                    gimbal_yaw_fake (Nav2 规划坐标系)
 ```
+
+- `base_footprint` 为 Nav2 的 `robot_base_frame`（业界惯例，水平 2D 投影点）。
+- 云台链（`gimbal_yaw → gimbal_pitch`）独立于底盘运动，由下位机上报关节角度驱动。
+- LiDAR 挂在 `gimbal_pitch` 上随云台旋转；odom_bridge 靠每帧 TF 查询消化云台旋转对底盘位姿的影响。
 
 ## 功能特性
 
-- **全向底盘导航**：OmniPidPursuit 控制器，纯平移跟踪，无差速约束
+- **差速轮足导航**：RPP + RotationShim 控制器组合，Nav2 官方差速默认
 - **高频定位**：Point-LIO 激光惯性紧耦合 + small_gicp 全局重定位
 - **地形感知**：基于 intensity 的体素代价地图层，支持坡道/台阶检测
 - **行为决策**：BehaviorTree.CPP 行为树，支持进攻/防守/补给/巡逻状态切换
-- **自旋模式**：底盘持续自转 + 云台反向稳定（fake_vel_transform 坐标补偿）
+- **云台独立**：Nav2 不控云台；云台由下位机和视觉/自动瞄准直接驱动，与导航正交
 - **完整仿真**：Gazebo Harmonic 全场景仿真，含裁判系统、多机器人对抗
 - **工具链**：串口 Mock、地图坐标拾取、实时数据可视化
 
@@ -76,9 +79,7 @@ map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → 
 src/
 ├── sentry_nav/                  # 导航核心（元包）
 │   ├── point_lio/               #   Point-LIO 激光惯性里程计
-│   ├── odom_bridge/             #   里程计 → TF 桥接
-│   ├── fake_vel_transform/      #   速度坐标变换 + 自旋叠加
-│   ├── omni_pid_pursuit_controller/  # 全向 PID 路径跟踪
+│   ├── odom_bridge/             #   里程计 → TF 桥接（支持云台雷达 TF 查询）
 │   ├── nav2_plugins/            #   IntensityVoxelLayer + BackUpFreeSpace
 │   ├── terrain_analysis/        #   地形分析
 │   ├── terrain_analysis_ext/    #   地形分析扩展
@@ -87,7 +88,7 @@ src/
 │   ├── ign_sim_pointcloud_tool/ #   仿真点云格式转换
 ├── sentry_nav_bringup/          # Launch 文件、Nav2 参数、地图、行为树 XML
 ├── sentry_behavior/             # BehaviorTree.CPP 行为树插件
-├── sentry_robot_description/    # 机器人 URDF/SDF 模型
+├── sentry_robot_description/    # 机器人 URDF/SDF 模型（wheeled_biped.sdf.xmacro）
 ├── serial/                      # rm_serial_driver 串口通信
 ├── rm_interfaces/               # 统一自定义消息（裁判系统 + 视觉）
 ├── small_gicp_relocalization/   # 全局重定位节点
@@ -96,7 +97,7 @@ src/
 ├── BehaviorTree.ROS2/           # BT-ROS2 集成框架
 ├── simulator/                   # Gazebo Harmonic 仿真环境
 │   ├── rmoss_core/              #   仿真基础库
-│   ├── rmoss_gazebo/            #   仿真插件（麦轮驱动/射击/灯条）
+│   ├── rmoss_gazebo/            #   仿真插件（DiffDrive/射击/灯条）
 │   ├── rmoss_gz_resources/      #   场地模型资源
 │   ├── rmu_gazebo_simulator/    #   RoboMaster 仿真器
 │   └── sdformat_tools/          #   SDF 工具
@@ -113,7 +114,7 @@ src/
 | Gazebo | Harmonic (gz-sim 8) |
 | C++ | C++17 |
 | Python | 3.12+ |
-| 硬件 | Livox Mid360 + 全向底盘 + BMI088 IMU |
+| 硬件 | Livox Mid360 + 差速轮足底盘 + BMI088 IMU |
 
 ## 编译
 
@@ -130,7 +131,15 @@ source install/setup.bash
 
 ## 快速开始
 
-### 仿真模式（三步启动）
+### 仿真模式（推荐一键启动）
+
+```bash
+# 一键启动（自动 unpause + 延时 15s 拉起导航栈）
+QT_QPA_PLATFORM=xcb ros2 launch sentry_nav_bringup rm_simulation_all_launch.py \
+  world:=rmuc_2026 slam:=False
+```
+
+### 仿真模式（分步启动，调试用）
 
 ```bash
 # 终端 1：启动 Gazebo（可选 headless:=true 无 GUI）
@@ -146,7 +155,7 @@ gz service -s /world/default/control \
 
 # 终端 3：启动导航
 ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py \
-  world:=rmul_2026 slam:=True
+  world:=rmuc_2026 slam:=False
 ```
 
 > **注意**：必须按此顺序启动。Gazebo 未 unpause 时不产生传感器数据，Point-LIO 无法初始化。
