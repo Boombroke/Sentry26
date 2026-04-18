@@ -328,7 +328,7 @@ controller_server:
       transform_tolerance: 0.1
       min_approach_linear_velocity: 0.3
       approach_velocity_scaling_dist: 0.8
-      use_collision_detection: true
+      use_collision_detection: false                    # SLAM 实时建图下 costmap 大部分 unknown，碰撞检测会误报；实车建图完成后可重启
       max_allowed_time_to_collision_up_to_carrot: 1.5
       use_regulated_linear_velocity_scaling: true
       regulated_linear_scaling_min_radius: 0.5
