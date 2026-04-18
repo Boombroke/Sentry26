@@ -7,6 +7,9 @@
 
 RoboMaster 2026 赛季哨兵机器人自主导航系统。基于 ROS2 Jazzy + Nav2 + BehaviorTree.CPP，支持差速轮足底盘、Livox Mid360 激光雷达、Gazebo Harmonic 仿真。
 
+> **Maintainer**: Boombroke <boombroke@icloud.com>
+> **Based on**: [SMBU-PolarBear-Robotics-Team/pb2025_sentry_nav](https://github.com/SMBU-PolarBear-Robotics-Team/pb2025_sentry_nav) by Lihan Chen, 2026 差速轮足架构迁移由 Boombroke 主导。
+
 ## 系统架构
 
 ```mermaid
@@ -75,34 +78,35 @@ map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → 
 
 ## 目录结构
 
+自研包与第三方上游代码分离，便于维护和同步。
+
 ```
 src/
-├── sentry_nav/                  # 导航核心（元包）
-│   ├── point_lio/               #   Point-LIO 激光惯性里程计
-│   ├── odom_bridge/             #   里程计 → TF 桥接（支持云台雷达 TF 查询）
-│   ├── nav2_plugins/            #   IntensityVoxelLayer + BackUpFreeSpace
-│   ├── terrain_analysis/        #   地形分析
-│   ├── terrain_analysis_ext/    #   地形分析扩展
-│   ├── livox_ros_driver2/       #   Livox 雷达驱动
-│   ├── pointcloud_to_laserscan/ #   点云 → 2D scan
-│   ├── ign_sim_pointcloud_tool/ #   仿真点云格式转换
-├── sentry_nav_bringup/          # Launch 文件、Nav2 参数、地图、行为树 XML
-├── sentry_behavior/             # BehaviorTree.CPP 行为树插件
-├── sentry_robot_description/    # 机器人 URDF/SDF 模型（wheeled_biped.sdf.xmacro）
-├── serial/                      # rm_serial_driver 串口通信
-├── rm_interfaces/               # 统一自定义消息（裁判系统 + 视觉）
-├── small_gicp_relocalization/   # 全局重定位节点
-├── odom_interpolator/           # 里程计插值
-├── sentry_tools/                # 调试工具（串口 Mock / 地图拾取 / 数据可视化）
-├── BehaviorTree.ROS2/           # BT-ROS2 集成框架
-├── simulator/                   # Gazebo Harmonic 仿真环境
-│   ├── rmoss_core/              #   仿真基础库
-│   ├── rmoss_gazebo/            #   仿真插件（DiffDrive/射击/灯条）
-│   ├── rmoss_gz_resources/      #   场地模型资源
-│   ├── rmu_gazebo_simulator/    #   RoboMaster 仿真器
-│   └── sdformat_tools/          #   SDF 工具
-├── scripts/                     # 环境配置脚本
-└── docs/                        # 项目文档
+├── sentry_nav/                       # 自研导航栈
+│   ├── odom_bridge/                  #   里程计桥接 + 云台雷达 TF 查询
+│   ├── nav2_plugins/                 #   IntensityVoxelLayer + BackUpFreeSpace
+│   └── small_gicp_relocalization/    #   全局重定位节点
+├── sentry_nav_bringup/               # Launch 文件、Nav2 参数、地图、行为树 XML
+├── sentry_behavior/                  # BehaviorTree.CPP 行为树插件
+├── sentry_robot_description/         # 机器人模型 wheeled_biped.sdf.xmacro
+├── serial/                           # rm_serial_driver 串口通信 + 协议生成器
+├── rm_interfaces/                    # 统一自定义消息（裁判系统 + 视觉）
+├── sentry_tools/                     # 调试工具（串口 Mock / 地图拾取 / 数据可视化）
+├── third_party/                      # 上游第三方代码（保持 upstream 同步）
+│   ├── point_lio/                    #   Point-LIO 激光惯性里程计
+│   ├── terrain_analysis*/            #   CMU terrain_analysis 系列
+│   ├── livox_ros_driver2/            #   Livox 官方雷达驱动
+│   ├── pointcloud_to_laserscan/      #   ROS2 点云→2D scan
+│   ├── ign_sim_pointcloud_tool/      #   仿真点云格式转换
+│   └── BehaviorTree.ROS2/            #   BT-ROS2 集成框架
+├── simulator/                        # Gazebo Harmonic 仿真环境（rmoss_* 体系）
+│   ├── rmoss_core/                   #   仿真基础库
+│   ├── rmoss_gazebo/                 #   仿真插件
+│   ├── rmoss_gz_resources/           #   场地模型资源
+│   ├── rmu_gazebo_simulator/         #   RoboMaster 仿真器启动包
+│   └── sdformat_tools/               #   SDF 工具
+├── scripts/                          # 环境配置脚本
+└── docs/                             # 项目文档
 ```
 
 ## 环境要求
@@ -134,7 +138,11 @@ source install/setup.bash
 ### 仿真模式（推荐一键启动）
 
 ```bash
-# 一键启动（自动 unpause + 延时 15s 拉起导航栈）
+# 一键启动（自动 unpause + 延时 15s 拉起导航栈；首次跑需要 slam:=True 建图）
+QT_QPA_PLATFORM=xcb ros2 launch sentry_nav_bringup rm_simulation_all_launch.py \
+  world:=rmuc_2026 slam:=True headless:=true
+
+# 有图后可切导航模式
 QT_QPA_PLATFORM=xcb ros2 launch sentry_nav_bringup rm_simulation_all_launch.py \
   world:=rmuc_2026 slam:=False
 ```
@@ -162,17 +170,28 @@ ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py \
 
 ### 实车模式
 
-```bash
-# 一键启动（含串口驱动）
-ros2 launch sentry_nav_bringup rm_sentry_launch.py \
-  namespace:=red_standard_robot1
+实车端**零代码改动，仅配置即可部署**。
 
-# 或分步启动
-# 建图模式
-ros2 launch sentry_nav_bringup rm_navigation_reality_launch.py slam:=True
-# 导航模式（需要先验地图和 PCD）
-ros2 launch sentry_nav_bringup rm_navigation_reality_launch.py slam:=False
+```bash
+# 首次建图（实车走一圈，建出 2D 地图和 PCD 点云）
+ros2 launch sentry_nav_bringup rm_sentry_launch.py slam:=True
+
+# 导出地图和 PCD（建图完成后）
+ros2 run nav2_map_server map_saver_cli -f <save_name>
+# PCD 保存由 Point-LIO 节点退出时自动执行
+
+# 有图后导航
+ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
 ```
+
+**跨团队协作事项**：
+
+- 下位机固件需升级到 2026 赛季版：
+  - `src/serial/serial_driver/protocol/protocol.yaml` 已新增 `chassis_yaw/pitch` + `gimbal_yaw/pitch` 四路姿态字段
+  - imu 包二进制布局从 11B → 27B
+  - 电控端需用新版 `src/serial/serial_driver/example/navigation_auto.h` 重编固件
+
+- 实车机械参数在 `src/sentry_robot_description/resource/xmacro/wheeled_biped.sdf.xmacro` 顶部定义（`wheel_separation`, `wheel_radius`, `gimbal_yaw_height` 等），按实车调整。
 
 ## 主要参数
 
@@ -210,8 +229,8 @@ python3 src/sentry_tools/serial_visualizer.py
 
 ## 致谢
 
-本项目参考 [深圳北理莫斯科大学 PolarBear 战队](https://github.com/SMBU-PolarBear-Robotics-Team) 开发。
+本项目基于 [深圳北理莫斯科大学 PolarBear 战队 pb2025_sentry_nav](https://github.com/SMBU-PolarBear-Robotics-Team/pb2025_sentry_nav) 重构。2026 赛季差速轮足架构迁移由 Boombroke 主导，原 Mecanum 全向底盘的感知、定位、行为树等模块设计归功于原作者 Lihan Chen 等。
 
 ## 许可证
 
-Apache-2.0
+Apache-2.0（遵循原项目许可证；原作者版权与署名保留在 `package.xml` 的 `<author>` 字段）
