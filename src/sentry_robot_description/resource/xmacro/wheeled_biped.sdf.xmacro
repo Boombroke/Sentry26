@@ -1,0 +1,334 @@
+<?xml version="1.0"?>
+<sdf version="1.7">
+
+    <!--include defination-->
+    <xmacro_include uri="model://mid360/model.sdf.xmacro" />
+    <xmacro_include uri="model://industrial_camera/model.sdf.xmacro" />
+
+    <!--property defination-->
+    <xmacro_define_value name="chassis_height" value="0.15" />
+    <xmacro_define_value name="chassis_length" value="0.36" />
+    <xmacro_define_value name="chassis_width" value="0.24" />
+    <xmacro_define_value name="chassis_z" value="0.10" />
+
+    <xmacro_define_value name="wheel_radius" value="0.076" />
+    <xmacro_define_value name="wheel_width" value="0.04" />
+    <xmacro_define_value name="wheel_separation" value="0.28" />
+
+    <xmacro_define_value name="gimbal_yaw_height" value="0.18" />
+    <xmacro_define_value name="gimbal_pitch_height" value="0.08" />
+
+    <!--wheeled biped robot model-->
+    <model name="wheeled_biped">
+
+        <pose>0 0 ${chassis_height} 0 0 0</pose>
+
+        <!--base footprint (ground projection)-->
+        <link name="base_footprint"/>
+
+        <joint name="base_to_chassis" type="fixed">
+            <pose relative_to="base_footprint">0 0 ${chassis_height} 0 0 0</pose>
+            <parent>base_footprint</parent>
+            <child>chassis</child>
+        </joint>
+
+        <!--chassis body-->
+        <link name="chassis">
+            <inertial>
+                <pose>0 0 ${chassis_z / 2} 0 0 0</pose>
+                <mass>15.0</mass>
+                <inertia>
+                    <ixx>0.15</ixx>
+                    <iyy>0.25</iyy>
+                    <izz>0.30</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
+                </inertia>
+            </inertial>
+            <visual name="chassis_visual">
+                <pose>0 0 ${chassis_z / 2} 0 0 0</pose>
+                <geometry>
+                    <box>
+                        <size>${chassis_length} ${chassis_width} ${chassis_z}</size>
+                    </box>
+                </geometry>
+                <material>
+                    <ambient>0.2 0.2 0.25 1</ambient>
+                    <diffuse>0.3 0.3 0.35 1</diffuse>
+                </material>
+            </visual>
+            <collision name="chassis_collision">
+                <pose>0 0 ${chassis_z / 2} 0 0 0</pose>
+                <geometry>
+                    <box>
+                        <size>${chassis_length} ${chassis_width} ${chassis_z}</size>
+                    </box>
+                </geometry>
+                <surface>
+                    <friction>
+                        <ode>
+                            <mu>0.3</mu>
+                            <mu2>0.3</mu2>
+                        </ode>
+                    </friction>
+                </surface>
+            </collision>
+            <sensor name="chassis_imu" type="imu">
+                <always_on>1</always_on>
+                <update_rate>200</update_rate>
+            </sensor>
+        </link>
+
+        <!--left drive wheel-->
+        <joint name="left_wheel_joint" type="revolute">
+            <pose relative_to="chassis">0 ${wheel_separation / 2} 0 -1.5708 0 0</pose>
+            <parent>chassis</parent>
+            <child>left_wheel</child>
+            <axis>
+                <xyz expressed_in="__model__">0 1 0</xyz>
+                <limit>
+                    <effort>100</effort>
+                    <velocity>50</velocity>
+                    <lower>-1.79769e+308</lower>
+                    <upper>1.79769e+308</upper>
+                </limit>
+                <dynamics>
+                    <damping>0.05</damping>
+                </dynamics>
+            </axis>
+        </joint>
+        <link name="left_wheel">
+            <pose relative_to="left_wheel_joint">0 0 0 0 0 0</pose>
+            <inertial>
+                <mass>0.5</mass>
+                <inertia>
+                    <ixx>0.0015</ixx>
+                    <iyy>0.0015</iyy>
+                    <izz>0.0025</izz>
+                </inertia>
+            </inertial>
+            <visual name="visual">
+                <geometry>
+                    <cylinder>
+                        <radius>${wheel_radius}</radius>
+                        <length>${wheel_width}</length>
+                    </cylinder>
+                </geometry>
+                <material>
+                    <ambient>0.1 0.1 0.1 1</ambient>
+                    <diffuse>0.15 0.15 0.15 1</diffuse>
+                </material>
+            </visual>
+            <collision name="collision">
+                <geometry>
+                    <cylinder>
+                        <radius>${wheel_radius}</radius>
+                        <length>${wheel_width}</length>
+                    </cylinder>
+                </geometry>
+                <surface>
+                    <friction>
+                        <ode>
+                            <mu>0.9</mu>
+                            <mu2>0.9</mu2>
+                        </ode>
+                    </friction>
+                </surface>
+            </collision>
+        </link>
+
+        <!--right drive wheel-->
+        <joint name="right_wheel_joint" type="revolute">
+            <pose relative_to="chassis">0 -${wheel_separation / 2} 0 -1.5708 0 0</pose>
+            <parent>chassis</parent>
+            <child>right_wheel</child>
+            <axis>
+                <xyz expressed_in="__model__">0 1 0</xyz>
+                <limit>
+                    <effort>100</effort>
+                    <velocity>50</velocity>
+                    <lower>-1.79769e+308</lower>
+                    <upper>1.79769e+308</upper>
+                </limit>
+                <dynamics>
+                    <damping>0.05</damping>
+                </dynamics>
+            </axis>
+        </joint>
+        <link name="right_wheel">
+            <pose relative_to="right_wheel_joint">0 0 0 0 0 0</pose>
+            <inertial>
+                <mass>0.5</mass>
+                <inertia>
+                    <ixx>0.0015</ixx>
+                    <iyy>0.0015</iyy>
+                    <izz>0.0025</izz>
+                </inertia>
+            </inertial>
+            <visual name="visual">
+                <geometry>
+                    <cylinder>
+                        <radius>${wheel_radius}</radius>
+                        <length>${wheel_width}</length>
+                    </cylinder>
+                </geometry>
+                <material>
+                    <ambient>0.1 0.1 0.1 1</ambient>
+                    <diffuse>0.15 0.15 0.15 1</diffuse>
+                </material>
+            </visual>
+            <collision name="collision">
+                <geometry>
+                    <cylinder>
+                        <radius>${wheel_radius}</radius>
+                        <length>${wheel_width}</length>
+                    </cylinder>
+                </geometry>
+                <surface>
+                    <friction>
+                        <ode>
+                            <mu>0.9</mu>
+                            <mu2>0.9</mu2>
+                        </ode>
+                    </friction>
+                </surface>
+            </collision>
+        </link>
+
+        <!--gimbal yaw joint (independent from chassis orientation)-->
+        <joint name="gimbal_yaw_joint" type="revolute">
+            <pose relative_to="chassis">0 0 ${gimbal_yaw_height} 0 0 0</pose>
+            <parent>chassis</parent>
+            <child>gimbal_yaw</child>
+            <axis>
+                <xyz>0 0 1</xyz>
+                <limit>
+                    <effort>20</effort>
+                    <velocity>50</velocity>
+                    <lower>-1.79769e+308</lower>
+                    <upper>1.79769e+308</upper>
+                </limit>
+            </axis>
+        </joint>
+        <link name="gimbal_yaw">
+            <pose relative_to="gimbal_yaw_joint">0 0 0 0 0 0</pose>
+            <inertial>
+                <pose>0 0 0.04 0 0 0</pose>
+                <mass>0.5</mass>
+                <inertia>
+                    <ixx>0.001</ixx>
+                    <iyy>0.001</iyy>
+                    <izz>0.0015</izz>
+                </inertia>
+            </inertial>
+            <visual name="visual">
+                <pose>0 0 0.04 0 0 0</pose>
+                <geometry>
+                    <box>
+                        <size>0.08 0.08 0.08</size>
+                    </box>
+                </geometry>
+                <material>
+                    <ambient>0.4 0.4 0.45 1</ambient>
+                    <diffuse>0.5 0.5 0.55 1</diffuse>
+                </material>
+            </visual>
+            <collision name="collision">
+                <pose>0 0 0.04 0 0 0</pose>
+                <geometry>
+                    <box>
+                        <size>0.08 0.08 0.08</size>
+                    </box>
+                </geometry>
+            </collision>
+        </link>
+
+        <!--gimbal pitch joint-->
+        <joint name="gimbal_pitch_joint" type="revolute">
+            <pose relative_to="gimbal_yaw">0 0 ${gimbal_pitch_height} 0 0 0</pose>
+            <parent>gimbal_yaw</parent>
+            <child>gimbal_pitch</child>
+            <axis>
+                <xyz>0 1 0</xyz>
+                <limit>
+                    <effort>20</effort>
+                    <velocity>50</velocity>
+                    <lower>${-3.14*0.25}</lower>
+                    <upper>${3.14*0.18}</upper>
+                </limit>
+            </axis>
+        </joint>
+        <link name="gimbal_pitch">
+            <pose relative_to="gimbal_pitch_joint">0 0 0 0 0 0</pose>
+            <inertial>
+                <pose>0.03 0 0 0 0 0</pose>
+                <mass>0.3</mass>
+                <inertia>
+                    <ixx>0.0005</ixx>
+                    <iyy>0.001</iyy>
+                    <izz>0.001</izz>
+                </inertia>
+            </inertial>
+            <visual name="visual">
+                <pose>0.03 0 0 0 0 0</pose>
+                <geometry>
+                    <box>
+                        <size>0.12 0.06 0.06</size>
+                    </box>
+                </geometry>
+                <material>
+                    <ambient>0.5 0.2 0.2 1</ambient>
+                    <diffuse>0.6 0.25 0.25 1</diffuse>
+                </material>
+            </visual>
+            <collision name="collision">
+                <pose>0.03 0 0 0 0 0</pose>
+                <geometry>
+                    <box>
+                        <size>0.12 0.06 0.06</size>
+                    </box>
+                </geometry>
+            </collision>
+        </link>
+
+        <!--LiDAR (Livox Mid360) mounted on gimbal_pitch, rotates with gimbal-->
+        <xmacro_block name="livox" prefix="front_" parent="gimbal_pitch" pose="-0.05 0 0.05 0 0 ${pi}" update_rate="50" samples="1875"/>
+
+        <!--industrial camera mounted on gimbal_pitch-->
+        <xmacro_block name="industrial_camera" prefix="front_" parent="gimbal_pitch" pose="0.08 0 0.02 0 0 0" update_rate="30" horizontal_fov="1" width="1920" height="1080"/>
+
+        <!--joint state publisher-->
+        <plugin filename="ignition-gazebo-joint-state-publisher-system" name="ignition::gazebo::systems::JointStatePublisher">
+        </plugin>
+
+        <!--differential drive plugin (subscribes /cmd_vel TwistStamped)-->
+        <plugin filename="ignition-gazebo-diff-drive-system" name="ignition::gazebo::systems::DiffDrive">
+            <left_joint>left_wheel_joint</left_joint>
+            <right_joint>right_wheel_joint</right_joint>
+            <wheel_separation>${wheel_separation}</wheel_separation>
+            <wheel_radius>${wheel_radius}</wheel_radius>
+            <topic>cmd_vel</topic>
+            <odom_publish_frequency>0</odom_publish_frequency>
+            <frame_id>odom</frame_id>
+            <child_frame_id>chassis</child_frame_id>
+            <tf_topic>/tf_diff_drive_unused</tf_topic>
+        </plugin>
+
+        <!--gimbal yaw joint controller-->
+        <plugin filename="ignition-gazebo-joint-controller-system" name="ignition::gazebo::systems::JointController">
+            <joint_name>gimbal_yaw_joint</joint_name>
+            <use_force_commands>false</use_force_commands>
+            <p_gain>0.2</p_gain>
+            <i_gain>0.01</i_gain>
+        </plugin>
+
+        <!--gimbal pitch joint controller-->
+        <plugin filename="ignition-gazebo-joint-controller-system" name="ignition::gazebo::systems::JointController">
+            <joint_name>gimbal_pitch_joint</joint_name>
+            <use_force_commands>false</use_force_commands>
+            <p_gain>1</p_gain>
+            <i_gain>0.01</i_gain>
+        </plugin>
+    </model>
+</sdf>
