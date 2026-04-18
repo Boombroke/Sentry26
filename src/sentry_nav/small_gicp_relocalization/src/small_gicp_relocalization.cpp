@@ -437,6 +437,14 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
     this->get_logger(), "GICP input: source=%zu points, target=%zu points",
     source_->size(), target_->size());
 
+  if (!target_ || target_->empty() || !target_tree_) {
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 5000,
+      "Target map empty or not loaded (prior PCD missing). "
+      "Skipping GICP registration. SLAM mode doesn't need PCD.");
+    return false;
+  }
+
   register_->reduction.num_threads = num_threads_;
   register_->rejector.max_dist_sq = max_dist_sq_;
   register_->optimizer.max_iterations = max_iterations_;

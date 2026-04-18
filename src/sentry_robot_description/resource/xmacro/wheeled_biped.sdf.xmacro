@@ -18,6 +18,14 @@
     <xmacro_define_value name="gimbal_yaw_height" value="0.18" />
     <xmacro_define_value name="gimbal_pitch_height" value="0.08" />
 
+    <!-- caster 球形支撑轮：仅用于仿真中让底盘稳定站立，避免两轮倒立摆
+         实车是轮足双轮，平衡由关节控制器维持；仿真里没有轮足控制器，
+         用无摩擦 caster 作为被动支撑点，和真实轮足表现等价（都是
+         vx/wz 差速） -->
+    <xmacro_define_value name="caster_radius" value="0.025" />
+    <xmacro_define_value name="caster_offset_x" value="0.14" />
+    <xmacro_define_value name="caster_z" value="${-wheel_radius + caster_radius}" />
+
     <!--wheeled biped robot model-->
     <model name="wheeled_biped">
 
@@ -196,6 +204,92 @@
                         <ode>
                             <mu>0.9</mu>
                             <mu2>0.9</mu2>
+                        </ode>
+                    </friction>
+                </surface>
+            </collision>
+        </link>
+
+        <!--front caster（被动球形支撑轮，低摩擦，防止底盘倒立摆翻倒）-->
+        <joint name="front_caster_joint" type="fixed">
+            <pose relative_to="chassis">${caster_offset_x} 0 ${caster_z} 0 0 0</pose>
+            <parent>chassis</parent>
+            <child>front_caster</child>
+        </joint>
+        <link name="front_caster">
+            <pose relative_to="front_caster_joint">0 0 0 0 0 0</pose>
+            <inertial>
+                <mass>0.05</mass>
+                <inertia>
+                    <ixx>1.25e-5</ixx>
+                    <iyy>1.25e-5</iyy>
+                    <izz>1.25e-5</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
+                </inertia>
+            </inertial>
+            <visual name="visual">
+                <geometry>
+                    <sphere><radius>${caster_radius}</radius></sphere>
+                </geometry>
+                <material>
+                    <ambient>0.3 0.3 0.3 1</ambient>
+                    <diffuse>0.4 0.4 0.4 1</diffuse>
+                </material>
+            </visual>
+            <collision name="collision">
+                <geometry>
+                    <sphere><radius>${caster_radius}</radius></sphere>
+                </geometry>
+                <surface>
+                    <friction>
+                        <ode>
+                            <mu>0.0</mu>
+                            <mu2>0.0</mu2>
+                        </ode>
+                    </friction>
+                </surface>
+            </collision>
+        </link>
+
+        <!--rear caster-->
+        <joint name="rear_caster_joint" type="fixed">
+            <pose relative_to="chassis">-${caster_offset_x} 0 ${caster_z} 0 0 0</pose>
+            <parent>chassis</parent>
+            <child>rear_caster</child>
+        </joint>
+        <link name="rear_caster">
+            <pose relative_to="rear_caster_joint">0 0 0 0 0 0</pose>
+            <inertial>
+                <mass>0.05</mass>
+                <inertia>
+                    <ixx>1.25e-5</ixx>
+                    <iyy>1.25e-5</iyy>
+                    <izz>1.25e-5</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
+                </inertia>
+            </inertial>
+            <visual name="visual">
+                <geometry>
+                    <sphere><radius>${caster_radius}</radius></sphere>
+                </geometry>
+                <material>
+                    <ambient>0.3 0.3 0.3 1</ambient>
+                    <diffuse>0.4 0.4 0.4 1</diffuse>
+                </material>
+            </visual>
+            <collision name="collision">
+                <geometry>
+                    <sphere><radius>${caster_radius}</radius></sphere>
+                </geometry>
+                <surface>
+                    <friction>
+                        <ode>
+                            <mu>0.0</mu>
+                            <mu2>0.0</mu2>
                         </ode>
                     </friction>
                 </surface>
