@@ -16,7 +16,7 @@ OdomBridgeNode::OdomBridgeNode(const rclcpp::NodeOptions & options)
   tf_odom_to_lidar_odom_(tf2::Transform::getIdentity()),
   has_previous_transform_(false),
   previous_transform_(tf2::Transform::getIdentity()),
-  previous_time_(std::chrono::steady_clock::time_point::min())
+  previous_stamp_(0, 0, RCL_ROS_TIME)
 {
   this->declare_parameter<std::string>("state_estimation_topic", "aft_mapped_to_init");
   this->declare_parameter<std::string>("registered_scan_topic", "cloud_registered");
@@ -188,30 +188,34 @@ void OdomBridgeNode::publishOdometry(
   out.pose.pose.orientation = tf2::toMsg(transform.getRotation());
 
   if (has_previous_transform_) {
-    const auto current_time = std::chrono::steady_clock::now();
-    const double dt =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - previous_time_).count() *
-      1e-9;
+    // 用消息时间戳（sim_time）而非 wall clock 算 dt,
+    // 否则仿真环境下 wall_time 和 sim_time 不同步会爆飞速度值
+    const double dt = (stamp - previous_stamp_).seconds();
 
-    if (dt > 0.0) {
+    if (dt > 1e-6 && dt < 1.0) {  // 合理 dt 范围, 避免 divide by zero 或跳变
       const auto linear_velocity = (transform.getOrigin() - previous_transform_.getOrigin()) / dt;
       const tf2::Quaternion q_diff =
         transform.getRotation() * previous_transform_.getRotation().inverse();
       const auto angular_velocity = q_diff.getAxis() * q_diff.getAngle() / dt;
 
-      out.twist.twist.linear.x = linear_velocity.x();
-      out.twist.twist.linear.y = linear_velocity.y();
-      out.twist.twist.linear.z = linear_velocity.z();
+      // 在 base_footprint 本体系下输出速度（消除机器人朝向影响）
+      const tf2::Matrix3x3 R(transform.getRotation());
+      const tf2::Vector3 v_world(linear_velocity.x(), linear_velocity.y(), linear_velocity.z());
+      const tf2::Vector3 v_body = R.transpose() * v_world;
+
+      out.twist.twist.linear.x = v_body.x();
+      out.twist.twist.linear.y = v_body.y();
+      out.twist.twist.linear.z = v_body.z();
       out.twist.twist.angular.x = angular_velocity.x();
       out.twist.twist.angular.y = angular_velocity.y();
       out.twist.twist.angular.z = angular_velocity.z();
     }
 
     previous_transform_ = transform;
-    previous_time_ = current_time;
+    previous_stamp_ = stamp;
   } else {
     previous_transform_ = transform;
-    previous_time_ = std::chrono::steady_clock::now();
+    previous_stamp_ = stamp;
     has_previous_transform_ = true;
   }
 

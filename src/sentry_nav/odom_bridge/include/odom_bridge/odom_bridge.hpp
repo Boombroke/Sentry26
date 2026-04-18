@@ -70,7 +70,7 @@ private:
 
   bool has_previous_transform_;
   tf2::Transform previous_transform_;
-  std::chrono::steady_clock::time_point previous_time_;
+  rclcpp::Time previous_stamp_;
 };
 
 }
