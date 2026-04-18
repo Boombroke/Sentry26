@@ -521,10 +521,10 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [2.5, 2.5, 3.0]
-    min_velocity: [-2.5, -2.5, -3.0]
-    max_accel: [4.5, 4.5, 5.0]
-    max_decel: [-4.5, -4.5, -5.0]
+    max_velocity: [2.5, 0.0, 3.0]                     # 差速底盘 vy 锁 0（双保险）
+    min_velocity: [-2.5, 0.0, -3.0]
+    max_accel: [4.5, 0.0, 5.0]
+    max_decel: [-4.5, 0.0, -5.0]
     odom_topic: "odometry"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
