@@ -106,6 +106,9 @@
                     <ixx>0.0015</ixx>
                     <iyy>0.0015</iyy>
                     <izz>0.0025</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
                 </inertia>
             </inertial>
             <visual name="visual">
@@ -164,6 +167,9 @@
                     <ixx>0.0015</ixx>
                     <iyy>0.0015</iyy>
                     <izz>0.0025</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
                 </inertia>
             </inertial>
             <visual name="visual">
@@ -220,6 +226,9 @@
                     <ixx>0.001</ixx>
                     <iyy>0.001</iyy>
                     <izz>0.0015</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
                 </inertia>
             </inertial>
             <visual name="visual">
@@ -268,6 +277,9 @@
                     <ixx>0.0005</ixx>
                     <iyy>0.001</iyy>
                     <izz>0.001</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
                 </inertia>
             </inertial>
             <visual name="visual">
