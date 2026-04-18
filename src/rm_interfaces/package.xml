@@ -4,8 +4,11 @@
   <name>rm_interfaces</name>
   <version>1.0.0</version>
   <description>ROS interfaces (.msg, .srv, .action) used in the StandardRobot++.</description>
-  <maintainer email="lihanchen2004@163.com">Lihan Chen</maintainer>
+  <maintainer email="boombroke@icloud.com">Boombroke</maintainer>
   <license>MIT</license>
+  <author email="lihanchen2004@163.com">Lihan Chen</author>
+  <author email="boombroke@icloud.com">Boombroke</author>
+
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <buildtool_depend>rosidl_default_generators</buildtool_depend>

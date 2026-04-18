@@ -6,11 +6,12 @@
   <name>rm_serial_driver</name>
   <version>0.1.0</version>
   <description>A template for ROS packages.</description>
-  <maintainer email="chen.junn@outlook.com">Chen Jun</maintainer>
+  <maintainer email="boombroke@icloud.com">Boombroke</maintainer>
   <license>MIT</license>
   <url type="website">https://github.com/chenjunnn/ros2_mindvision_camera</url>
   <url type="bugtracker">https://github.com/chenjunnn/ros2_mindvision_camera/issues</url>
   <author email="chen.junn@outlook.com">Chen Jun</author>
+  <author email="boombroke@icloud.com">Boombroke</author>
 
   <!-- buildtool_depend: dependencies of the build process -->
   <buildtool_depend>ament_cmake</buildtool_depend>

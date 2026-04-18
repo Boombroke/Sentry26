@@ -7,9 +7,10 @@
     SMBU Polarbear Robotics Team's behavior tree for sentry robot decision-making in RoboMaster 2025, based on BehaviorTree.CPP.
   </description>
 
-  <maintainer email="lihanchen2004@163.com">Lihan Chen</maintainer>
+  <maintainer email="boombroke@icloud.com">Boombroke</maintainer>
   <license>Apache-2.0</license>
   <author email="lihanchen2004@163.com">Lihan Chen</author>
+  <author email="boombroke@icloud.com">Boombroke</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
