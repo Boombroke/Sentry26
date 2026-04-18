@@ -7,6 +7,11 @@ MEMORY.md
 __pycache__/
 *.pyc
 
+# 编辑器临时文件
+.goutputstream-*
+*.swp
+.*.swp
+
 # 大文件（点云、地图、3D 模型等）
 *.pcd
 *.pgm
