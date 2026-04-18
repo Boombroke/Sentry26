@@ -12,8 +12,12 @@ packets:
     direction: stm32_to_ros
     frequency_hz: 1000
     fields:
-      - { name: pitch, type: float, unit: rad, desc: "云台 pitch" }
-      - { name: yaw,   type: float, unit: rad, desc: "云台 yaw" }
+      - { name: pitch,         type: float, unit: rad, desc: "云台 pitch（历史字段，保留兼容）" }
+      - { name: yaw,           type: float, unit: rad, desc: "云台 yaw（历史字段，保留兼容）" }
+      - { name: gimbal_pitch,  type: float, unit: rad, desc: "云台 pitch" }
+      - { name: gimbal_yaw,    type: float, unit: rad, desc: "云台 yaw" }
+      - { name: chassis_pitch, type: float, unit: rad, desc: "底盘 pitch" }
+      - { name: chassis_yaw,   type: float, unit: rad, desc: "底盘 yaw" }
 
   status:
     header: 0xA2
