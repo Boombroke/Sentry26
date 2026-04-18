@@ -140,17 +140,6 @@ terrain_analysis_ext:
     ceilingFilteringThre: 2.0
     localTerrainMapRadius: 4.0
 
-fake_vel_transform:
-  ros__parameters:
-    use_sim_time: True
-    odom_topic: "odometry"
-    robot_base_frame: "gimbal_yaw"
-    fake_robot_base_frame: "gimbal_yaw_fake"
-    input_cmd_vel_topic: "cmd_vel_nav2_result"
-    output_cmd_vel_topic: "cmd_vel"
-    cmd_spin_topic: "cmd_spin"
-    init_spin_speed: 3.14
-
 small_gicp_relocalization:
   ros__parameters:
     use_sim_time: True
