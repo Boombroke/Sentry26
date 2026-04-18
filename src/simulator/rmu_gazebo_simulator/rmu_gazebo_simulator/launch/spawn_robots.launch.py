@@ -28,7 +28,7 @@ def generate_launch_description():
         pkg_sentry_robot_description,
         "resource",
         "xmacro",
-        "simulation_robot.sdf.xmacro",
+        "wheeled_biped.sdf.xmacro",
     )
     bridge_config = os.path.join(pkg_simulator, "config", "ros_gz_bridge.yaml")
     robot_config = os.path.join(pkg_simulator, "config", "base_params.yaml")

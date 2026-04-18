@@ -1,9 +1,9 @@
-# mecanum plugin odometry
-- ros_topic_name: "/<robot_name>/chassis_odometry_gt"
-  gz_topic_name: "/<robot_name>/odometry"
-  ros_type_name: "nav_msgs/msg/Odometry"
-  gz_type_name: "ignition.msgs.Odometry"
-  direction: "GZ_TO_ROS"
+# Differential drive cmd_vel (ROS → Gazebo)
+- ros_topic_name: "/<robot_name>/cmd_vel"
+  gz_topic_name: "/model/<robot_name>/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "ignition.msgs.Twist"
+  direction: "ROS_TO_GZ"
 
 # JointStatePublisher publish
 - ros_topic_name: "/<robot_name>/joint_states"
@@ -16,12 +16,6 @@
   gz_topic_name: "/world/default/model/<robot_name>/link/front_industrial_camera/sensor/front_industrial_camera/image"
   ros_type_name: "sensor_msgs/msg/Image"
   gz_type_name: "ignition.msgs.Image"
-  direction: "GZ_TO_ROS"
-
-- ros_topic_name: "/<robot_name>/rplidar_a2/scan"
-  gz_topic_name: "/world/default/model/<robot_name>/link/front_rplidar_a2/sensor/front_rplidar_a2/scan"
-  ros_type_name: "sensor_msgs/msg/LaserScan"
-  gz_type_name: "ignition.msgs.LaserScan"
   direction: "GZ_TO_ROS"
 
 - ros_topic_name: "/<robot_name>/livox/lidar"
