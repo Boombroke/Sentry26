@@ -54,16 +54,19 @@
             <inertial>
                 <pose>0 0 ${chassis_z / 2} 0 0 0</pose>
                 <mass>25.0</mass>
-                <!-- 按 25kg 箱体惯量（m/12*(a²+b²)）+ 抑振加成，必须满足
-                     三角不等式（任意两轴之和 > 第三轴）：
-                     ixx（roll，y²+z²=0.174）理论 0.363 → 取 0.7
-                     iyy（pitch，x²+z²=0.137）理论 0.285 → 取 1.0 抑制前后摇摆
-                     izz（yaw，x²+y²=0.283）理论 0.589 → 取 0.7
-                     验证：0.7+1.0=1.7>0.7 ✓, 0.7+0.7=1.4>1.0 ✓, 1.0+0.7=1.7>0.7 ✓ -->
+                <!-- 25kg 箱体理论惯量（m/12*(a²+b²)）：
+                     ixx (roll, y²+z²=0.174)  = 0.363
+                     iyy (pitch, x²+z²=0.137) = 0.285
+                     izz (yaw, x²+y²=0.283)   = 0.589
+                     用接近理论值避免物理发散：高 iyy 会让 ODE 约束求解
+                     数值爆掉（rosbag 里 wz 跑到 100 rad/s 印证）。
+                     抑制俯仰靠 caster 间距 + 接触 kp/kd，不靠惯量压。
+                     验证三角不等式：
+                     0.40+0.60=1.0>0.40 ✓, 0.40+0.40=0.80>0.60 ✓, 0.60+0.40=1.00>0.40 ✓ -->
                 <inertia>
-                    <ixx>0.7</ixx>
-                    <iyy>1.0</iyy>
-                    <izz>0.7</izz>
+                    <ixx>0.40</ixx>
+                    <iyy>0.40</iyy>
+                    <izz>0.60</izz>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
                     <iyz>0</iyz>
@@ -165,11 +168,14 @@
                             <mu2>2.0</mu2>
                         </ode>
                     </friction>
-                    <!-- 接触软化，吸收冲击避免 IMU az 爆飞 -->
+                    <!-- 接触刚度需偏高 (1e7) 避免轮子压陷底盘导致高频抖动，
+                         阻尼 kd=500 吸收冲击；rosbag 显示 kp=1e6 时 IMU az
+                         标准差飙到 10+ 是物理发散 -->
                     <contact>
                         <ode>
-                            <kp>1e6</kp>
-                            <kd>100</kd>
+                            <kp>1e7</kp>
+                            <kd>500</kd>
+                            <min_depth>0.001</min_depth>
                         </ode>
                     </contact>
                 </surface>
@@ -238,11 +244,14 @@
                             <mu2>2.0</mu2>
                         </ode>
                     </friction>
-                    <!-- 接触软化，吸收冲击避免 IMU az 爆飞 -->
+                    <!-- 接触刚度需偏高 (1e7) 避免轮子压陷底盘导致高频抖动，
+                         阻尼 kd=500 吸收冲击；rosbag 显示 kp=1e6 时 IMU az
+                         标准差飙到 10+ 是物理发散 -->
                     <contact>
                         <ode>
-                            <kp>1e6</kp>
-                            <kd>100</kd>
+                            <kp>1e7</kp>
+                            <kd>500</kd>
+                            <min_depth>0.001</min_depth>
                         </ode>
                     </contact>
                 </surface>

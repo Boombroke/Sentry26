@@ -44,3 +44,4 @@ opencode.json
 .cursor/
 .cursorrules
 .github/copilot-instructions.md
+nav_debug/

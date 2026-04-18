@@ -296,31 +296,31 @@ controller_server:
     RotateShim:
       plugin: "nav2_rotation_shim_controller::RotationShimController"
       primary_controller: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      angular_dist_threshold: 2.094                     # 120°，非倒车场景不触发原地旋转（避免笨拙）
+      angular_dist_threshold: 1.571                     # 90°，只在大转角/倒退时原地旋转
       forward_sampling_distance: 0.5
-      rotate_to_heading_angular_vel: 3.0                # 原地转 180° 从 2s → 1s
-      max_angular_accel: 6.0                            # 加速响应翻倍
+      rotate_to_heading_angular_vel: 2.0
+      max_angular_accel: 4.0
       simulate_ahead_time: 1.0
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 3.5                           # 直线速度 2.0 → 3.5
+      desired_linear_vel: 2.5                           # 降到 2.5，物理稳后再推高
       lookahead_dist: 1.0
-      min_lookahead_dist: 0.4
+      min_lookahead_dist: 0.5
       max_lookahead_dist: 1.5
       lookahead_time: 1.0
       use_velocity_scaled_lookahead_dist: true
       transform_tolerance: 0.1
-      min_approach_linear_velocity: 0.8                 # 0.3 → 0.8，到点前仍保持速度
-      approach_velocity_scaling_dist: 0.4               # 0.8 → 0.4，减速距离缩半
+      min_approach_linear_velocity: 0.5
+      approach_velocity_scaling_dist: 0.6
       use_collision_detection: false
       max_allowed_time_to_collision_up_to_carrot: 1.5
       use_regulated_linear_velocity_scaling: true
-      regulated_linear_scaling_min_radius: 0.4          # 0.5 → 0.4，急弯才减速
-      regulated_linear_scaling_min_speed: 0.5           # 0.3 → 0.5，减速下限提高
-      use_rotate_to_heading: false                      # 不强制到点对齐 yaw（goal_checker yaw_tol=6.28 本就不要求）
+      regulated_linear_scaling_min_radius: 0.5
+      regulated_linear_scaling_min_speed: 0.4
+      use_rotate_to_heading: false                      # 不强制到点对齐 yaw
       rotate_to_heading_min_angle: 0.785
-      max_angular_accel: 6.0                            # 3.2 → 6.0
-      rotate_to_heading_angular_vel: 3.0                # 1.5 → 3.0
+      max_angular_accel: 4.0
+      rotate_to_heading_angular_vel: 2.0
       allow_reversing: false
       max_robot_pose_search_dist: 10.0
 
@@ -521,10 +521,10 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [4.0, 0.0, 4.0]                     # 2.5→4.0；差速底盘 vy 锁 0（双保险）
-    min_velocity: [-4.0, 0.0, -4.0]
-    max_accel: [10.0, 0.0, 10.0]                      # 4.5→10.0，放开直线和转向加速度
-    max_decel: [-10.0, 0.0, -10.0]
+    max_velocity: [3.0, 0.0, 3.0]                     # 差速底盘 vy 锁 0（双保险）
+    min_velocity: [-3.0, 0.0, -3.0]
+    max_accel: [6.0, 0.0, 6.0]                        # 加速度温和化，让仿真物理跟得上
+    max_decel: [-6.0, 0.0, -6.0]
     odom_topic: "odometry"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
