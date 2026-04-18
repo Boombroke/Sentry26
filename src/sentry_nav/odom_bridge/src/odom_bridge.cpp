@@ -23,7 +23,7 @@ OdomBridgeNode::OdomBridgeNode(const rclcpp::NodeOptions & options)
   this->declare_parameter<std::string>("odom_frame", "odom");
   this->declare_parameter<std::string>("base_frame", "base_footprint");
   this->declare_parameter<std::string>("lidar_frame", "front_mid360");
-  this->declare_parameter<std::string>("robot_base_frame", "gimbal_yaw");
+  this->declare_parameter<std::string>("robot_base_frame", "base_footprint");
 
   this->get_parameter("state_estimation_topic", state_estimation_topic_);
   this->get_parameter("registered_scan_topic", registered_scan_topic_);
