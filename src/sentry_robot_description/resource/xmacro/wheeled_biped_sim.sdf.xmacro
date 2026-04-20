@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+    <xmacro_include uri="file://wheeled_biped_core.sdf.xmacro" />
+
+    <!--
+        Gazebo profile for the 2026 differential wheel-leg robot.
+        This profile intentionally keeps simulation-only workarounds out of the
+        real TF model:
+        - 65% chassis box to reduce self-occlusion
+        - caster balls to replace the missing active balancer
+        - Gazebo DiffDrive / joint controller plugins
+        - fixed 30 deg Mid360 down-pitch for near low obstacles
+    -->
+    <xmacro_block
+        name="wheeled_biped_model"
+        model_name="wheeled_biped"
+        chassis_length="0.4212"
+        chassis_width="0.4225"
+        chassis_z="0.078"
+        front_lidar_pose="-0.05 0 0.05 0.0 0.523598775598299 3.141592653589793"
+        use_sim_sensors="True"
+        use_real_sensors="False"
+        use_casters="True"
+        use_gazebo_plugins="True"
+    />
+</sdf>

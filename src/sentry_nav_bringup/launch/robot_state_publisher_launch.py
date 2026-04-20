@@ -52,7 +52,7 @@ def generate_launch_description():
 
     declare_robot_name_cmd = DeclareLaunchArgument(
         "robot_name",
-        default_value="wheeled_biped",
+        default_value="wheeled_biped_real",
         description="The file name of the robot xmacro to be used",
     )
 

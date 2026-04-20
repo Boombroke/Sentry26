@@ -7,7 +7,7 @@
 
 1. `lidar_odom -> odom` 变换
 2. `odom -> chassis(base_frame)` 2D 约束（z=0, roll=0, pitch=0）
-3. `odom -> robot_base_frame` 里程计发布（输出仍保持地面底盘语义：pose/twist 只保留 x、y、yaw）
+3. `odom -> robot_base_frame` 里程计发布（输出仍保持地面底盘语义：pose 只保留 x、y、yaw；差速 `twist` 只保留 `vx + wz`）
 4. 点云转换并发布 `sensor_scan`（lidar 系）
 5. 发布 `registered_scan`（odom 系点云）和 `lidar_odometry`（odom 系里程计），供 terrain_analysis/ext 使用
 6. TF 广播 `odom -> base_frame`
@@ -24,7 +24,7 @@
 ## 发布话题
 
 - `sensor_scan` (`sensor_msgs/msg/PointCloud2`，lidar 系)
-- `odometry` (`nav_msgs/msg/Odometry`，odom -> robot_base_frame，2D pose + 2D 速度语义)
+- `odometry` (`nav_msgs/msg/Odometry`，odom -> robot_base_frame，2D pose + 差速速度语义 `vx / wz`)
 - `registered_scan` (`sensor_msgs/msg/PointCloud2`，odom 系点云，供 terrain_analysis/ext)
 - `lidar_odometry` (`nav_msgs/msg/Odometry`，odom -> lidar_frame，供 terrain_analysis/ext)
 - `odom_to_lidar_odom` (`geometry_msgs/msg/TransformStamped`，latched，odom -> lidar_odom 的静态偏移，供 small_gicp_relocalization 使用，确保与 registered_scan 的坐标变换一致)

@@ -256,9 +256,9 @@ ros2 launch serial_driver serial_driver.launch.py device_name:=/dev/pts/4
 
 ### 标签页 5：重力标定
 
-采集 Livox mid360 内置 BMI088 IMU 的加速度数据，计算 Point-LIO 所需的 `gravity` 参数向量。**需要 ROS 环境**（通过 `ros2 topic echo` 采集数据）。
+采集 Livox mid360 内置 BMI088 IMU 的静态加速度数据，计算 Point-LIO 所需的 `gravity` 参数向量。**需要 ROS 环境**（通过 `ros2 topic echo` 采集数据）。
 
-**背景：** Point-LIO 启动时通过重力对齐确定初始坐标系方向。`gravity` 参数定义了 IMU 静止时测量到的加速度向量（含重力）。如果该参数与实际不匹配，会导致建图时地图方向不一致。**每次更换雷达或调整安装角度后都需要重新标定。**
+**背景：** Point-LIO 启动时先统计静止阶段的 `mean_acc`，再用它和 `gravity` 做重力对齐，确定第一帧姿态。工具箱输出的 `gravity` 使用 `-mean_acc` 的方向，范数固定为 `9.81m/s²`；`acc_norm` 只用于检查 IMU 原始加速度单位（Livox 为 g，仿真通常为 m/s²），不决定写入的 `gravity` 范数。LiDAR 斜装/倒装的几何关系仍然必须写在 `gimbal_pitch → front_mid360` TF 外参中，不能用 `gravity` 代替。
 
 **一键标定（推荐）：**
 
@@ -292,16 +292,16 @@ ros2 launch serial_driver serial_driver.launch.py device_name:=/dev/pts/4
 | 一键标定区 | 检测雷达连接 / 一键标定 / 停止 + 状态指示 + 执行日志 |
 | 顶栏 | IMU Topic 输入、采样数设置、开始/停止按钮、状态指示 |
 | 实时采集 | 进度条、当前/均值/标准差实时显示、X-Y/Y-Z/X-Z 散点投影图 |
-| 标定结果 | acc_norm 选择（1.0g / 9.81m/s²）、gravity 向量、norm 值（颜色编码）、复制/写入按钮 |
+| 标定结果 | IMU acc_norm 选择（1.0g / 9.81m/s²）、gravity 向量、raw_acc_norm / gravity_norm 值（颜色编码）、复制/写入按钮 |
 
 **acc_norm 选择：**
 
 | 设置 | 含义 | 实车 mid360 | 仿真 |
 |---|---|---|---|
-| 1.0 | IMU 加速度单位为 g | ✅ 选这个 | — |
-| 9.81 | IMU 加速度单位为 m/s² | — | ✅ 选这个 |
+| 1.0 | IMU 原始加速度单位为 g | ✅ 选这个 | — |
+| 9.81 | IMU 原始加速度单位为 m/s² | — | ✅ 选这个 |
 
-norm 值应接近所选的 acc_norm 值（绿色=正常，黄色=偏差 3-8%，红色=偏差 >8%）。
+`raw_acc_norm` 应接近所选的 IMU `acc_norm`（绿色=正常，黄色=偏差 3-8%，红色=偏差 >8%）；写入 YAML 的 `gravity_norm` 固定接近 `9.81`。
 
 ---
 

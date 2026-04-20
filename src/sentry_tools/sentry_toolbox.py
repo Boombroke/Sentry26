@@ -2793,6 +2793,7 @@ class OneClickCalibThread(QtCore.QThread):
 
 class GravityCalibTab(QtWidgets.QWidget):
     SKIP_SAMPLES = 10
+    POINT_LIO_GRAVITY_NORM = 9.81
 
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
@@ -2936,13 +2937,15 @@ class GravityCalibTab(QtWidgets.QWidget):
         layout.setColumnStretch(1, 1)
         layout.setColumnStretch(3, 1)
 
-        self.warning_label = QtWidgets.QLabel('⚠️ 采集时请确保机器人完全静止，放置在水平地面上')
+        self.warning_label = QtWidgets.QLabel(
+            '⚠️ 采集时请确保机器人完全静止，放置在水平地面上；gravity 使用 -mean_acc 方向，范数固定 9.81'
+        )
         self.warning_label.setStyleSheet('color: #fbbf24; font-weight: 600;')
         layout.addWidget(self.warning_label, 0, 0, 1, 4)
 
-        layout.addWidget(QtWidgets.QLabel('acc_norm'), 1, 0)
+        layout.addWidget(QtWidgets.QLabel('IMU acc_norm'), 1, 0)
         self.acc_norm_combo = QtWidgets.QComboBox()
-        self.acc_norm_combo.addItem('1.0 (g)', 1.0)
+        self.acc_norm_combo.addItem('1.0 (Livox g)', 1.0)
         self.acc_norm_combo.addItem('9.81 (m/s²)', 9.81)
         self.acc_norm_combo.setCurrentIndex(0)
         self.acc_norm_combo.currentIndexChanged.connect(self._update_result_view)
@@ -3311,12 +3314,13 @@ class GravityCalibTab(QtWidgets.QWidget):
     def _get_display_gravity(self) -> np.ndarray | None:
         if self.final_gravity is None:
             return None
-        g = self.final_gravity.copy()
-        raw_norm = float(np.linalg.norm(g))
-        expected_norm = float(self.acc_norm_combo.currentData())
-        if raw_norm > 1e-6:
-            g = g / raw_norm * expected_norm
-        return g
+        raw_acc = self.final_gravity.copy()
+        raw_norm = float(np.linalg.norm(raw_acc))
+        if raw_norm <= 1e-6:
+            return None
+        # Point-LIO computes tmp_gravity = -mean_acc / ||mean_acc|| * ||gravity|| during init.
+        # Store the same gravity direction explicitly and keep the state norm in m/s^2.
+        return -raw_acc / raw_norm * self.POINT_LIO_GRAVITY_NORM
 
     def _update_result_view(self) -> None:
         if self.final_gravity is None:
@@ -3326,17 +3330,26 @@ class GravityCalibTab(QtWidgets.QWidget):
             return
 
         g = self._get_display_gravity()
+        if g is None:
+            self.gravity_label.setText('gravity: [--, --, --]')
+            self.norm_label.setText('raw_acc_norm: 0.000, gravity_norm: --')
+            self.norm_label.setStyleSheet('color: #ef4444; font-weight: 700;')
+            return
         self.gravity_label.setText(f'gravity: [{g[0]:.9f}, {g[1]:.9f}, {g[2]:.9f}]')
-        norm = float(np.linalg.norm(g))
-        expected_norm = float(self.acc_norm_combo.currentData())
-        diff = abs(norm - expected_norm)
-        if diff <= expected_norm * 0.03:
+        raw_norm = float(np.linalg.norm(self.final_gravity))
+        gravity_norm = float(np.linalg.norm(g))
+        expected_acc_norm = float(self.acc_norm_combo.currentData())
+        diff = abs(raw_norm - expected_acc_norm)
+        if diff <= expected_acc_norm * 0.03:
             color = '#34d399'
-        elif diff <= expected_norm * 0.08:
+        elif diff <= expected_acc_norm * 0.08:
             color = '#fbbf24'
         else:
             color = '#ef4444'
-        self.norm_label.setText(f'norm: {norm:.3f} (expected ~ {expected_norm:.2f})')
+        self.norm_label.setText(
+            f'raw_acc_norm: {raw_norm:.3f} (expected ~ {expected_acc_norm:.2f}), '
+            f'gravity_norm: {gravity_norm:.3f}'
+        )
         self.norm_label.setStyleSheet(f'color: {color}; font-weight: 700;')
 
     def _format_yaml_text(self, g: np.ndarray) -> str:
@@ -3363,7 +3376,8 @@ class GravityCalibTab(QtWidgets.QWidget):
         self._show_status_message('已复制 gravity YAML 到剪贴板')
 
     def _write_yaml(self) -> None:
-        if self.final_gravity is None:
+        g = self._get_display_gravity()
+        if g is None:
             QtWidgets.QMessageBox.information(self, '无可写入数据', '请先完成采集后再写入配置。')
             return
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -3378,7 +3392,7 @@ class GravityCalibTab(QtWidgets.QWidget):
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
-            updated = self._replace_mapping_gravity(lines, self.final_gravity)
+            updated = self._replace_mapping_gravity(lines, g)
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.writelines(updated)
             self._show_status_message(f'已写入重力参数: {file_path}')

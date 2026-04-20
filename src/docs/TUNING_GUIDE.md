@@ -358,7 +358,7 @@ python3 src/sentry_tools/serial_visualizer.py
 
 ### 17. max_velocity（最大速度限制）
 
-**当前值**：`[2.5, 0.0, 3.0]` —— **vy 必须锁 0**（差速约束）
+**当前值**：仿真 `[1.5, 0.0, 6.3]` / 实车 `[1.5, 0.0, 3.0]` —— **vy 必须锁 0**（差速约束）
 
 应与 controller 的 `desired_linear_vel` / `max_angular_accel * simulate_ahead_time` 一致或略大。如果 smoother 限速比 controller 小，controller 的指令会被截断。
 

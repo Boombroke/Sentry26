@@ -85,7 +85,7 @@ src/
 │   └── small_gicp_relocalization/    #   全局重定位节点
 ├── sentry_nav_bringup/               # Launch 文件、Nav2 参数、地图、行为树 XML
 ├── sentry_behavior/                  # BehaviorTree.CPP 行为树插件
-├── sentry_robot_description/         # 机器人模型 wheeled_biped.sdf.xmacro
+├── sentry_robot_description/         # 机器人模型（wheeled_biped_real/sim + shared core）
 ├── serial/                           # rm_serial_driver 串口通信 + 协议生成器
 ├── rm_interfaces/                    # 统一自定义消息（裁判系统 + 视觉）
 ├── sentry_tools/                     # 调试工具（串口 Mock / 地图拾取 / 数据可视化）
@@ -182,7 +182,7 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
   - imu 包二进制布局从 11B → 27B
   - 电控端需用新版 `src/serial/serial_driver/example/navigation_auto.h` 重编固件
 
-- 实车机械参数在 `src/sentry_robot_description/resource/xmacro/wheeled_biped.sdf.xmacro` 顶部定义（`wheel_separation`, `wheel_radius`, `gimbal_yaw_height` 等），按实车调整。
+- 实车 TF 与传感器安装外参在 `src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro` 调整；仿真专用底盘缩小、caster、DiffDrive 和 Mid360 下俯角只在 `wheeled_biped_sim.sdf.xmacro` 调整；共享轮距/轮径/云台拓扑位于 `wheeled_biped_core.sdf.xmacro`。
 
 ## 主要参数
 

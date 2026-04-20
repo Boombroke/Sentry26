@@ -247,7 +247,7 @@ void OdomBridgeNode::publishOdometry(
       // 丢弃避免 velocity_smoother 把污染值当反馈回灌给 controller.
       if (std::abs(v_body.x()) < 10.0 && std::abs(v_body.y()) < 10.0) {
         out.twist.twist.linear.x = v_body.x();
-        out.twist.twist.linear.y = v_body.y();
+        out.twist.twist.linear.y = 0.0;
         out.twist.twist.linear.z = 0.0;
         out.twist.twist.angular.x = 0.0;
         out.twist.twist.angular.y = 0.0;

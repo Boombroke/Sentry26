@@ -522,10 +522,10 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 |:---|:---|:---|
 | `smoothing_frequency` | 仿真 `20.0` / 实车 `30.0` | 必须与 `controller_frequency` 一致 |
 | `enable_stamped_cmd_vel` | `true` | Jazzy 要求：三个节点（controller_server / behavior_server / velocity_smoother）必须一致 |
-| `max_velocity` | 仿真 `[1.5, 0.0, 1.5]` / 实车 `[1.5, 0.0, 3.0]` | 最大速度 [vx, vy, vθ]，**vy 锁 0** |
-| `min_velocity` | 仿真 `[-1.5, 0.0, -1.5]` / 实车 `[-1.5, 0.0, -3.0]` | 最小速度（反向），**vy 锁 0** |
-| `max_accel` | 仿真 `[1.5, 0.0, 2.5]` / 实车 `[2.5, 0.0, 5.0]` | 最大加速度 [ax, ay, aθ] |
-| `max_decel` | 仿真 `[-1.5, 0.0, -2.5]` / 实车 `[-2.5, 0.0, -5.0]` | 最大减速度 |
+| `max_velocity` | 仿真 `[1.5, 0.0, 6.3]` / 实车 `[1.5, 0.0, 3.0]` | 最大速度 [vx, vy, vθ]，**vy 锁 0** |
+| `min_velocity` | 仿真 `[-1.5, 0.0, -6.3]` / 实车 `[-1.5, 0.0, -3.0]` | 最小速度（反向），**vy 锁 0** |
+| `max_accel` | 仿真 `[1.5, 0.0, 8.0]` / 实车 `[2.5, 0.0, 5.0]` | 最大加速度 [ax, ay, aθ] |
+| `max_decel` | 仿真 `[-1.5, 0.0, -8.0]` / 实车 `[-2.5, 0.0, -5.0]` | 最大减速度 |
 | `feedback` | `OPEN_LOOP` | 反馈模式。`OPEN_LOOP` 不依赖里程计反馈 |
 
 > velocity_smoother 的输出直接 remap 到 `/cmd_vel`（差速底盘 `chassis_yaw ≡ base_footprint_yaw`，无需坐标旋转）。
@@ -562,7 +562,7 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `preprocess.timestamp_unit` | `2` (微秒) | `3` (纳秒) | 时间戳单位: 0=秒, 1=毫秒, 2=微秒, 3=纳秒 |
 | `preprocess.blind` | `0.35` | `0.2` | 盲区半径 (m)，过滤近距离噪声；仿真需兼顾低矮近障 |
 | `mapping.acc_norm` | `9.81` | `1.0` | 加速度单位：1.0=g, 9.81=m/s² |
-| `mapping.satu_acc` | `30.0` | `4.0` | IMU 加速度计饱和值 |
+| `mapping.satu_acc` | `30.0` | `6.0` | IMU 加速度计饱和值，实车按 BMI088 ±6g 物理量程配置 |
 | `mapping.gravity` | `[0, 0, -9.81]` | `[2.64, 0, -9.68]` | Point-LIO 的重力状态初值，不是 Mid360 安装角参数 |
 | `mapping.gravity_init` | `[0, 0, -9.81]` | `[2.64, 0, -9.68]` | 初始重力估计，不是 Mid360 安装角参数 |
 | `mapping.extrinsic_T` | `[0, 0, 0]` | `[-0.011, -0.023, 0.044]` | LiDAR-IMU 外参平移 (m) |
@@ -760,6 +760,7 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 ### 场景 4: Point-LIO 里程计发散
 
 - **首先检查传感器安装外参**（`gimbal_pitch → front_mid360` 的 TF / 模型定义）是否与实物一致，不要先改 `gravity`
+- `gravity` 的范数应保持约 `9.81m/s²`；实车重力标定只用静态 IMU 的 `-mean_acc` 方向更新它，不能把 LiDAR 安装角手算塞进去
 - 确认 `lidar_type` 和 `timestamp_unit` 设置正确
 - 检查 IMU 数据质量，调整 `satu_acc` / `satu_gyro`
 - 增大 `lidar_meas_cov`（降低 LiDAR 测量信任度）

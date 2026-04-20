@@ -2,7 +2,13 @@
 <sdf version="1.8">
     <xmacro_include uri="file://wheeled_biped_core.sdf.xmacro" />
 
-    <!-- Backward-compatible alias. New launch files use wheeled_biped_real or wheeled_biped_sim explicitly. -->
+    <!--
+        Real robot TF profile.
+        Keep measured sensor extrinsics here. Do not copy Gazebo-only pitch,
+        caster, reduced chassis, or DiffDrive plugin settings into this file.
+        The default keeps the historical Mid360 yaw inversion but removes the
+        simulation-only 30 deg down-pitch.
+    -->
     <xmacro_block
         name="wheeled_biped_model"
         model_name="wheeled_biped"

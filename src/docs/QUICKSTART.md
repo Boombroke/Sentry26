@@ -167,16 +167,13 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
 - 电控端用 `src/serial/serial_driver/example/navigation_auto.h` 重编固件
 - 旧固件会因 CRC 不匹配被丢包
 
-**实车机械参数**（在 `src/sentry_robot_description/resource/xmacro/wheeled_biped.sdf.xmacro` 头部）：
+**实车机械参数与外参**：
 
-```xml
-<xmacro_define_value name="wheel_radius" value="0.060" />
-<xmacro_define_value name="wheel_separation" value="0.65" />
-<xmacro_define_value name="gimbal_yaw_height" value="0.18" />
-<xmacro_define_value name="gimbal_pitch_height" value="0.08" />
-```
+- 实车 TF 入口：`src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro`
+- 仿真 Gazebo 入口：`src/sentry_robot_description/resource/xmacro/wheeled_biped_sim.sdf.xmacro`
+- 共享拓扑核心：`src/sentry_robot_description/resource/xmacro/wheeled_biped_core.sdf.xmacro`
 
-按实车尺寸修改这 4 个值即可（不需改 SDF 结构）。
+LiDAR 斜装、倒装或实测平移只改 `wheeled_biped_real.sdf.xmacro` 里的 `front_lidar_pose`，不要用 Point-LIO `gravity` 表达安装角。仿真为了扫到近场低矮底座保留 30° 下俯角，这个角只存在于 `wheeled_biped_sim.sdf.xmacro`。
 
 ## 5. 行为树决策
 

@@ -298,8 +298,8 @@ controller_server:
       primary_controller: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
       angular_dist_threshold: 0.785                     # 45° 起就先原地对齐，避免高速前进同时急转扫侧墙
       forward_sampling_distance: 0.5
-      rotate_to_heading_angular_vel: 1.2
-      max_angular_accel: 2.5
+      rotate_to_heading_angular_vel: 4.5
+      max_angular_accel: 8.0
       simulate_ahead_time: 1.0
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
@@ -319,8 +319,8 @@ controller_server:
       regulated_linear_scaling_min_speed: 0.3
       use_rotate_to_heading: false                      # 不强制到点对齐 yaw
       rotate_to_heading_min_angle: 0.785
-      max_angular_accel: 2.5
-      rotate_to_heading_angular_vel: 1.2
+      max_angular_accel: 8.0
+      rotate_to_heading_angular_vel: 4.5
       allow_reversing: false
       max_robot_pose_search_dist: 10.0
 
@@ -504,15 +504,15 @@ behavior_server:
     robot_base_frame: base_footprint
     transform_tolerance: 0.1
     simulate_ahead_time: 2.0
-    max_rotational_vel: 1.0
+    max_rotational_vel: 6.3
     min_rotational_vel: 0.4
-    rotational_acc_lim: 3.2
+    rotational_acc_lim: 8.0
     # params for nav2_behaviors_plugins::BackUpFreeSpace
     service_name: "global_costmap/get_costmap"
     max_radius: 2.0
     min_backward_projection: 0.2
-    max_angular_vel: 1.0
-    turn_gain: 1.5
+    max_angular_vel: 6.3
+    turn_gain: 2.0
     visualize: false
 
 waypoint_follower:
@@ -533,12 +533,12 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [1.5, 0.0, 1.5]                     # 仿真先收紧上限，避免贴边场景高速硬拐
-    min_velocity: [-1.5, 0.0, -1.5]
+    max_velocity: [1.5, 0.0, 6.3]                     # 仿真角速度放开到接近实车 2π，避免转向瓶颈由配置而非物理决定
+    min_velocity: [-1.5, 0.0, -6.3]
     # 对齐实车：实测平地线加速度 ~2.5 m/s² (理论 a_max=2F/m=2*(2.4/0.06)/28≈2.86).
     # 仿真物理能跑更高, 但调好的 Nav2 参数要能直迁实车, 所以这里按实车上限.
-    max_accel: [1.5, 0.0, 2.5]
-    max_decel: [-1.5, 0.0, -2.5]
+    max_accel: [1.5, 0.0, 8.0]
+    max_decel: [-1.5, 0.0, -8.0]
     odom_topic: "odometry"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
