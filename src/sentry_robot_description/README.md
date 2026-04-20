@@ -44,10 +44,15 @@ map -> odom -> base_footprint -> chassis -> gimbal_yaw -> gimbal_pitch -> front_
 
 - `base_footprint` 是导航使用的 2D 基座
 - `chassis` 与 `base_footprint` 共享 yaw
-- 云台是 `gimbal_yaw -> gimbal_pitch`
+- 云台 frame 名固定为 `gimbal_yaw -> gimbal_pitch`
 - Mid360 和工业相机都挂在 `gimbal_pitch`
 - LiDAR 斜装、倒装、下俯都只能写在 `gimbal_pitch -> front_mid360`
 - 不能把 LiDAR 安装角写进 Point-LIO 的 `gravity`
+
+当前默认语义：
+
+- 实车 profile: `chassis -> gimbal_yaw -> gimbal_pitch` 是静态 TF
+- 仿真 profile: `gimbal_yaw_joint / gimbal_pitch_joint` 仍是动态关节
 
 ## 三个 xmacro 分别干什么
 
@@ -60,6 +65,7 @@ map -> odom -> base_footprint -> chassis -> gimbal_yaw -> gimbal_pitch -> front_
 - 公共 link / joint / frame 名字
 - 左右驱动轮
 - `base_footprint -> chassis -> gimbal_yaw -> gimbal_pitch` 主体拓扑
+- 固定云台 / 动态云台两种 joint 语义开关（`use_fixed_gimbal`）
 - Mid360 / industrial camera 的公共 block
 - Gazebo caster / plugin 的可复用 block
 
@@ -85,8 +91,9 @@ map -> odom -> base_footprint -> chassis -> gimbal_yaw -> gimbal_pitch -> front_
 这里应该只保留实车真实语义：
 
 - 实车 chassis 尺寸
-- 实车 LiDAR 外参
+- 实车 LiDAR 外参（当前默认 15° 下俯）
 - 实车相机外参
+- 实车固定云台 TF
 - TF / visual / collision
 
 这里**不应该**出现：
@@ -96,6 +103,7 @@ map -> odom -> base_footprint -> chassis -> gimbal_yaw -> gimbal_pitch -> front_
 - Gazebo `sensor`
 - 仿真专用 30° 下俯角
 - 仿真专用 65% chassis 缩小
+- 串口 joint state 驱动的动态云台 TF
 
 ### 3. `wheeled_biped_sim.sdf.xmacro`
 
@@ -113,6 +121,7 @@ Gazebo 入口。
 - Gazebo gimbal joint controller
 - `gpu_lidar` / camera / chassis imu sensor
 - Mid360 固定下俯约 30°，补近场低矮底座感知
+- 动态 `gimbal_yaw_joint / gimbal_pitch_joint`
 
 ### 4. `wheeled_biped.sdf.xmacro`
 
@@ -127,6 +136,7 @@ Gazebo 入口。
 | 需求 | 改哪个文件 | 典型参数 |
 |---|---|---|
 | 实车 LiDAR 斜装、倒装、实测平移变化 | `wheeled_biped_real.sdf.xmacro` | `front_lidar_pose` |
+| 实车云台改成固定安装 | `wheeled_biped_real.sdf.xmacro` | `use_fixed_gimbal=True`（默认已开启） |
 | 仿真里想调下俯角、仿真 chassis 尺寸 | `wheeled_biped_sim.sdf.xmacro` | `front_lidar_pose`、`chassis_length/width/z` |
 | 公共轮距、轮径、云台高度变化 | `wheeled_biped_core.sdf.xmacro` | 公共 joint / 几何参数 |
 
@@ -145,12 +155,14 @@ Gazebo 入口。
 - `chassis_length = 0.648`
 - `chassis_width = 0.650`
 - `chassis_z = 0.120`
-- `front_lidar_pose = -0.05 0 0.05 0.0 0.0 3.141592653589793`
+- `front_lidar_pose = -0.05 0 0.05 0.0 0.2617993877991494 3.141592653589793`
+- `use_fixed_gimbal = True`
 
 说明：
 
 - 当前保留了 Mid360 的 yaw 反向安装
-- 不带仿真 30° 下俯角
+- 当前实车默认是 15° 下俯
+- 实车 `gimbal_yaw_joint / gimbal_pitch_joint` 为 fixed，不再依赖串口 joint state 驱动 TF
 
 ### 仿真入口默认值
 
@@ -160,11 +172,13 @@ Gazebo 入口。
 - `chassis_width = 0.4225`
 - `chassis_z = 0.078`
 - `front_lidar_pose = -0.05 0 0.05 0.0 0.523598775598299 3.141592653589793`
+- `use_fixed_gimbal = False`
 
 说明：
 
 - chassis 缩到实车的 65%
 - Mid360 固定下俯约 30°
+- 云台关节保持 Gazebo 动态控制
 
 ## 和 gravity 的边界
 
@@ -179,6 +193,12 @@ Gazebo 入口。
 
 不要把 LiDAR 安装角手算进 `gravity`。  
 那会把传感器几何问题和 IMU 重力方向问题混在一起。
+
+`front_lidar_pose` 当前使用 `x y z roll pitch yaw`。
+
+- `pitch > 0` 表示雷达下俯
+- `pitch < 0` 表示雷达上仰
+- 当前实车 15° 下俯即 `pitch = 0.2617993877991494`
 
 ## Launch 用法
 
@@ -215,7 +235,7 @@ ros2 launch sentry_robot_description robot_description_launch.py \
 2. 用 `xmacro4sdf` 风格解析 xmacro，生成 SDF
 3. 用 `sdformat_tools` 把 SDF 转成 URDF
 4. 启动：
-   - `joint_state_publisher`
+   - 可选 `joint_state_publisher`
    - `robot_state_publisher`
    - 可选 `rviz2`
 
@@ -224,6 +244,13 @@ ros2 launch sentry_robot_description robot_description_launch.py \
 - `robot_name = wheeled_biped_real`
 - `use_sim_time = False`
 - `use_rviz = True`
+- `use_joint_state_publisher = False`
+
+补充说明：
+
+- 默认 `params/robot_description.yaml` 的 `source_list` 为空，因为当前实车 profile 使用静态云台 TF
+- `serial/gimbal_joint_state` 仍会保留给调试/可视化使用，但默认不再驱动 TF
+- 如果后续恢复动态云台，可传 `use_joint_state_publisher:=True` 并提供带 `source_list` 的参数文件
 
 ## 环境变量
 

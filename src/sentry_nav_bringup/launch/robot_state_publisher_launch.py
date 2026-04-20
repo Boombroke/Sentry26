@@ -36,6 +36,7 @@ def generate_launch_description():
     namespace = LaunchConfiguration("namespace")
     use_sim_time = LaunchConfiguration("use_sim_time")
     robot_name = LaunchConfiguration("robot_name")
+    use_joint_state_publisher = LaunchConfiguration("use_joint_state_publisher")
 
     # Declare the launch arguments
     declare_namespace_cmd = DeclareLaunchArgument(
@@ -56,6 +57,12 @@ def generate_launch_description():
         description="The file name of the robot xmacro to be used",
     )
 
+    declare_use_joint_state_publisher_cmd = DeclareLaunchArgument(
+        "use_joint_state_publisher",
+        default_value="False",
+        description="Whether to start joint_state_publisher for dynamic joints",
+    )
+
     bringup_cmd_group = GroupAction(
         [
             PushRosNamespace(namespace=namespace),
@@ -73,6 +80,7 @@ def generate_launch_description():
                     "namespace": namespace,
                     "use_sim_time": use_sim_time,
                     "robot_name": robot_name,
+                    "use_joint_state_publisher": use_joint_state_publisher,
                     "use_rviz": "False",
                 }.items(),
             ),
@@ -86,6 +94,7 @@ def generate_launch_description():
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_robot_name_cmd)
+    ld.add_action(declare_use_joint_state_publisher_cmd)
 
     # Add the actions to launch all nodes
     ld.add_action(bringup_cmd_group)

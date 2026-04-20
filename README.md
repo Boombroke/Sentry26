@@ -60,8 +60,8 @@ map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → 
 ```
 
 - `base_footprint` 为 Nav2 的 `robot_base_frame`（业界惯例，水平 2D 投影点）。
-- 云台链（`gimbal_yaw → gimbal_pitch`）独立于底盘运动，由下位机上报关节角度驱动。
-- LiDAR 挂在 `gimbal_pitch` 上随云台旋转；odom_bridge 靠每帧 TF 查询消化云台旋转对底盘位姿的影响。
+- 当前实车 profile 中，`gimbal_yaw → gimbal_pitch` 与底盘是静态 TF；仿真 profile 仍保留动态云台关节。
+- LiDAR 挂在 `gimbal_pitch` 上；实车当前为固定 15° 下俯安装，odom_bridge 继续统一通过 TF 查询消化该外参。
 
 ## 功能特性
 
@@ -182,7 +182,7 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
   - imu 包二进制布局从 11B → 27B
   - 电控端需用新版 `src/serial/serial_driver/example/navigation_auto.h` 重编固件
 
-- 实车 TF 与传感器安装外参在 `src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro` 调整；仿真专用底盘缩小、caster、DiffDrive 和 Mid360 下俯角只在 `wheeled_biped_sim.sdf.xmacro` 调整；共享轮距/轮径/云台拓扑位于 `wheeled_biped_core.sdf.xmacro`。
+- 实车 TF 与传感器安装外参在 `src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro` 调整；当前实车默认是固定云台 + Mid360 下俯 15°。仿真专用底盘缩小、caster、DiffDrive 和 Mid360 下俯角只在 `wheeled_biped_sim.sdf.xmacro` 调整；共享轮距/轮径/云台拓扑位于 `wheeled_biped_core.sdf.xmacro`。
 
 ## 主要参数
 

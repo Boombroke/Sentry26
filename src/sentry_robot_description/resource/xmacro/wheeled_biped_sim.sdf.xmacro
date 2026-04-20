@@ -22,5 +22,6 @@
         use_real_sensors="False"
         use_casters="True"
         use_gazebo_plugins="True"
+        use_fixed_gimbal="False"
     />
 </sdf>

@@ -55,7 +55,7 @@ serial/serial_driver/
 | 话题 | 类型 | 方向 | 说明 |
 | :--- | :--- | :--- | :--- |
 | `/cmd_vel` | geometry_msgs/msg/TwistStamped | Subscription | 接收差速速度指令（base_footprint 系, 只消费 vx / wz），封装为 Nav 包发送至 STM32 |
-| `serial/gimbal_joint_state` | sensor_msgs/msg/JointState | Publication | 发布从 IMU 包解析的云台 pitch/yaw 角度 + chassis yaw/pitch 姿态（供 TF 链路使用） |
+| `serial/gimbal_joint_state` | sensor_msgs/msg/JointState | Publication | 发布从 IMU 包解析的云台 pitch/yaw 角度，供调试/可视化或可选动态云台 TF 配置使用；当前默认实车 TF 不再消费该话题 |
 | `referee/game_status` | rm_interfaces/msg/GameStatus | Publication | 发布从 Status 包解析的游戏阶段及剩余时间 |
 | `referee/robot_status` | rm_interfaces/msg/RobotStatus | Publication | 发布从 Status 包解析的当前血量及剩余弹量 |
 | `referee/all_robot_hp` | rm_interfaces/msg/GameRobotHP | Publication | 发布从 HP 包解析的 7 个己方单位血量值 |

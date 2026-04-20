@@ -28,6 +28,7 @@ def launch_setup(context: LaunchContext) -> list:
     params_file = LaunchConfiguration("params_file")
     rviz_config_file = LaunchConfiguration("rviz_config_file")
     use_rviz = LaunchConfiguration("use_rviz")
+    use_joint_state_publisher = LaunchConfiguration("use_joint_state_publisher")
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
 
@@ -66,6 +67,7 @@ def launch_setup(context: LaunchContext) -> list:
     bringup_cmd_group = GroupAction(
         [
             Node(
+                condition=IfCondition(use_joint_state_publisher),
                 package="joint_state_publisher",
                 executable="joint_state_publisher",
                 name="joint_state_publisher",
@@ -153,6 +155,12 @@ def generate_launch_description():
         "use_rviz", default_value="True", description="Whether to start RViz"
     )
 
+    declare_use_joint_state_publisher_cmd = DeclareLaunchArgument(
+        "use_joint_state_publisher",
+        default_value="False",
+        description="Whether to start joint_state_publisher. Real fixed-gimbal TF does not need it.",
+    )
+
     declare_use_respawn_cmd = DeclareLaunchArgument(
         "use_respawn",
         default_value="False",
@@ -174,6 +182,7 @@ def generate_launch_description():
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_rviz_cmd)
+    ld.add_action(declare_use_joint_state_publisher_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
 

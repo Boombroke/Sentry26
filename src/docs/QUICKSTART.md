@@ -175,6 +175,12 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
 
 LiDAR 斜装、倒装或实测平移只改 `wheeled_biped_real.sdf.xmacro` 里的 `front_lidar_pose`，不要用 Point-LIO `gravity` 表达安装角。仿真为了扫到近场低矮底座保留 30° 下俯角，这个角只存在于 `wheeled_biped_sim.sdf.xmacro`。
 
+当前实车默认值：
+
+- `front_lidar_pose = -0.05 0 0.05 0.0 0.2617993877991494 3.141592653589793`
+- `pitch > 0` 表示下俯，因此这里表示 Mid360 相对 `gimbal_pitch` 下俯 15°
+- 实车 `chassis -> gimbal_yaw -> gimbal_pitch` 现在是静态 TF，不再默认消费 `serial/gimbal_joint_state` 驱动 robot_state_publisher
+
 ## 5. 行为树决策
 
 ```bash

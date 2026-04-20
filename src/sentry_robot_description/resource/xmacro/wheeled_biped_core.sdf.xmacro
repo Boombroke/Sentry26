@@ -214,7 +214,61 @@
         </sensor>
     </xmacro_define_block>
 
-    <xmacro_define_block name="wheeled_biped_model" params="model_name chassis_length chassis_width chassis_z front_lidar_pose use_sim_sensors use_real_sensors use_casters use_gazebo_plugins">
+    <xmacro_define_block name="wheeled_biped_gimbal_yaw_fixed">
+        <joint name="gimbal_yaw_joint" type="fixed">
+            <pose relative_to="chassis">0 0 0.18 0 0 0</pose>
+            <parent>chassis</parent>
+            <child>gimbal_yaw</child>
+        </joint>
+    </xmacro_define_block>
+
+    <xmacro_define_block name="wheeled_biped_gimbal_yaw_revolute">
+        <joint name="gimbal_yaw_joint" type="revolute">
+            <pose relative_to="chassis">0 0 0.18 0 0 0</pose>
+            <parent>chassis</parent>
+            <child>gimbal_yaw</child>
+            <axis>
+                <xyz>0 0 1</xyz>
+                <limit>
+                    <effort>20</effort>
+                    <velocity>50</velocity>
+                    <lower>-1.79769e+308</lower>
+                    <upper>1.79769e+308</upper>
+                </limit>
+            </axis>
+        </joint>
+    </xmacro_define_block>
+
+    <xmacro_define_block name="wheeled_biped_gimbal_pitch_fixed">
+        <joint name="gimbal_pitch_joint" type="fixed">
+            <pose relative_to="gimbal_yaw">0 0 0.08 0 0 0</pose>
+            <parent>gimbal_yaw</parent>
+            <child>gimbal_pitch</child>
+        </joint>
+    </xmacro_define_block>
+
+    <xmacro_define_block name="wheeled_biped_gimbal_pitch_revolute">
+        <joint name="gimbal_pitch_joint" type="revolute">
+            <pose relative_to="gimbal_yaw">0 0 0.08 0 0 0</pose>
+            <parent>gimbal_yaw</parent>
+            <child>gimbal_pitch</child>
+            <axis>
+                <xyz>0 1 0</xyz>
+                <limit>
+                    <effort>20</effort>
+                    <velocity>50</velocity>
+                    <lower>-0.785</lower>
+                    <upper>0.5652</upper>
+                </limit>
+            </axis>
+        </joint>
+    </xmacro_define_block>
+
+    <!--
+        use_fixed_gimbal=True keeps chassis -> gimbal_yaw -> gimbal_pitch as static TF.
+        The real robot currently uses this mode; Gazebo keeps revolute joints.
+    -->
+    <xmacro_define_block name="wheeled_biped_model" params="model_name chassis_length chassis_width chassis_z front_lidar_pose use_sim_sensors use_real_sensors use_casters use_gazebo_plugins use_fixed_gimbal">
         <model name="${model_name}" canonical_link="chassis" placement_frame="base_footprint">
             <pose>0 0 0 0 0 0</pose>
 
@@ -410,20 +464,8 @@
 
             <xmacro_block condition="${use_casters}" name="wheeled_biped_casters" />
 
-            <joint name="gimbal_yaw_joint" type="revolute">
-                <pose relative_to="chassis">0 0 0.18 0 0 0</pose>
-                <parent>chassis</parent>
-                <child>gimbal_yaw</child>
-                <axis>
-                    <xyz>0 0 1</xyz>
-                    <limit>
-                        <effort>20</effort>
-                        <velocity>50</velocity>
-                        <lower>-1.79769e+308</lower>
-                        <upper>1.79769e+308</upper>
-                    </limit>
-                </axis>
-            </joint>
+            <xmacro_block condition="${use_fixed_gimbal}" name="wheeled_biped_gimbal_yaw_fixed" />
+            <xmacro_block condition="${use_fixed_gimbal == 'False'}" name="wheeled_biped_gimbal_yaw_revolute" />
             <link name="gimbal_yaw">
                 <pose relative_to="gimbal_yaw_joint">0 0 0 0 0 0</pose>
                 <inertial>
@@ -460,20 +502,8 @@
                 </collision>
             </link>
 
-            <joint name="gimbal_pitch_joint" type="revolute">
-                <pose relative_to="gimbal_yaw">0 0 0.08 0 0 0</pose>
-                <parent>gimbal_yaw</parent>
-                <child>gimbal_pitch</child>
-                <axis>
-                    <xyz>0 1 0</xyz>
-                    <limit>
-                        <effort>20</effort>
-                        <velocity>50</velocity>
-                        <lower>-0.785</lower>
-                        <upper>0.5652</upper>
-                    </limit>
-                </axis>
-            </joint>
+            <xmacro_block condition="${use_fixed_gimbal}" name="wheeled_biped_gimbal_pitch_fixed" />
+            <xmacro_block condition="${use_fixed_gimbal == 'False'}" name="wheeled_biped_gimbal_pitch_revolute" />
             <link name="gimbal_pitch">
                 <pose relative_to="gimbal_pitch_joint">0 0 0 0 0 0</pose>
                 <inertial>
