@@ -2,13 +2,13 @@
 
 ![PolarBear Logo](https://raw.githubusercontent.com/SMBU-PolarBear-Robotics-Team/.github/main/.docs/image/polarbear_logo_text.png)
 
-SMBU PolarBear Team robot description package for RoboMaster 2025.
+SMBU PolarBear Team robot description package for RoboMaster 2026 sentry navigation.
 
-深圳北理莫斯科大学北极熊战队 - RoboMaster 2025 赛季通用机器人关节描述包。
+深圳北理莫斯科大学北极熊战队 - RoboMaster 2026 哨兵机器人描述包。
 
 ## 1. Overview
 
-本功能包含深圳北理莫斯科大学北极熊战队用于 RoboMaster 赛事的机器人关节描述文件。它将读取机器人描述文件并转换为 TF 和 joint_states ，以便与其他 ROS2 节点配合使用。
+本包负责维护 2026 赛季差速轮足哨兵机器人的 TF / joint 结构描述，并在 launch 中把 xmacro 生成的 SDF 转成 URDF 提供给 `robot_state_publisher`。Gazebo 仿真 spawn 也从这里读取机器人描述。
 
 本项目使用 [xmacro](https://github.com/gezp/xmacro) 格式描述机器人关节信息，可以更灵活的组合已有模型。
 
@@ -40,14 +40,52 @@ Mid360 允许相对 `gimbal_pitch` 存在固定安装外参（例如下俯、侧
 
 仿真放置注意：不要把 Gazebo spawn 的 `-z` 简单理解成“平台面高度”。当前项目以 `gz_world.yaml` 中各世界实测稳定的 `z_pose` 为准，其中 `rmuc_2026` 的轮足模型已验证需要 `0.72`，否则轮子会卡进地图。
 
-## 2. Quick Start
+## 2. Which File To Edit
 
-### 2.1 Setup Environment
+日常开发时，不要再直接改 legacy 的 `wheeled_biped.sdf.xmacro`。按场景改下面这三个文件：
 
-- Ubuntu 22.04
-- ROS: [Humble](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
+| 需求 | 应修改文件 | 典型修改项 |
+|---|---|---|
+| 改实车雷达安装角、倒装/斜装、实测平移外参 | [wheeled_biped_real.sdf.xmacro](./resource/xmacro/wheeled_biped_real.sdf.xmacro) | `front_lidar_pose` |
+| 改 Gazebo 专用 workaround | [wheeled_biped_sim.sdf.xmacro](./resource/xmacro/wheeled_biped_sim.sdf.xmacro) | 仿真 LiDAR 下俯角、仿真底盘尺寸 |
+| 改机器人公共结构 | [wheeled_biped_core.sdf.xmacro](./resource/xmacro/wheeled_biped_core.sdf.xmacro) | 轮距、轮径、云台高度、公共 link/joint/TF 拓扑 |
 
-### 2.2 Create Workspace
+### 2.1 常见判断
+
+- LiDAR 在实车上斜装、倒装了：改 `wheeled_biped_real.sdf.xmacro`
+- 仿真里低矮底座扫不到，想保留 30° 下俯或继续调它：改 `wheeled_biped_sim.sdf.xmacro`
+- 轮半径、轮距、云台高度这些实车/仿真都应该一致的量变了：改 `wheeled_biped_core.sdf.xmacro`
+- Point-LIO 里的 `gravity` 不对：去改导航参数或用工具箱重力标定，不要来改 xmacro
+
+### 2.2 现在默认谁在用哪个入口
+
+- `ros2 launch sentry_robot_description robot_description_launch.py`
+  - 默认 `robot_name:=wheeled_biped_real`
+- `ros2 launch sentry_nav_bringup robot_state_publisher_launch.py`
+  - 默认 `robot_name:=wheeled_biped_real`
+- `ros2 launch rmu_gazebo_simulator bringup_sim.launch.py`
+  - 内部固定使用 `wheeled_biped_sim.sdf.xmacro`
+
+### 2.3 为什么不建议改包名
+
+`sentry_robot_description` 这个名字在 ROS 生态里是标准、直观且低歧义的命名方式，语义就是“这个包提供机器人描述”。从职责上看，它现在仍然是恰当的。
+
+当前**不建议**把它重命名，原因是：
+
+- 它已经被多个 launch 和 package 直接依赖，比如 `get_package_share_directory("sentry_robot_description")`
+- Gazebo spawn、Nav2 bringup、依赖声明、文档索引都已经稳定使用这个名字
+- 改名收益很小，只是文字更贴近“哨兵轮足”，但风险是真实的：会带来 launch、依赖、文档和安装路径的同步修改成本
+
+如果后面真的要改名，更合适的目标也不是现在立刻做，而是等描述结构和赛季模型稳定后，再统一重命名为更赛季化的名字，例如 `sentry_wheeled_biped_description`。现阶段保留 `sentry_robot_description` 是更稳妥的选择。
+
+## 3. Quick Start
+
+### 3.1 Setup Environment
+
+- Ubuntu 24.04
+- ROS: [Jazzy](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
+
+### 3.2 Create Workspace
 
 ```bash
 sudo apt install git-lfs
@@ -71,7 +109,13 @@ vcs import --recursive < dependencies.repos
 pip install xmacro
 ```
 
-### 2.3 Build
+> Ubuntu 24.04 上通常需要：
+>
+> ```bash
+> pip3 install xmacro --break-system-packages
+> ```
+
+### 3.3 Build
 
 ```bash
 rosdep install -r --from-paths src --ignore-src --rosdistro $ROS_DISTRO -y
@@ -81,15 +125,21 @@ rosdep install -r --from-paths src --ignore-src --rosdistro $ROS_DISTRO -y
 colcon build --symlink-install
 ```
 
-### 2.4 Running
+### 3.4 Running
 
-#### Option1: 在 RViz 中可视化机器人
+#### Option 1: 在 RViz 中可视化实车 TF 模型
 
 ```bash
 ros2 launch sentry_robot_description robot_description_launch.py
 ```
 
-#### Option2: Python API
+如果想直接查看仿真描述入口：
+
+```bash
+ros2 launch sentry_robot_description robot_description_launch.py robot_name:=wheeled_biped_sim
+```
+
+#### Option 2: Python API
 
 通过 Python API，在 launch file 中解析 XMacro 文件，生成 URDF 和 SDF 文件 (Recommend)：
 
@@ -118,7 +168,7 @@ urdf_generator.parse_from_sdf_string(robot_xml)
 robot_urdf_xml = urdf_generator.to_string()
 ```
 
-#### Option3: 命令行
+#### Option 3: 命令行
 
 通过命令行直接转换输出 SDF 文件（Not Recommend）:
 
@@ -129,11 +179,11 @@ xmacro4sdf src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.x
 xmacro4sdf src/sentry_robot_description/resource/xmacro/wheeled_biped_sim.sdf.xmacro > /tmp/wheeled_biped_sim.sdf
 ```
 
-## 3. Subscribed Topics
+## 4. Subscribed Topics
 
 None.
 
-## 4. Published Topics
+## 5. Published Topics
 
 - `robot_description (std_msgs/msg/String)`
 
@@ -151,7 +201,7 @@ None.
 
     机器人关节坐标系信息。
 
-## 5. Launch Arguments
+## 6. Launch Arguments
 
 - `use_sim_time` (bool, default: False)
 

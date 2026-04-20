@@ -2,7 +2,7 @@
 <package format="2">
 	<name>sentry_robot_description</name>
 	<version>1.0.0</version>
-	<description>sentry_robot_description</description>
+	<description>Robot description package for the 2026 sentry wheeled-biped platform</description>
 
 	<maintainer email="boombroke@icloud.com">Boombroke</maintainer>
 	<license>MIT</license>
