@@ -194,11 +194,194 @@ Gazebo 入口。
 不要把 LiDAR 安装角手算进 `gravity`。  
 那会把传感器几何问题和 IMU 重力方向问题混在一起。
 
+## 外参与 DOF 怎么理解
+
+`front_lidar_pose` 当前使用：
+
+```text
+x y z roll pitch yaw
+```
+
+含义是：
+
+- `x y z`: 子坐标系原点在父坐标系里的平移，单位米
+- `roll`: 绕父坐标系 `x` 轴转，单位弧度
+- `pitch`: 绕父坐标系 `y` 轴转，单位弧度
+- `yaw`: 绕父坐标系 `z` 轴转，单位弧度
+
+在当前模型里：
+
+- `front_lidar_pose` 永远表示 `gimbal_pitch -> front_mid360`
+- 也就是“雷达相对云台安装板”的外参
+- 不要把它理解成 `map`、`odom` 或 `base_footprint` 下的绝对姿态
+
+### 当前 TF / joint 的 DOF 语义
+
+当前实车默认：
+
+```text
+base_footprint -> chassis         fixed
+chassis -> gimbal_yaw             fixed
+gimbal_yaw -> gimbal_pitch        fixed
+gimbal_pitch -> front_mid360      fixed (由 front_lidar_pose 定义)
+```
+
+所以当前实车有效语义是：
+
+- 底盘和云台一起运动，是同一个刚体链
+- LiDAR 只有“安装外参”这一个固定姿态差
+- 改 LiDAR 安装角，只改 `front_lidar_pose`
+- 不要去改 `gravity` 表达 LiDAR 安装角
+
+当前仿真默认：
+
+```text
+base_footprint -> chassis         fixed
+chassis -> gimbal_yaw             revolute
+gimbal_yaw -> gimbal_pitch        revolute
+gimbal_pitch -> front_mid360      fixed
+```
+
+所以仿真保留了云台动态 DOF，实车默认没有。
+
+### roll / pitch / yaw 正方向
+
+按 ROS 常用右手系：
+
+- `+roll`: 绕 `x` 轴正向旋转
+- `+pitch`: 绕 `y` 轴正向旋转
+- `+yaw`: 绕 `z` 轴正向旋转
+
+在这个包当前 Mid360 安装语义里，最常用的是：
+
+- `pitch > 0`: 雷达下俯
+- `pitch < 0`: 雷达上仰
+- `yaw = pi`: 雷达前后反装 180°
+
+当前实车 15° 下俯即：
+
+- `pitch = +0.2617993877991494`
+
 `front_lidar_pose` 当前使用 `x y z roll pitch yaw`。
 
 - `pitch > 0` 表示雷达下俯
 - `pitch < 0` 表示雷达上仰
 - 当前实车 15° 下俯即 `pitch = 0.2617993877991494`
+
+## 角度为什么是 0.261799...
+
+SDF / URDF / TF 的旋转默认都用**弧度**，不是角度。
+
+换算公式：
+
+```text
+radian = degree * pi / 180
+degree = radian * 180 / pi
+```
+
+所以：
+
+- `15° = 15 * pi / 180 = pi / 12 = 0.2617993877991494`
+- `30° = 0.5235987755982988`
+- `45° = 0.7853981633974483`
+- `90° = 1.5707963267948966`
+- `180° = 3.141592653589793`
+
+常用心算：
+
+- 15° 看成 `pi / 12`
+- 30° 看成 `pi / 6`
+- 45° 看成 `pi / 4`
+- 90° 看成 `pi / 2`
+- 180° 看成 `pi`
+
+如果只是临时算一个角度：
+
+```bash
+python3 -c "import math; print(math.radians(15))"
+python3 -c "import math; print(math.degrees(0.2617993877991494))"
+```
+
+## 常见安装场景怎么写
+
+以下都只讨论 `front_lidar_pose` 的 `roll pitch yaw` 三个角。
+
+### 1. 正装，只是下俯 15°
+
+```text
+0.0 0.2617993877991494 0.0
+```
+
+也就是当前实车这种情况。
+
+### 2. 正装，只是上仰 15°
+
+```text
+0.0 -0.2617993877991494 0.0
+```
+
+### 3. 正装，但左右歪了 10°
+
+```text
+0.0 0.0 0.17453292519943295
+```
+
+也就是只改 `yaw`。
+
+### 4. 雷达倒置
+
+最常见先从 `roll = pi` 或 `yaw = pi` 去理解。
+
+具体写法要看你是绕哪根机械轴翻过去的，但原则是：
+
+- 倒置属于**安装姿态**
+- 仍然只改 `front_lidar_pose`
+- 不改 `gravity`
+
+常见例子：
+
+- 若雷达是“上下翻转”装上去，通常先试 `roll = pi`
+- 若雷达是“前后反装”装上去，通常先试 `yaw = pi`
+
+当前模型历史上保留了：
+
+```text
+yaw = 3.141592653589793
+```
+
+这就是一个 180° 反装。
+
+### 5. 倒置后再下俯 15°
+
+这类场景不要只凭脑补改一个角。
+
+正确做法：
+
+1. 先确定基础倒置是绕哪根轴翻的
+2. 再在那个基础姿态上叠加俯仰角
+3. 用 RViz / TF 树看 `front_mid360` 坐标轴是否符合实物
+
+如果不确定，宁可分两步验证：
+
+1. 先只写倒置
+2. 看坐标轴方向
+3. 再叠加 `pitch`
+
+## 改外参时最容易犯的错
+
+- 把角度直接写进 SDF，忘了要用弧度
+- 把 LiDAR 安装角写进 Point-LIO `gravity`
+- 把 `front_lidar_pose` 误当成世界坐标系姿态
+- 底盘/云台已经固定，却还去改 `gimbal_yaw_joint` 或 `gimbal_pitch_joint` 的动态关节语义
+- 倒装时一次同时改多个轴，最后分不清是谁起作用
+
+最稳的流程是：
+
+1. 先只改一个轴
+2. 用弧度写值
+3. 启动 `robot_state_publisher`
+4. 在 RViz 检查 `front_mid360` 的坐标轴方向
+5. 确认对了再继续叠加下一个角
 
 ## Launch 用法
 
