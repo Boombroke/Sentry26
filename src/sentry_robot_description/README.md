@@ -1,234 +1,290 @@
 # sentry_robot_description
 
-![PolarBear Logo](https://raw.githubusercontent.com/SMBU-PolarBear-Robotics-Team/.github/main/.docs/image/polarbear_logo_text.png)
+2026 赛季哨兵差速轮足机器人的描述包。
 
-SMBU PolarBear Team robot description package for RoboMaster 2026 sentry navigation.
+这个包的职责只有两件事：
 
-深圳北理莫斯科大学北极熊战队 - RoboMaster 2026 哨兵机器人描述包。
+1. 定义机器人公共 TF / joint / link 拓扑  
+2. 提供实车与 Gazebo 两套描述入口，分别给 `robot_state_publisher` 和仿真 spawn 使用
 
-## 1. Overview
+它不是导航参数包，也不是传感器驱动包。  
+LiDAR 安装外参、底盘公共几何、Gazebo workaround 都在这里维护。
 
-本包负责维护 2026 赛季差速轮足哨兵机器人的 TF / joint 结构描述，并在 launch 中把 xmacro 生成的 SDF 转成 URDF 提供给 `robot_state_publisher`。Gazebo 仿真 spawn 也从这里读取机器人描述。
+## 包内结构
 
-本项目使用 [xmacro](https://github.com/gezp/xmacro) 格式描述机器人关节信息，可以更灵活的组合已有模型。
+```text
+src/sentry_robot_description/
+├── launch/
+│   └── robot_description_launch.py
+├── params/
+│   └── robot_description.yaml
+├── resource/
+│   └── xmacro/
+│       ├── wheeled_biped_core.sdf.xmacro
+│       ├── wheeled_biped_real.sdf.xmacro
+│       ├── wheeled_biped_sim.sdf.xmacro
+│       └── wheeled_biped.sdf.xmacro
+├── rviz/
+│   └── visualize_robot.rviz
+└── env-hooks/
+    └── gazebo.dsv.in
+```
 
-当前机器人描述文件为 2026 赛季差速轮足底盘定制，不再基于旧 Mecanum 全向模板。模型按环境拆分为共享核心和两个入口文件，避免 Gazebo 物理 workaround 污染实车 TF。
+## 当前模型设计
 
-- [wheeled_biped_core](./resource/xmacro/wheeled_biped_core.sdf.xmacro)
+当前只维护一套 2026 差速轮足模型：`wheeled_biped`。
 
-    内部共享核心，只定义差速轮足拓扑、`base_footprint → chassis → gimbal_yaw → gimbal_pitch → front_mid360` TF 链、左右轮和云台关节。不要直接作为 launch 入口使用。
+TF 链固定为：
 
-- [wheeled_biped_real](./resource/xmacro/wheeled_biped_real.sdf.xmacro)
+```text
+map -> odom -> base_footprint -> chassis -> gimbal_yaw -> gimbal_pitch -> front_mid360
+```
 
-    实车 TF 入口，也是 `robot_description_launch.py` 和 `sentry_nav_bringup/robot_state_publisher_launch.py` 的默认入口。只保留实车 TF/visual/collision，不包含 Gazebo `sensor`、caster、DiffDrive plugin 或仿真专用下俯角。
+语义约束：
 
-- [wheeled_biped_sim](./resource/xmacro/wheeled_biped_sim.sdf.xmacro)
+- `base_footprint` 是导航使用的 2D 基座
+- `chassis` 与 `base_footprint` 共享 yaw
+- 云台是 `gimbal_yaw -> gimbal_pitch`
+- Mid360 和工业相机都挂在 `gimbal_pitch`
+- LiDAR 斜装、倒装、下俯都只能写在 `gimbal_pitch -> front_mid360`
+- 不能把 LiDAR 安装角写进 Point-LIO 的 `gravity`
 
-    Gazebo 入口，由 `rmu_gazebo_simulator/spawn_robots.launch.py` 使用。包含仿真专用内容：65% chassis 盒体、前后 caster ball、Gazebo DiffDrive / joint controller plugin、`gpu_lidar` / camera sensor，以及用于覆盖近场低矮底座的 Mid360 固定下俯约 30°。
+## 三个 xmacro 分别干什么
 
-- [wheeled_biped](./resource/xmacro/wheeled_biped.sdf.xmacro)
+### 1. `wheeled_biped_core.sdf.xmacro`
 
-    向后兼容别名，当前等价于 `wheeled_biped_real`。新配置应显式使用 `wheeled_biped_real` 或 `wheeled_biped_sim`。
+共享核心，不直接作为入口使用。
 
-差速底盘（左右两个驱动轮）+ 独立云台 yaw/pitch 关节。Livox Mid360 与 industrial_camera 均挂在 `gimbal_pitch`，随云台旋转。底盘朝向即运动方向（车头始终朝前）。
+这里放的是：
 
-TF 链（6 层）：`map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → front_mid360`
+- 公共 link / joint / frame 名字
+- 左右驱动轮
+- `base_footprint -> chassis -> gimbal_yaw -> gimbal_pitch` 主体拓扑
+- Mid360 / industrial camera 的公共 block
+- Gazebo caster / plugin 的可复用 block
 
-Mid360 允许相对 `gimbal_pitch` 存在固定安装外参（例如下俯、侧装、倒装）；这些姿态只应写在 `gimbal_pitch → front_mid360` 这一层，不改变底盘或云台的机械语义。实车外参写入 `wheeled_biped_real.sdf.xmacro`，仿真外参写入 `wheeled_biped_sim.sdf.xmacro`。
+只有“实车和仿真都应该一起变”的结构变化，才改这里。
 
-注意这只是传感器安装外参；Point-LIO 的 `gravity / gravity_init` 不用于表达 Mid360 安装角。仿真保持标准 `[0, 0, -9.81]`，实车由工具箱静态 IMU 标定根据 `mean_acc` 计算重力方向。
+典型例子：
 
-仿真放置注意：不要把 Gazebo spawn 的 `-z` 简单理解成“平台面高度”。当前项目以 `gz_world.yaml` 中各世界实测稳定的 `z_pose` 为准，其中 `rmuc_2026` 的轮足模型已验证需要 `0.72`，否则轮子会卡进地图。
+- 轮距变了
+- 轮半径变了
+- 云台高度变了
+- link / joint 名字要变
+- TF 拓扑要变
 
-## 2. Which File To Edit
+### 2. `wheeled_biped_real.sdf.xmacro`
 
-日常开发时，不要再直接改 legacy 的 `wheeled_biped.sdf.xmacro`。按场景改下面这三个文件：
+实车入口。
 
-| 需求 | 应修改文件 | 典型修改项 |
-|---|---|---|
-| 改实车雷达安装角、倒装/斜装、实测平移外参 | [wheeled_biped_real.sdf.xmacro](./resource/xmacro/wheeled_biped_real.sdf.xmacro) | `front_lidar_pose` |
-| 改 Gazebo 专用 workaround | [wheeled_biped_sim.sdf.xmacro](./resource/xmacro/wheeled_biped_sim.sdf.xmacro) | 仿真 LiDAR 下俯角、仿真底盘尺寸 |
-| 改机器人公共结构 | [wheeled_biped_core.sdf.xmacro](./resource/xmacro/wheeled_biped_core.sdf.xmacro) | 轮距、轮径、云台高度、公共 link/joint/TF 拓扑 |
-
-### 2.1 常见判断
-
-- LiDAR 在实车上斜装、倒装了：改 `wheeled_biped_real.sdf.xmacro`
-- 仿真里低矮底座扫不到，想保留 30° 下俯或继续调它：改 `wheeled_biped_sim.sdf.xmacro`
-- 轮半径、轮距、云台高度这些实车/仿真都应该一致的量变了：改 `wheeled_biped_core.sdf.xmacro`
-- Point-LIO 里的 `gravity` 不对：去改导航参数或用工具箱重力标定，不要来改 xmacro
-
-### 2.2 现在默认谁在用哪个入口
+默认被下面两个 launch 使用：
 
 - `ros2 launch sentry_robot_description robot_description_launch.py`
-  - 默认 `robot_name:=wheeled_biped_real`
 - `ros2 launch sentry_nav_bringup robot_state_publisher_launch.py`
-  - 默认 `robot_name:=wheeled_biped_real`
+
+这里应该只保留实车真实语义：
+
+- 实车 chassis 尺寸
+- 实车 LiDAR 外参
+- 实车相机外参
+- TF / visual / collision
+
+这里**不应该**出现：
+
+- Gazebo caster
+- Gazebo DiffDrive plugin
+- Gazebo `sensor`
+- 仿真专用 30° 下俯角
+- 仿真专用 65% chassis 缩小
+
+### 3. `wheeled_biped_sim.sdf.xmacro`
+
+Gazebo 入口。
+
+默认被下面的仿真 spawn 使用：
+
 - `ros2 launch rmu_gazebo_simulator bringup_sim.launch.py`
-  - 内部固定使用 `wheeled_biped_sim.sdf.xmacro`
 
-### 2.3 为什么不建议改包名
+这里放仿真专用 workaround：
 
-`sentry_robot_description` 这个名字在 ROS 生态里是标准、直观且低歧义的命名方式，语义就是“这个包提供机器人描述”。从职责上看，它现在仍然是恰当的。
+- 65% chassis box，减少自遮挡
+- 前后 caster ball，替代实车主动平衡控制
+- Gazebo DiffDrive plugin
+- Gazebo gimbal joint controller
+- `gpu_lidar` / camera / chassis imu sensor
+- Mid360 固定下俯约 30°，补近场低矮底座感知
 
-当前**不建议**把它重命名，原因是：
+### 4. `wheeled_biped.sdf.xmacro`
 
-- 它已经被多个 launch 和 package 直接依赖，比如 `get_package_share_directory("sentry_robot_description")`
-- Gazebo spawn、Nav2 bringup、依赖声明、文档索引都已经稳定使用这个名字
-- 改名收益很小，只是文字更贴近“哨兵轮足”，但风险是真实的：会带来 launch、依赖、文档和安装路径的同步修改成本
+兼容别名。
 
-如果后面真的要改名，更合适的目标也不是现在立刻做，而是等描述结构和赛季模型稳定后，再统一重命名为更赛季化的名字，例如 `sentry_wheeled_biped_description`。现阶段保留 `sentry_robot_description` 是更稳妥的选择。
+当前等价于 `wheeled_biped_real.sdf.xmacro`，只为了兼容旧引用。
 
-## 3. Quick Start
+新开发不要再把它当主文件改。
 
-### 3.1 Setup Environment
+## 你平时该改哪个文件
 
-- Ubuntu 24.04
-- ROS: [Jazzy](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
+| 需求 | 改哪个文件 | 典型参数 |
+|---|---|---|
+| 实车 LiDAR 斜装、倒装、实测平移变化 | `wheeled_biped_real.sdf.xmacro` | `front_lidar_pose` |
+| 仿真里想调下俯角、仿真 chassis 尺寸 | `wheeled_biped_sim.sdf.xmacro` | `front_lidar_pose`、`chassis_length/width/z` |
+| 公共轮距、轮径、云台高度变化 | `wheeled_biped_core.sdf.xmacro` | 公共 joint / 几何参数 |
 
-### 3.2 Create Workspace
+快速判断：
 
-```bash
-sudo apt install git-lfs
-pip install vcstool2
-```
+- 改完后只应该影响实车 TF：改 `real`
+- 改完后只应该影响 Gazebo：改 `sim`
+- 改完后实车和仿真都应该一起变：改 `core`
 
-```bash
-mkdir -p ~/ros_ws
-cd ~/ros_ws
-```
+## 当前默认参数
 
-```bash
-git clone https://github.com/SMBU-PolarBear-Robotics-Team/sentry_robot_description.git
-```
+### 实车入口默认值
 
-```bash
-vcs import --recursive < dependencies.repos
-```
+文件：`wheeled_biped_real.sdf.xmacro`
 
-```bash
-pip install xmacro
-```
+- `chassis_length = 0.648`
+- `chassis_width = 0.650`
+- `chassis_z = 0.120`
+- `front_lidar_pose = -0.05 0 0.05 0.0 0.0 3.141592653589793`
 
-> Ubuntu 24.04 上通常需要：
->
-> ```bash
-> pip3 install xmacro --break-system-packages
-> ```
+说明：
 
-### 3.3 Build
+- 当前保留了 Mid360 的 yaw 反向安装
+- 不带仿真 30° 下俯角
 
-```bash
-rosdep install -r --from-paths src --ignore-src --rosdistro $ROS_DISTRO -y
-```
+### 仿真入口默认值
 
-```bash
-colcon build --symlink-install
-```
+文件：`wheeled_biped_sim.sdf.xmacro`
 
-### 3.4 Running
+- `chassis_length = 0.4212`
+- `chassis_width = 0.4225`
+- `chassis_z = 0.078`
+- `front_lidar_pose = -0.05 0 0.05 0.0 0.523598775598299 3.141592653589793`
 
-#### Option 1: 在 RViz 中可视化实车 TF 模型
+说明：
+
+- chassis 缩到实车的 65%
+- Mid360 固定下俯约 30°
+
+## 和 gravity 的边界
+
+这个包只负责**几何外参 / TF 语义**。
+
+它不负责 Point-LIO 的重力状态初始化。
+
+必须区分：
+
+- LiDAR 安装角：改这里的 `front_lidar_pose`
+- Point-LIO `gravity / gravity_init`：改导航参数或用工具箱标定
+
+不要把 LiDAR 安装角手算进 `gravity`。  
+那会把传感器几何问题和 IMU 重力方向问题混在一起。
+
+## Launch 用法
+
+### 1. 查看默认实车描述
 
 ```bash
 ros2 launch sentry_robot_description robot_description_launch.py
 ```
 
-如果想直接查看仿真描述入口：
+默认等价于：
+
+```bash
+ros2 launch sentry_robot_description robot_description_launch.py robot_name:=wheeled_biped_real
+```
+
+### 2. 直接查看仿真描述
 
 ```bash
 ros2 launch sentry_robot_description robot_description_launch.py robot_name:=wheeled_biped_sim
 ```
 
-#### Option 2: Python API
-
-通过 Python API，在 launch file 中解析 XMacro 文件，生成 URDF 和 SDF 文件 (Recommend)：
-
-> [!TIP]
->
-> [robot_state_publisher](https://github.com/ros/robot_state_publisher) 需要传入 urdf 格式的机器人描述文件
->
-> Gazebo 仿真器 spawn robot 时，需要传入 sdf / urdf 格式的机器人描述文件
-
-感谢前辈的开源工具 [xmacro](https://github.com/gezp/xmacro) 和 [sdformat_tools](https://github.com/gezp/sdformat_tools) ，这里简述 XMacro 转 URDF 和 SDF 的示例，用于在 launch file 中生成 URDF 和 SDF 文件。
-
-```python
-from xmacro.xmacro4sdf import XMLMacro4sdf
-from sdformat_tools.urdf_generator import UrdfGenerator
-
-xmacro = XMLMacro4sdf()
-xmacro.set_xml_file(robot_xmacro_path)
-
-# Generate SDF from xmacro
-xmacro.generate()
-robot_xml = xmacro.to_string()
-
-# Generate URDF from SDF
-urdf_generator = UrdfGenerator()
-urdf_generator.parse_from_sdf_string(robot_xml)
-robot_urdf_xml = urdf_generator.to_string()
-```
-
-#### Option 3: 命令行
-
-通过命令行直接转换输出 SDF 文件（Not Recommend）:
+### 3. 指定绝对路径入口
 
 ```bash
-source install/setup.bash
+ros2 launch sentry_robot_description robot_description_launch.py \
+  robot_xmacro_file:=/abs/path/to/custom_model.sdf.xmacro
+```
 
+## `robot_description_launch.py` 做了什么
+
+这个 launch 会：
+
+1. 读取 `robot_name` 或 `robot_xmacro_file`
+2. 用 `xmacro4sdf` 风格解析 xmacro，生成 SDF
+3. 用 `sdformat_tools` 把 SDF 转成 URDF
+4. 启动：
+   - `joint_state_publisher`
+   - `robot_state_publisher`
+   - 可选 `rviz2`
+
+默认参数：
+
+- `robot_name = wheeled_biped_real`
+- `use_sim_time = False`
+- `use_rviz = True`
+
+## 环境变量
+
+`env-hooks/gazebo.dsv.in` 会自动把模型路径导出到：
+
+- `GZ_SIM_RESOURCE_PATH`
+- `IGN_GAZEBO_RESOURCE_PATH`
+- `SDF_PATH`
+- `GZ_FILE_PATH`
+
+这样 xmacro 的 `model://mid360/...`、Gazebo 的模型资源和 mesh 才能被正确解析。
+
+## 常用验证
+
+### 1. 验证 launch 默认入口
+
+```bash
+ros2 launch sentry_robot_description robot_description_launch.py --show-args
+```
+
+应看到默认：
+
+```text
+robot_name: wheeled_biped_real
+```
+
+### 2. 验证 xmacro 能展开
+
+```bash
 xmacro4sdf src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro > /tmp/wheeled_biped_real.sdf
 xmacro4sdf src/sentry_robot_description/resource/xmacro/wheeled_biped_sim.sdf.xmacro > /tmp/wheeled_biped_sim.sdf
 ```
 
-## 4. Subscribed Topics
+### 3. 验证包能编译
 
-None.
+```bash
+colcon build --packages-select sentry_robot_description --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+```
 
-## 5. Published Topics
+## 当前为什么不改包名
 
-- `robot_description (std_msgs/msg/String)`
+`sentry_robot_description` 现在这个包名仍然合适。
 
-    机器人描述文件（字符串形式）。
+原因很简单：
 
-- `joint_states (sensor_msgs/msg/JointState)`
+- 这是 ROS 里标准的职责命名
+- 它确实就是机器人描述包
+- 现在已经被多个 launch / package / 文档直接依赖
 
-    如果命令行中未给出 URDF，则此节点将侦听 `robot_description` 话题以获取要发布的 URDF。一旦收到一次，该节点将开始将关节状态发布到 `joint_states` 话题。
+现在改名收益很小，但改动面会很大：
 
-- `any_topic (sensor_msgs/msg/JointState)`
+- `get_package_share_directory("sentry_robot_description")`
+- 依赖包 `package.xml`
+- launch 引用
+- 文档路径
+- 安装路径
 
-    如果 `sources_list` 参数不为空（请参阅下面的参数），则将订阅此参数中的每个命名话题以进行联合状态更新。不要将默认的 `joint_states` 话题添加到此列表中，因为它最终会陷入无限循环。
+所以现阶段不建议为了“名字更具体”去重命名它。
 
-- `tf, tf_static (tf2_msgs/msg/TFMessage)`
+如果未来模型完全稳定，确实要更具体，可以再统一改成类似：
 
-    机器人关节坐标系信息。
+- `sentry_wheeled_biped_description`
 
-## 6. Launch Arguments
-
-- `use_sim_time` (bool, default: False)
-
-    是否使用仿真时间。
-
-- `robot_name` (str, default: "wheeled_biped_real")
-
-    机器人 XMacro 描述文件的**名字（无需后缀）**。描述文件应位于 `package://sentry_robot_description/resource/xmacro` 目录下。
-
-- `robot_xmacro_file` (str, default: "[wheeled_biped_real.sdf.xmacro](./resource/xmacro/wheeled_biped_real.sdf.xmacro)")
-
-    机器人 XMacro 描述文件的**绝对路径**。本参数的优先级高于 `robot_name`，即若设置了 `robot_xmacro_file`，则 `robot_name` 参数无效。若未设置 `robot_xmacro_file`，则使用 `robot_name` 参数并自动补全路径作为 `robot_xmacro_file` 的值。
-
-- `params_file` (str, default: [robot_description.yaml](./params/robot_description.yaml))
-
-- `rviz_config_file` (str, default: [visualize_robot.rviz](./rviz/visualize_robot.rviz))
-
-    RViz 配置文件路径。
-
-- `use_rviz` (bool, default: True)
-
-    是否启动 RViz 可视化界面。
-
-- `use_respawn` (bool, default: False)
-
-    是否在节点退出时尝试重启节点。
-
-- `log_level` (str, default: "info")
-
-    日志级别。
+但那应该是一次专门的重命名工作，不应和当前调参与仿真修复混做。
