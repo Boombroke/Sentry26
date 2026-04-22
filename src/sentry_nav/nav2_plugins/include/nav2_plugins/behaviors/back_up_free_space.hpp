@@ -57,7 +57,8 @@ public:
    * @param command Goal to execute
    * @return Status of behavior
    */
-  nav2_behaviors::ResultStatus onRun(const std::shared_ptr<const BackUpAction::Goal> command) override;
+  nav2_behaviors::ResultStatus onRun(
+    const std::shared_ptr<const BackUpAction::Goal> command) override;
 
   /**
    * @brief Loop function to run behavior
@@ -89,12 +90,21 @@ protected:
     const nav2_msgs::msg::Costmap & costmap, geometry_msgs::msg::Pose2D pose, float start_angle,
     float end_angle, float radius, float angle_increment);
 
+  float findBestBackwardDirection(
+    const nav2_msgs::msg::Costmap & costmap, geometry_msgs::msg::Pose2D pose, float radius,
+    float angle_increment);
+
+  float scoreDirection(
+    const nav2_msgs::msg::Costmap & costmap, geometry_msgs::msg::Pose2D pose, float angle,
+    float radius);
+
   void visualize(
     geometry_msgs::msg::Pose2D pose, float radius, float first_safe_angle, float last_unsafe_angle);
 
   rclcpp::Client<nav2_msgs::srv::GetCostmap>::SharedPtr costmap_client_;
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>>
     marker_pub_;
+  std::string costmap_frame_;
   geometry_msgs::msg::PoseStamped last_pose_;
   double twist_x_{0.0}, twist_y_{0.0}, twist_theta_{0.0};
   double distance_traveled_{0.0};
@@ -105,6 +115,8 @@ protected:
   double min_backward_projection_;
   double max_angular_vel_;
   double turn_gain_;
+  double min_escape_clearance_;
+  double unknown_cost_threshold_;
   bool visualize_;
 };
 

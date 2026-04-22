@@ -90,6 +90,14 @@ odom_bridge:
     base_frame: "base_footprint"
     lidar_frame: "front_mid360"
     robot_base_frame: "base_footprint"
+    min_twist_dt: 0.001
+    max_twist_dt: 0.1
+    max_valid_linear_speed: 3.0
+    max_valid_lateral_speed: 0.35
+    max_valid_angular_speed: 6.3
+    max_valid_linear_accel: 12.0
+    max_valid_angular_accel: 40.0
+    twist_filter_alpha: 0.45
 
 terrain_analysis:
   ros__parameters:
@@ -513,6 +521,8 @@ behavior_server:
     min_backward_projection: 0.2
     max_angular_vel: 6.3
     turn_gain: 2.0
+    min_escape_clearance: 0.3
+    unknown_cost_threshold: 253.0
     visualize: false
 
 waypoint_follower:

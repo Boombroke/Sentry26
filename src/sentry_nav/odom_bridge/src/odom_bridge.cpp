@@ -1,5 +1,6 @@
 #include "odom_bridge/odom_bridge.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 #include "pcl_ros/transforms.hpp"
@@ -60,7 +61,16 @@ OdomBridgeNode::OdomBridgeNode(const rclcpp::NodeOptions & options)
   tf_odom_to_lidar_odom_(tf2::Transform::getIdentity()),
   has_previous_transform_(false),
   previous_transform_(tf2::Transform::getIdentity()),
-  previous_stamp_(0, 0, RCL_ROS_TIME)
+  previous_stamp_(0, 0, RCL_ROS_TIME),
+  has_previous_twist_(false),
+  min_twist_dt_(1e-3),
+  max_twist_dt_(0.1),
+  max_valid_linear_speed_(3.0),
+  max_valid_lateral_speed_(0.35),
+  max_valid_angular_speed_(6.3),
+  max_valid_linear_accel_(12.0),
+  max_valid_angular_accel_(40.0),
+  twist_filter_alpha_(0.45)
 {
   this->declare_parameter<std::string>("state_estimation_topic", "aft_mapped_to_init");
   this->declare_parameter<std::string>("registered_scan_topic", "cloud_registered");
@@ -68,6 +78,14 @@ OdomBridgeNode::OdomBridgeNode(const rclcpp::NodeOptions & options)
   this->declare_parameter<std::string>("base_frame", "base_footprint");
   this->declare_parameter<std::string>("lidar_frame", "front_mid360");
   this->declare_parameter<std::string>("robot_base_frame", "base_footprint");
+  this->declare_parameter<double>("min_twist_dt", min_twist_dt_);
+  this->declare_parameter<double>("max_twist_dt", max_twist_dt_);
+  this->declare_parameter<double>("max_valid_linear_speed", max_valid_linear_speed_);
+  this->declare_parameter<double>("max_valid_lateral_speed", max_valid_lateral_speed_);
+  this->declare_parameter<double>("max_valid_angular_speed", max_valid_angular_speed_);
+  this->declare_parameter<double>("max_valid_linear_accel", max_valid_linear_accel_);
+  this->declare_parameter<double>("max_valid_angular_accel", max_valid_angular_accel_);
+  this->declare_parameter<double>("twist_filter_alpha", twist_filter_alpha_);
 
   this->get_parameter("state_estimation_topic", state_estimation_topic_);
   this->get_parameter("registered_scan_topic", registered_scan_topic_);
@@ -75,6 +93,15 @@ OdomBridgeNode::OdomBridgeNode(const rclcpp::NodeOptions & options)
   this->get_parameter("base_frame", base_frame_);
   this->get_parameter("lidar_frame", lidar_frame_);
   this->get_parameter("robot_base_frame", robot_base_frame_);
+  this->get_parameter("min_twist_dt", min_twist_dt_);
+  this->get_parameter("max_twist_dt", max_twist_dt_);
+  this->get_parameter("max_valid_linear_speed", max_valid_linear_speed_);
+  this->get_parameter("max_valid_lateral_speed", max_valid_lateral_speed_);
+  this->get_parameter("max_valid_angular_speed", max_valid_angular_speed_);
+  this->get_parameter("max_valid_linear_accel", max_valid_linear_accel_);
+  this->get_parameter("max_valid_angular_accel", max_valid_angular_accel_);
+  this->get_parameter("twist_filter_alpha", twist_filter_alpha_);
+  twist_filter_alpha_ = std::clamp(twist_filter_alpha_, 0.0, 1.0);
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
@@ -229,9 +256,9 @@ void OdomBridgeNode::publishOdometry(
     // 否则仿真环境下 wall_time 和 sim_time 不同步会爆飞速度值
     const double dt = (stamp - previous_stamp_).seconds();
 
-    // dt 窗口收紧: 低于 1ms 是重复戳; 高于 0.1s 是 LIO burst 空窗, 跨多帧差分会爆飞.
-    // 两种情况都保持 twist=0, 让 Nav2 velocity_smoother 用上一拍反馈, 不输出虚假速度.
-    if (dt > 1e-3 && dt < 0.1) {
+    // dt 窗口收紧: 低于 min_twist_dt 是重复戳; 高于 max_twist_dt 是 LIO burst 空窗.
+    // 两种情况都保持 twist=0, 避免跨多帧差分制造虚假速度尖峰.
+    if (dt > min_twist_dt_ && dt < max_twist_dt_) {
       const tf2::Vector3 v_world =
         (transform.getOrigin() - previous_transform_.getOrigin()) / dt;
 
@@ -243,17 +270,46 @@ void OdomBridgeNode::publishOdometry(
       const tf2::Matrix3x3 R(q);
       const tf2::Vector3 v_body = R.transpose() * v_world;
 
-      // body 速度 sanity check: 差速底盘物理上限 ~3 m/s, >10 m/s 必然是 LIO 位姿抖动,
-      // 丢弃避免 velocity_smoother 把污染值当反馈回灌给 controller.
-      if (std::abs(v_body.x()) < 10.0 && std::abs(v_body.y()) < 10.0) {
-        out.twist.twist.linear.x = v_body.x();
-        out.twist.twist.linear.y = 0.0;
-        out.twist.twist.linear.z = 0.0;
-        out.twist.twist.angular.x = 0.0;
-        out.twist.twist.angular.y = 0.0;
-        out.twist.twist.angular.z =
-          normalizedYawDelta(previous_transform_.getRotation(), q) / dt;
+      const double wz = normalizedYawDelta(previous_transform_.getRotation(), q) / dt;
+      const bool speed_ok =
+        std::abs(v_body.x()) <= max_valid_linear_speed_ &&
+        std::abs(v_body.y()) <= max_valid_lateral_speed_ &&
+        std::abs(wz) <= max_valid_angular_speed_;
+      const bool accel_ok =
+        !has_previous_twist_ ||
+        (std::abs(v_body.x() - previous_twist_.linear.x) / dt <= max_valid_linear_accel_ &&
+        std::abs(wz - previous_twist_.angular.z) / dt <= max_valid_angular_accel_);
+
+      if (speed_ok && accel_ok) {
+        geometry_msgs::msg::Twist raw_twist;
+        raw_twist.linear.x = v_body.x();
+        raw_twist.linear.y = 0.0;
+        raw_twist.linear.z = 0.0;
+        raw_twist.angular.x = 0.0;
+        raw_twist.angular.y = 0.0;
+        raw_twist.angular.z = wz;
+
+        if (has_previous_twist_) {
+          out.twist.twist.linear.x =
+            twist_filter_alpha_ * raw_twist.linear.x +
+            (1.0 - twist_filter_alpha_) * previous_twist_.linear.x;
+          out.twist.twist.angular.z =
+            twist_filter_alpha_ * raw_twist.angular.z +
+            (1.0 - twist_filter_alpha_) * previous_twist_.angular.z;
+        } else {
+          out.twist.twist = raw_twist;
+        }
+        previous_twist_ = out.twist.twist;
+        has_previous_twist_ = true;
+      } else if (has_previous_twist_) {
+        RCLCPP_WARN_THROTTLE(
+          this->get_logger(), *this->get_clock(), 1000,
+          "Rejected odom twist spike: vx=%.3f vy=%.3f wz=%.3f dt=%.3f speed_ok=%d accel_ok=%d",
+          v_body.x(), v_body.y(), wz, dt, speed_ok, accel_ok);
+        has_previous_twist_ = false;
       }
+    } else {
+      has_previous_twist_ = false;
     }
 
     previous_transform_ = transform;

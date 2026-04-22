@@ -109,6 +109,21 @@ ros2 action send_goal /red_standard_robot1/navigate_to_pose \
 - `/tf`, `/tf_static`：坐标变换树
 - `/map`：当前使用的 2D 占据栅格地图
 - `/cmd_vel`（`TwistStamped`）：给底盘消费者（Gazebo DiffDrive 插件 或 rm_serial_driver）
+- `/odometry`（`Odometry`）：pose 为 `odom -> base_footprint`，twist 为 `base_footprint` 机体系 `vx + wz`
+
+## 实车调试录包建议
+
+排查导航失败或速度尖峰时，建议至少录制：
+
+- `/tf`, `/tf_static`, `/joint_states`
+- `/livox/lidar`, `/livox/imu`
+- `/aft_mapped_to_init`, `/cloud_registered`
+- `/odometry`, `/cmd_vel`, `/cmd_vel_controller`
+- `/local_costmap/costmap_raw`, `/global_costmap/costmap_raw`
+- `/terrain_map`, `/terrain_map_ext`
+- `/rosout`
+
+`/rosout` 对定位 BT 失败原因很关键；只有行为树状态统计时，只能看到 `ComputePathToPose` / `FollowPath` / `BackUp` 失败次数，无法知道具体是 TF 超时、碰撞检查、progress checker 还是 planner 不可达。
 
 ## 配置与资源目录
 

@@ -18,9 +18,10 @@
 
 `BackUpFreeSpace` 插件是一个用于在机器人的导航过程中执行后退脱困的插件，主要功能：
 
-1. **搜索自由退出扇区**：在给定半径内扫描 costmap，找到最长连续安全扇区作为退出方向。
-2. **差速可执行脱困**：将自由空间方向投影到机体后向，输出 `vx + wz` 的后退回摆弧线，不依赖 `vy`。
-3. **保守失败策略**：若后向投影不足，直接失败交给下一个 recovery，而不是发送无效侧移命令。
+1. **搜索后向可执行退出方向**：在 global costmap 中扫描车尾半平面，按自由距离和后向投影评分，而不是选侧前方自由扇区。
+2. **差速可执行脱困**：输出 `vx + wz` 的后退回摆弧线，不依赖 `vy`；正后方可退时 `wz=0`，斜后方自由时才转向回摆。
+3. **坐标系分离**：方向搜索使用 `global_frame` / global costmap，弧线碰撞检查使用 `local_frame` / local costmap，避免 map->odom 重定位偏移后把 map 位姿误喂给 local collision checker。
+4. **保守失败策略**：若后向投影或安全距离不足，直接失败交给下一个 recovery，而不是发送无效侧移或盲退命令。
 
 **Parameters:**
 
@@ -29,6 +30,8 @@
 - `min_backward_projection`: 自由空间方向在机体后向上的最小投影，低于该值则拒绝盲退（default：0.2）。
 - `max_angular_vel`: recovery 回摆的最大角速度（default：1.0 rad/s）。
 - `turn_gain`: 将自由空间夹角转换为角速度的比例系数（default：1.5）。
+- `min_escape_clearance`: 候选方向最小无碰撞射线长度，低于该值拒绝后退（default：0.3 m）。
+- `unknown_cost_threshold`: costmap cell 达到该值即视为不可穿越，默认 253 表示 unknown/lethal 都阻断恢复射线（default：253）。
 - `visualize`: 是否启用可视化功能。启用后会在 RViz 中显示自由空间和目标位置（default：false）。
 
 **Example:**
@@ -65,8 +68,10 @@ ros__parameters:
    max_radius: 2.0
    service_name: "global_costmap/get_costmap"
    min_backward_projection: 0.2
-   max_angular_vel: 1.0
-   turn_gain: 1.5
+   max_angular_vel: 6.3
+   turn_gain: 2.0
+   min_escape_clearance: 0.3
+   unknown_cost_threshold: 253.0
    visualize: True
 ```
 
@@ -75,6 +80,8 @@ ros__parameters:
 #### 2.2.1 IntensityVoxelLayer
 
 `IntensityVoxelLayer` 是一个用于处理点云数据中障碍物强度信息的代价地图层。它可以根据点云数据中的强度值来标记障碍物，并将这些障碍物信息添加到代价地图中，本插件推荐配合 [terrain_analysis](https://github.com/SMBU-PolarBear-Robotics-Team/terrain_analysis) 功能包使用。
+
+“costmap 太密”通常指局部或全局代价地图中非零 cell 占比很高。它不等于全是实体障碍，很多 cell 是 inflation layer 生成的安全代价带；例如 `robot_radius=0.46` 且 `inflation_radius=0.90` 时，5m 局部窗口内墙边和障碍周围会出现大片非零代价。这样更保守、防擦角，但狭窄通道和恢复行为更容易认为可走空间不足。调参时应同时看 lethal cell、inflated cell 和真实点云，不应只凭“颜色很多”直接降低安全距离。
 
 **Parameters:**
 

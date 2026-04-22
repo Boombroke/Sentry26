@@ -105,6 +105,14 @@ odom_bridge:
     base_frame: "base_footprint"
     lidar_frame: "front_mid360"
     robot_base_frame: "base_footprint"
+    min_twist_dt: 0.001
+    max_twist_dt: 0.1
+    max_valid_linear_speed: 3.0
+    max_valid_lateral_speed: 0.35
+    max_valid_angular_speed: 6.3
+    max_valid_linear_accel: 12.0
+    max_valid_angular_accel: 40.0
+    twist_filter_alpha: 0.45
 
 terrain_analysis:
   ros__parameters:
@@ -313,8 +321,8 @@ controller_server:
       primary_controller: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
       angular_dist_threshold: 1.571                     # 90°，小转角由 RPP 边走边转，不磨蹭
       forward_sampling_distance: 0.5
-      rotate_to_heading_angular_vel: 1.2
-      max_angular_accel: 2.5
+      rotate_to_heading_angular_vel: 4.5
+      max_angular_accel: 8.0
       simulate_ahead_time: 1.0
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
@@ -334,8 +342,8 @@ controller_server:
       regulated_linear_scaling_min_speed: 0.3
       use_rotate_to_heading: false                      # 终端不强制对齐 yaw（哨兵由云台瞄准，底盘朝向无所谓）
       rotate_to_heading_min_angle: 0.785
-      max_angular_accel: 2.5
-      rotate_to_heading_angular_vel: 1.2
+      max_angular_accel: 8.0
+      rotate_to_heading_angular_vel: 4.5
       allow_reversing: false
       max_robot_pose_search_dist: 10.0
 
@@ -518,15 +526,17 @@ behavior_server:
     robot_base_frame: base_footprint
     transform_tolerance: 0.1
     simulate_ahead_time: 2.0
-    max_rotational_vel: 1.0
+    max_rotational_vel: 6.3
     min_rotational_vel: 0.4
-    rotational_acc_lim: 3.2
+    rotational_acc_lim: 8.0
     # params for nav2_behaviors_plugins::BackUpFreeSpace
     service_name: "global_costmap/get_costmap"
     max_radius: 2.0
     min_backward_projection: 0.2
-    max_angular_vel: 1.0
-    turn_gain: 1.5
+    max_angular_vel: 6.3
+    turn_gain: 2.0
+    min_escape_clearance: 0.3
+    unknown_cost_threshold: 253.0
     visualize: false
 
 waypoint_follower:
@@ -547,12 +557,12 @@ velocity_smoother:
     smoothing_frequency: 30.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [1.5, 0.0, 3.0]                     # 差速底盘 vy 锁 0（双保险）
-    min_velocity: [-1.5, 0.0, -3.0]
+    max_velocity: [1.5, 0.0, 6.3]                     # 差速底盘 vy 锁 0，wz 放开到接近实车 2π
+    min_velocity: [-1.5, 0.0, -6.3]
     # 物理上限: 28kg, 2 电机 x 2.4N·m 轮径 0.060m → F_max=80N, a_max≈2.86 m/s²
     # 实车取 2.5 m/s² 留 0.4 余量（抗坡 + 负载波动）
-    max_accel: [2.5, 0.0, 5.0]
-    max_decel: [-2.5, 0.0, -5.0]
+    max_accel: [2.5, 0.0, 8.0]
+    max_decel: [-2.5, 0.0, -8.0]
     odom_topic: "odometry"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

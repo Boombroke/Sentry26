@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 
+#include "geometry_msgs/msg/twist.hpp"
 #include "message_filters/subscriber.h"
 #include "message_filters/sync_policies/approximate_time.h"
 #include "message_filters/synchronizer.h"
@@ -71,6 +72,17 @@ private:
   bool has_previous_transform_;
   tf2::Transform previous_transform_;
   rclcpp::Time previous_stamp_;
+
+  bool has_previous_twist_;
+  geometry_msgs::msg::Twist previous_twist_;
+  double min_twist_dt_;
+  double max_twist_dt_;
+  double max_valid_linear_speed_;
+  double max_valid_lateral_speed_;
+  double max_valid_angular_speed_;
+  double max_valid_linear_accel_;
+  double max_valid_angular_accel_;
+  double twist_filter_alpha_;
 };
 
 }

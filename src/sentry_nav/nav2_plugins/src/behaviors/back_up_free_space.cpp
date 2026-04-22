@@ -15,6 +15,9 @@
 
 #include "nav2_plugins/behaviors/back_up_free_space.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 namespace nav2_behaviors_plugins
 {
 
@@ -34,6 +37,10 @@ void BackUpFreeSpace::onConfigure()
   nav2_util::declare_parameter_if_not_declared(
     node, "max_angular_vel", rclcpp::ParameterValue(1.0));
   nav2_util::declare_parameter_if_not_declared(node, "turn_gain", rclcpp::ParameterValue(1.5));
+  nav2_util::declare_parameter_if_not_declared(
+    node, "min_escape_clearance", rclcpp::ParameterValue(0.3));
+  nav2_util::declare_parameter_if_not_declared(
+    node, "unknown_cost_threshold", rclcpp::ParameterValue(253.0));
   nav2_util::declare_parameter_if_not_declared(node, "visualize", rclcpp::ParameterValue(false));
 
   node->get_parameter("global_frame", global_frame_);
@@ -42,6 +49,8 @@ void BackUpFreeSpace::onConfigure()
   node->get_parameter("min_backward_projection", min_backward_projection_);
   node->get_parameter("max_angular_vel", max_angular_vel_);
   node->get_parameter("turn_gain", turn_gain_);
+  node->get_parameter("min_escape_clearance", min_escape_clearance_);
+  node->get_parameter("unknown_cost_threshold", unknown_cost_threshold_);
   node->get_parameter("visualize", visualize_);
 
   costmap_client_ = node->create_client<nav2_msgs::srv::GetCostmap>(service_name_);
@@ -79,37 +88,51 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onRun(
 
   // get costmap
   auto costmap = result.get()->map;
+  costmap_frame_ = costmap.header.frame_id.empty() ? global_frame_ : costmap.header.frame_id;
 
   if (!nav2_util::getCurrentPose(
-        initial_pose_, *tf_, global_frame_, robot_base_frame_, transform_tolerance_)) {
+        initial_pose_, *tf_, costmap_frame_, robot_base_frame_, transform_tolerance_)) {
     RCLCPP_ERROR(logger_, "Initial robot pose is not available.");
     return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED};
   }
 
-  // get current pose
-  geometry_msgs::msg::Pose2D pose;
-  pose.x = initial_pose_.pose.position.x;
-  pose.y = initial_pose_.pose.position.y;
-  pose.theta = tf2::getYaw(initial_pose_.pose.orientation);
-
-  // Search for the safest escape heading, then project it onto the robot's backward
-  // axis because a differential base can't execute lateral vy.
-  float best_angle = findBestDirection(costmap, pose, -M_PI, M_PI, max_radius_, M_PI / 32.0);
-  const float relative_angle = angles::shortest_angular_distance(pose.theta, best_angle);
-  const float backward_projection = std::max(0.0f, -std::cos(relative_angle));
-
-  if (backward_projection < min_backward_projection_) {
-    RCLCPP_WARN(
-      logger_,
-      "No sufficiently free backward sector found (best=%.3f, relative=%.3f), refusing blind backup",
-      best_angle, relative_angle);
+  geometry_msgs::msg::PoseStamped local_initial_pose;
+  if (!nav2_util::getCurrentPose(
+        local_initial_pose, *tf_, local_frame_, robot_base_frame_, transform_tolerance_)) {
+    RCLCPP_ERROR(logger_, "Initial local robot pose is not available.");
     return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED};
   }
 
-  twist_x_ = -std::fabs(command->speed) * backward_projection;
+  geometry_msgs::msg::Pose2D global_pose;
+  global_pose.x = initial_pose_.pose.position.x;
+  global_pose.y = initial_pose_.pose.position.y;
+  global_pose.theta = tf2::getYaw(initial_pose_.pose.orientation);
+
+  // Search in the global costmap frame, but run collision checks in local_frame_.
+  // The local checker is backed by local_costmap/costmap_raw and cannot safely consume map-frame poses
+  // when map->odom has been corrected by relocalization.
+  const float best_angle =
+    findBestBackwardDirection(costmap, global_pose, max_radius_, M_PI / 48.0);
+  const float forward_relative_angle =
+    angles::shortest_angular_distance(global_pose.theta, best_angle);
+  const float backward_error =
+    angles::shortest_angular_distance(global_pose.theta + M_PI, best_angle);
+  const float backward_projection = std::max(0.0f, std::cos(backward_error));
+  const float escape_clearance = scoreDirection(costmap, global_pose, best_angle, max_radius_);
+
+  if (backward_projection < min_backward_projection_ || escape_clearance < min_escape_clearance_) {
+    RCLCPP_WARN(
+      logger_,
+      "No sufficiently free backward sector found (best=%.3f, forward_relative=%.3f, "
+      "backward_error=%.3f, projection=%.3f, clearance=%.3f), refusing blind backup",
+      best_angle, forward_relative_angle, backward_error, backward_projection, escape_clearance);
+    return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED};
+  }
+
+  twist_x_ = -std::fabs(command->speed);
   twist_y_ = 0.0;
   twist_theta_ = std::clamp(
-    static_cast<double>(turn_gain_ * relative_angle), -max_angular_vel_, max_angular_vel_);
+    static_cast<double>(turn_gain_ * backward_error), -max_angular_vel_, max_angular_vel_);
   command_x_ = -std::fabs(command->target.x);
   command_time_allowance_ = command->time_allowance;
   distance_traveled_ = 0.0;
@@ -124,8 +147,10 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onRun(
   last_pose_ = initial_pose_;
   RCLCPP_WARN(
     logger_,
-    "backing up %.3f meters with speed %.3f and wz %.3f, free-space angle %.3f, relative angle %.3f, projection %.3f",
-    std::fabs(command_x_), twist_x_, twist_theta_, best_angle, relative_angle, backward_projection);
+    "backing up %.3f meters with speed %.3f and wz %.3f, free-space angle %.3f, forward relative "
+    "%.3f, backward error %.3f, projection %.3f, clearance %.3f",
+    std::fabs(command_x_), twist_x_, twist_theta_, best_angle, forward_relative_angle,
+    backward_error, backward_projection, escape_clearance);
 
   return nav2_behaviors::ResultStatus{nav2_behaviors::Status::SUCCEEDED};
 }
@@ -144,8 +169,15 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onCycleUpdate()
 
   geometry_msgs::msg::PoseStamped current_pose;
   if (!nav2_util::getCurrentPose(
-        current_pose, *tf_, global_frame_, robot_base_frame_, transform_tolerance_)) {
+        current_pose, *tf_, costmap_frame_, robot_base_frame_, transform_tolerance_)) {
     RCLCPP_ERROR(logger_, "Current robot pose is not available.");
+    return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED};
+  }
+
+  geometry_msgs::msg::PoseStamped local_current_pose;
+  if (!nav2_util::getCurrentPose(
+        local_current_pose, *tf_, local_frame_, robot_base_frame_, transform_tolerance_)) {
+    RCLCPP_ERROR(logger_, "Current local robot pose is not available.");
     return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED};
   }
 
@@ -175,9 +207,9 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onCycleUpdate()
   cmd_vel->twist.angular.z = twist_theta_;
 
   geometry_msgs::msg::Pose2D pose;
-  pose.x = current_pose.pose.position.x;
-  pose.y = current_pose.pose.position.y;
-  pose.theta = tf2::getYaw(current_pose.pose.orientation);
+  pose.x = local_current_pose.pose.position.x;
+  pose.y = local_current_pose.pose.position.y;
+  pose.theta = tf2::getYaw(local_current_pose.pose.orientation);
 
   if (!isArcCollisionFree(std::fabs(command_x_) - distance_traveled_, cmd_vel->twist, pose)) {
     stopRobot();
@@ -191,7 +223,8 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onCycleUpdate()
 }
 
 bool BackUpFreeSpace::isArcCollisionFree(
-  double remaining_distance, const geometry_msgs::msg::Twist & cmd_vel, geometry_msgs::msg::Pose2D pose)
+  double remaining_distance, const geometry_msgs::msg::Twist & cmd_vel,
+  geometry_msgs::msg::Pose2D pose)
 {
   if (remaining_distance <= 0.0) {
     return true;
@@ -309,6 +342,86 @@ float BackUpFreeSpace::findBestDirection(
   }
 
   return best_angle;
+}
+
+float BackUpFreeSpace::findBestBackwardDirection(
+  const nav2_msgs::msg::Costmap & costmap, geometry_msgs::msg::Pose2D pose, float radius,
+  float angle_increment)
+{
+  float best_angle = angles::normalize_angle(pose.theta + M_PI);
+  float best_score = -1.0f;
+
+  for (float relative = -M_PI; relative <= M_PI; relative += angle_increment) {
+    const float backward_projection = std::max(0.0f, -std::cos(relative));
+    if (backward_projection < min_backward_projection_) {
+      continue;
+    }
+
+    const float angle = angles::normalize_angle(pose.theta + relative);
+    const float clearance = scoreDirection(costmap, pose, angle, radius);
+    if (clearance < min_escape_clearance_) {
+      continue;
+    }
+
+    // Prefer long obstacle-free rays, but bias toward directions the differential base can execute
+    // as a backward arc without demanding excessive in-place spin.
+    const float score = clearance * (0.5f + 0.5f * backward_projection);
+    if (score > best_score) {
+      best_score = score;
+      best_angle = angle;
+    }
+  }
+
+  if (visualize_) {
+    visualize(pose, radius, best_angle - angle_increment, best_angle + angle_increment);
+  }
+
+  return best_angle;
+}
+
+float BackUpFreeSpace::scoreDirection(
+  const nav2_msgs::msg::Costmap & costmap, geometry_msgs::msg::Pose2D pose, float angle,
+  float radius)
+{
+  const float resolution = costmap.metadata.resolution;
+  const float origin_x = costmap.metadata.origin.position.x;
+  const float origin_y = costmap.metadata.origin.position.y;
+  const int size_x = costmap.metadata.size_x;
+  const int size_y = costmap.metadata.size_y;
+
+  if (resolution <= 0.0f || size_x <= 0 || size_y <= 0) {
+    return 0.0f;
+  }
+
+  const float map_min_x = origin_x;
+  const float map_max_x = origin_x + (size_x * resolution);
+  const float map_min_y = origin_y;
+  const float map_max_y = origin_y + (size_y * resolution);
+
+  float clearance = 0.0f;
+  for (float r = 0.0f; r <= radius; r += resolution) {
+    const float x = pose.x + r * std::cos(angle);
+    const float y = pose.y + r * std::sin(angle);
+
+    if (x < map_min_x || x >= map_max_x || y < map_min_y || y >= map_max_y) {
+      break;
+    }
+
+    const int i = static_cast<int>((x - origin_x) / resolution);
+    const int j = static_cast<int>((y - origin_y) / resolution);
+    if (i < 0 || i >= size_x || j < 0 || j >= size_y) {
+      break;
+    }
+
+    const int lethal_threshold = std::clamp(static_cast<int>(unknown_cost_threshold_), 0, 255);
+    const int cost = costmap.data[i + j * size_x];
+    if (cost >= lethal_threshold) {
+      break;
+    }
+    clearance = r;
+  }
+
+  return clearance;
 }
 
 std::vector<geometry_msgs::msg::Point> BackUpFreeSpace::gatherFreePoints(
