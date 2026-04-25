@@ -180,6 +180,50 @@ Gazebo 入口。
 - Mid360 固定下俯约 30°
 - 云台关节保持 Gazebo 动态控制
 
+## use_fixed_gimbal 参数说明
+
+`use_fixed_gimbal` 是 `wheeled_biped_core.sdf.xmacro` 的模板开关，控制云台关节在 SDF 里生成 **fixed（固定）** 还是 **revolute（可旋转）** 类型。
+
+### 两种模式对比
+
+| 参数值 | 云台关节类型 | 适用场景 | TF 是否动态 |
+|---|---|---|---|
+| `True` | `fixed`（刚性连接） | 实车（底盘云台一体） | ❌ 静态，robot_state_publisher 发布一次不再变 |
+| `False` | `revolute`（可旋转） | 仿真（Gazebo JointController 驱动） | ✅ 动态，每帧随关节角度更新 |
+
+### 实车为什么用 fixed
+
+当前实车机械结构已将底盘与云台固定为一体，`gimbal_yaw_joint` 和 `gimbal_pitch_joint` 不再有物理自由度。
+
+使用 `use_fixed_gimbal="True"` 的效果：
+
+```text
+chassis -> gimbal_yaw_joint  [type="fixed"]
+chassis -> gimbal_pitch_joint [type="fixed"]
+```
+
+- `robot_state_publisher` 只需发布一次静态 TF，不依赖 `joint_state_publisher` 持续驱动
+- `serial/gimbal_joint_state` 话题仍可保留给调试/可视化，但不再作为 TF 来源
+- `odom_bridge` 每帧通过 `lookupTransform` 查询 `front_mid360 → base_footprint`，静态 TF 永远不会超时
+
+### 仿真为什么用 revolute
+
+仿真里 Gazebo 的 `JointController` 插件需要 revolute 关节才能驱动云台旋转，因此 `wheeled_biped_sim.sdf.xmacro` 保持 `use_fixed_gimbal="False"`。
+
+### 改雷达外参不需要改这个参数
+
+`use_fixed_gimbal` 只控制关节类型（fixed/revolute），与 `front_lidar_pose`（雷达安装角）完全无关。改雷达外参只改 `front_lidar_pose`，不动 `use_fixed_gimbal`。
+
+### 翻车检测与 use_fixed_gimbal 的关系
+
+`odom_bridge` 的翻车检测（`/robot_flipped` 话题）读取的是 `tf_odom_to_robot_base_raw` 的 roll/pitch，即底盘本体在 odom 系的真实倾斜角。
+
+无论 `use_fixed_gimbal` 是 `True` 还是 `False`，`getTransform(lidar_frame → robot_base_frame)` 都会从 TF 树查询完整变换链，雷达安装角（`front_lidar_pose`）的影响在变换链中被精确抵消。因此：
+
+- 改 `front_lidar_pose`（雷达外参）→ 不影响翻车检测结果
+- 改 `use_fixed_gimbal`（关节类型）→ 不影响翻车检测结果
+- 翻车检测阈值由 `odom_bridge` 的 `flip_roll_threshold` / `flip_pitch_threshold` 参数控制（默认 30°）
+
 ## 和 gravity 的边界
 
 这个包只负责**几何外参 / TF 语义**。
@@ -193,6 +237,15 @@ Gazebo 入口。
 
 不要把 LiDAR 安装角手算进 `gravity`。  
 那会把传感器几何问题和 IMU 重力方向问题混在一起。
+
+### 改雷达外参需不需要重标 gravity
+
+| 操作 | 需要改 front_lidar_pose | 需要重标 gravity |
+|---|---|---|
+| 只改 xmacro 数字（修正测量误差） | ✅ | ❌ |
+| 物理重新安装雷达（改了角度） | ✅ | ⚠️ 建议重标，`imu_en=True` 时影响小 |
+| 物理重新安装雷达（只改平移 xyz） | ✅ | ❌ |
+| 换了新的 Mid360 | ✅ | ✅ 新 IMU 有自己的偏差 |
 
 ## 外参与 DOF 怎么理解
 
