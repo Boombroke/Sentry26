@@ -28,6 +28,7 @@
 - `registered_scan` (`sensor_msgs/msg/PointCloud2`，odom 系点云，供 terrain_analysis/ext)
 - `lidar_odometry` (`nav_msgs/msg/Odometry`，odom -> lidar_frame，供 terrain_analysis/ext)
 - `odom_to_lidar_odom` (`geometry_msgs/msg/TransformStamped`，latched，odom -> lidar_odom 的静态偏移，供 small_gicp_relocalization 使用，确保与 registered_scan 的坐标变换一致)
+- `robot_flipped` (`std_msgs/msg/Bool`，底盘翻车检测结果；`true` 表示 roll 或 pitch 超过阈值，与雷达安装角无关)
 
 ## TF 发布
 
@@ -49,6 +50,8 @@
 - `max_valid_linear_accel` (double, 默认: `12.0`)：`vx` 单帧加速度门限
 - `max_valid_angular_accel` (double, 默认: `40.0`)：`wz` 单帧角加速度门限
 - `twist_filter_alpha` (double, 默认: `0.45`)：合法速度的一阶低通系数，范围 `[0, 1]`
+- `flip_roll_threshold` (double, 默认: `0.5236`)：底盘 roll 超过此值（弧度）时发布翻车告警，默认 30°
+- `flip_pitch_threshold` (double, 默认: `0.5236`)：底盘 pitch 超过此值（弧度）时发布翻车告警，默认 30°
 
 ## `/odometry` 语义
 

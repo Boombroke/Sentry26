@@ -105,6 +105,8 @@ odom_bridge:
     base_frame: "base_footprint"
     lidar_frame: "front_mid360"
     robot_base_frame: "base_footprint"
+    flip_roll_threshold: 0.5236    # 30°，底盘侧倾超过此值视为翻车
+    flip_pitch_threshold: 0.5236   # 30°，底盘俯仰超过此值视为翻车
 
 terrain_analysis:
   ros__parameters:
