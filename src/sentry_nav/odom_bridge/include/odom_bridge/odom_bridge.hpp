@@ -17,6 +17,7 @@
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
+#include "std_msgs/msg/bool.hpp"
 
 namespace odom_bridge
 {
@@ -58,6 +59,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr registered_scan_pub_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr lidar_odometry_pub_;
   rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr odom_to_lidar_odom_pub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr robot_flipped_pub_;
 
   message_filters::Subscriber<nav_msgs::msg::Odometry> odometry_sub_;
   message_filters::Subscriber<sensor_msgs::msg::PointCloud2> registered_scan_sub_;
@@ -83,6 +85,8 @@ private:
   double max_valid_linear_accel_;
   double max_valid_angular_accel_;
   double twist_filter_alpha_;
+  double flip_roll_threshold_;
+  double flip_pitch_threshold_;
 };
 
 }
