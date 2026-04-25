@@ -53,7 +53,7 @@ point_lio:
       lidar_type: 1                                     # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR
       scan_line: 4
       timestamp_unit: 3                                 # the unit of time/t field in the PointCloud2 rostopic: 0-second, 1-milisecond, 2-microsecond, 3-nanosecond.
-      blind: 0.2
+      blind: 0.4
 
     mapping:
       imu_en: True
@@ -75,8 +75,8 @@ point_lio:
       plane_thr: 0.1                                    # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 81.0
       ivox_grid_resolution: 0.5
-      gravity: [2.639014832, 0.0, -9.675732356]            # gravity to be aligned
-      gravity_init: [2.639014832, 0.0, -9.675732356]       # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
+      gravity: [4.842804457, 0.126177074, -8.530382426]            # gravity to be aligned
+      gravity_init: [4.842804457, 0.126177074, -8.530382426]       # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
       extrinsic_T: [ -0.011, -0.02329, 0.04412 ]
       extrinsic_R: [ 1.0, 0.0, 0.0,
                      0.0, 1.0, 0.0,
@@ -105,14 +105,6 @@ odom_bridge:
     base_frame: "base_footprint"
     lidar_frame: "front_mid360"
     robot_base_frame: "base_footprint"
-    min_twist_dt: 0.001
-    max_twist_dt: 0.1
-    max_valid_linear_speed: 3.0
-    max_valid_lateral_speed: 0.35
-    max_valid_angular_speed: 6.3
-    max_valid_linear_accel: 12.0
-    max_valid_angular_accel: 40.0
-    twist_filter_alpha: 0.45
 
 terrain_analysis:
   ros__parameters:
@@ -314,19 +306,19 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.15
+      xy_goal_tolerance: 0.3
       yaw_goal_tolerance: 6.28
     RotateShim:
       plugin: "nav2_rotation_shim_controller::RotationShimController"
       primary_controller: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      angular_dist_threshold: 1.571                     # 90°，小转角由 RPP 边走边转，不磨蹭
+      angular_dist_threshold: 3.14                      # 提高到接近 180°，尽量减少"先转头再走"
       forward_sampling_distance: 0.5
-      rotate_to_heading_angular_vel: 4.5
-      max_angular_accel: 8.0
+      rotate_to_heading_angular_vel: 1.2
+      max_angular_accel: 2.5
       simulate_ahead_time: 1.0
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 1.0                           # 实车从 1.0 起步，实测后再放宽
+      desired_linear_vel: 0.8                           # 略降巡航速度，给后向感知更多反应裕度
       lookahead_dist: 1.0
       min_lookahead_dist: 0.5
       max_lookahead_dist: 1.2
@@ -342,9 +334,9 @@ controller_server:
       regulated_linear_scaling_min_speed: 0.3
       use_rotate_to_heading: false                      # 终端不强制对齐 yaw（哨兵由云台瞄准，底盘朝向无所谓）
       rotate_to_heading_min_angle: 0.785
-      max_angular_accel: 8.0
-      rotate_to_heading_angular_vel: 4.5
-      allow_reversing: false
+      max_angular_accel: 2.5
+      rotate_to_heading_angular_vel: 1.2
+      allow_reversing: true                             # 允许倒车跟踪路径，后置雷达场景可优先使用后向感知
       max_robot_pose_search_dist: 10.0
 
 
@@ -393,7 +385,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 8.0                            # 陡峭梯度, 把 RPP 推向走廊中心
-        inflation_radius: 0.90                              # 车身 0.46 + 缓冲 0.44, 防擦角
+        inflation_radius: 0.5                               # 必须 >= 外接半径(约0.474)，避免 Smac SE2 报错并提升规划性能
       always_send_full_costmap: False
 
 global_costmap:
@@ -439,7 +431,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 8.0                            # 陡峭梯度, 把 RPP 推向走廊中心
-        inflation_radius: 0.90                              # 车身 0.46 + 缓冲 0.44, 防擦角
+        inflation_radius: 0.5                               # 必须 >= 外接半径(约0.474)，避免 Smac SE2 报错并提升规划性能
       always_send_full_costmap: False
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
@@ -472,10 +464,10 @@ planner_server:
       max_iterations: 1000000
       max_on_approach_iterations: 1000
       max_planning_time: 1.5
-      motion_model_for_search: "DUBIN"
+      motion_model_for_search: "REEDS_SHEPP"        # 支持前进+后退的混合轨迹搜索
       angle_quantization_bins: 72
       minimum_turning_radius: 0.25
-      reverse_penalty: 2.1
+      reverse_penalty: 1.0                           # 进一步偏向倒车（1.0 = 不额外惩罚倒车）
       change_penalty: 0.0
       non_straight_penalty: 1.2
       cost_penalty: 2.0
@@ -526,17 +518,15 @@ behavior_server:
     robot_base_frame: base_footprint
     transform_tolerance: 0.1
     simulate_ahead_time: 2.0
-    max_rotational_vel: 6.3
+    max_rotational_vel: 1.0
     min_rotational_vel: 0.4
-    rotational_acc_lim: 8.0
+    rotational_acc_lim: 3.2
     # params for nav2_behaviors_plugins::BackUpFreeSpace
     service_name: "global_costmap/get_costmap"
     max_radius: 2.0
     min_backward_projection: 0.2
-    max_angular_vel: 6.3
-    turn_gain: 2.0
-    min_escape_clearance: 0.3
-    unknown_cost_threshold: 253.0
+    max_angular_vel: 1.0
+    turn_gain: 1.5
     visualize: false
 
 waypoint_follower:
@@ -557,12 +547,12 @@ velocity_smoother:
     smoothing_frequency: 30.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [1.5, 0.0, 6.3]                     # 差速底盘 vy 锁 0，wz 放开到接近实车 2π
-    min_velocity: [-1.5, 0.0, -6.3]
+    max_velocity: [1.5, 0.0, 3.0]                     # 差速底盘 vy 锁 0（双保险）
+    min_velocity: [-1.5, 0.0, -3.0]
     # 物理上限: 28kg, 2 电机 x 2.4N·m 轮径 0.060m → F_max=80N, a_max≈2.86 m/s²
     # 实车取 2.5 m/s² 留 0.4 余量（抗坡 + 负载波动）
-    max_accel: [2.5, 0.0, 8.0]
-    max_decel: [-2.5, 0.0, -8.0]
+    max_accel: [2.5, 0.0, 5.0]
+    max_decel: [-2.5, 0.0, -5.0]
     odom_topic: "odometry"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
