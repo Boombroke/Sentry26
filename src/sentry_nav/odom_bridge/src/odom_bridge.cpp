@@ -70,7 +70,9 @@ OdomBridgeNode::OdomBridgeNode(const rclcpp::NodeOptions & options)
   max_valid_angular_speed_(6.3),
   max_valid_linear_accel_(12.0),
   max_valid_angular_accel_(40.0),
-  twist_filter_alpha_(0.45)
+  twist_filter_alpha_(0.45),
+  flip_roll_threshold_(0.5236),
+  flip_pitch_threshold_(0.5236)
 {
   this->declare_parameter<std::string>("state_estimation_topic", "aft_mapped_to_init");
   this->declare_parameter<std::string>("registered_scan_topic", "cloud_registered");
@@ -86,6 +88,8 @@ OdomBridgeNode::OdomBridgeNode(const rclcpp::NodeOptions & options)
   this->declare_parameter<double>("max_valid_linear_accel", max_valid_linear_accel_);
   this->declare_parameter<double>("max_valid_angular_accel", max_valid_angular_accel_);
   this->declare_parameter<double>("twist_filter_alpha", twist_filter_alpha_);
+  this->declare_parameter<double>("flip_roll_threshold", 0.5236);   // 30 deg
+  this->declare_parameter<double>("flip_pitch_threshold", 0.5236);  // 30 deg
 
   this->get_parameter("state_estimation_topic", state_estimation_topic_);
   this->get_parameter("registered_scan_topic", registered_scan_topic_);
@@ -101,6 +105,8 @@ OdomBridgeNode::OdomBridgeNode(const rclcpp::NodeOptions & options)
   this->get_parameter("max_valid_linear_accel", max_valid_linear_accel_);
   this->get_parameter("max_valid_angular_accel", max_valid_angular_accel_);
   this->get_parameter("twist_filter_alpha", twist_filter_alpha_);
+  this->get_parameter("flip_roll_threshold", flip_roll_threshold_);
+  this->get_parameter("flip_pitch_threshold", flip_pitch_threshold_);
   twist_filter_alpha_ = std::clamp(twist_filter_alpha_, 0.0, 1.0);
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
@@ -111,6 +117,7 @@ OdomBridgeNode::OdomBridgeNode(const rclcpp::NodeOptions & options)
   odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("odometry", 2);
   registered_scan_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("registered_scan", 5);
   lidar_odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("lidar_odometry", 5);
+  robot_flipped_pub_ = this->create_publisher<std_msgs::msg::Bool>("robot_flipped", 2);
 
   rclcpp::QoS latched_qos(1);
   latched_qos.transient_local();
@@ -183,6 +190,30 @@ void OdomBridgeNode::lidarOdometryAndPointCloudCallback(
 
   tf2::Transform tf_odom_to_chassis = tf_odom_to_lidar * tf_lidar_to_chassis;
   const tf2::Transform tf_odom_to_robot_base_raw = tf_odom_to_lidar * tf_lidar_to_robot_base;
+  // 翻车检测：从 raw 变换提取底盘真实 roll/pitch（与雷达安装角无关，外参已在 TF 链中抵消）
+  {
+    tf2::Quaternion q_raw = tf_odom_to_robot_base_raw.getRotation();
+    q_raw.normalize();
+    double raw_roll;
+    double raw_pitch;
+    double raw_yaw_unused;
+    tf2::Matrix3x3(q_raw).getRPY(raw_roll, raw_pitch, raw_yaw_unused);
+
+    const bool is_flipped =
+      (std::abs(raw_roll) > flip_roll_threshold_) ||
+      (std::abs(raw_pitch) > flip_pitch_threshold_);
+
+    std_msgs::msg::Bool flipped_msg;
+    flipped_msg.data = is_flipped;
+    robot_flipped_pub_->publish(flipped_msg);
+
+    if (is_flipped) {
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "Robot flip detected: roll=%.3f rad (%.1f deg), pitch=%.3f rad (%.1f deg)",
+        raw_roll, raw_roll * 180.0 / M_PI, raw_pitch, raw_pitch * 180.0 / M_PI);
+    }
+  }
   const tf2::Transform tf_odom_to_robot_base = projectToPlanarBase(tf_odom_to_robot_base_raw);
   tf_odom_to_chassis = projectToPlanarBase(tf_odom_to_chassis);
 
