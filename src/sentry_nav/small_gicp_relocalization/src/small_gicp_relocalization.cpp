@@ -595,7 +595,16 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
     Eigen::Isometry3d map_to_odom = map_to_robot_base * robot_base_to_odom;
 
     previous_result_t_ = result_t_ = map_to_odom;
+    has_localized_ = true;
     consecutive_periodic_failures_ = 0;
+
+    {
+      std::lock_guard<std::mutex> lock(cloud_mutex_);
+      accumulated_cloud_->clear();
+      accumulated_count_ = 0;
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Initial pose accepted. Marked as localized.");
   } catch (tf2::TransformException & ex) {
     RCLCPP_WARN(
       this->get_logger(), "Could not transform initial pose from %s to %s: %s",
