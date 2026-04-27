@@ -57,6 +57,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("emergency_consecutive_failures", 3);
   this->declare_parameter("emergency_max_correction_distance", 3.0);
   this->declare_parameter("emergency_min_score_threshold", 200000.0);
+  this->declare_parameter("quality_convergence_threshold", 0.008);
   this->declare_parameter("terrain_clearing_threshold", 0.1);
 
   this->get_parameter("num_threads", num_threads_);
@@ -83,19 +84,21 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("emergency_consecutive_failures", emergency_consecutive_failures_);
   this->get_parameter("emergency_max_correction_distance", emergency_max_correction_distance_);
   this->get_parameter("emergency_min_score_threshold", emergency_min_score_threshold_);
+  this->get_parameter("quality_convergence_threshold", quality_convergence_threshold_);
   this->get_parameter("terrain_clearing_threshold", terrain_clearing_threshold_);
 
   RCLCPP_INFO(
     this->get_logger(),
     "Parameters: max_iterations=%d, accumulated_threshold=%d, min_range=%.2f, "
-    "min_inlier_ratio=%.2f, max_fitness_error=%.2f, periodic=%s, interval=%.1fs, "
+    "min_inlier_ratio=%.2f, max_fitness_error=%.2f, quality_convergence_threshold=%.4f, "
+    "periodic=%s, interval=%.1fs, "
     "max_correction=%.1fm, emergency_max_dist_sq=%.1f, emergency_after=%d failures, "
     "emergency_max_correction=%.1fm, emergency_min_score=%.1f",
     max_iterations_, accumulated_count_threshold_, min_range_, min_inlier_ratio_,
-    max_fitness_error_, enable_periodic_relocalization_ ? "true" : "false",
-    relocalization_interval_, max_correction_distance_, emergency_max_dist_sq_,
-    emergency_consecutive_failures_, emergency_max_correction_distance_,
-    emergency_min_score_threshold_);
+    max_fitness_error_, quality_convergence_threshold_,
+    enable_periodic_relocalization_ ? "true" : "false", relocalization_interval_,
+    max_correction_distance_, emergency_max_dist_sq_, emergency_consecutive_failures_,
+    emergency_max_correction_distance_, emergency_min_score_threshold_);
 
   if (!init_pose_.empty() && init_pose_.size() >= 6) {
     result_t_.translation() << init_pose_[0], init_pose_[1], init_pose_[2];
@@ -488,8 +491,23 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
     "GICP transform: t=[%.3f, %.3f, %.3f], rpy=[%.3f, %.3f, %.3f]",
     t.x(), t.y(), t.z(), rpy.x(), rpy.y(), rpy.z());
 
-  if (!result.converged) {
-    RCLCPP_WARN(this->get_logger(), "GICP did not converge.");
+  if (!result.converged && result.num_inliers > 0) {
+    double per_point_err = result.error / static_cast<double>(result.num_inliers);
+    if (per_point_err < quality_convergence_threshold_) {
+      RCLCPP_INFO(
+        this->get_logger(),
+        "GICP did not formally converge (iterations=%zu) but per_point_error=%.6f < "
+        "quality_convergence_threshold=%.6f, treating as quality-converged.",
+        result.iterations, per_point_err, quality_convergence_threshold_);
+    } else {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "GICP did not converge: iterations=%zu, per_point_error=%.6f >= threshold=%.6f",
+        result.iterations, per_point_err, quality_convergence_threshold_);
+      return false;
+    }
+  } else if (!result.converged) {
+    RCLCPP_WARN(this->get_logger(), "GICP did not converge (no inliers).");
     return false;
   }
 
