@@ -49,12 +49,14 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("accumulated_count_threshold", 20);
   this->declare_parameter("min_range", 0.5);
   this->declare_parameter("min_inlier_ratio", 0.3);
-  this->declare_parameter("max_fitness_error", 1.0);
+  this->declare_parameter("max_fitness_error", 0.05);
   this->declare_parameter("enable_periodic_relocalization", false);
   this->declare_parameter("relocalization_interval", 30.0);
   this->declare_parameter("max_correction_distance", 5.0);
   this->declare_parameter("emergency_max_dist_sq", 50.0);
   this->declare_parameter("emergency_consecutive_failures", 3);
+  this->declare_parameter("emergency_max_correction_distance", 3.0);
+  this->declare_parameter("emergency_min_score_threshold", 200000.0);
   this->declare_parameter("terrain_clearing_threshold", 0.1);
 
   this->get_parameter("num_threads", num_threads_);
@@ -79,17 +81,21 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("max_correction_distance", max_correction_distance_);
   this->get_parameter("emergency_max_dist_sq", emergency_max_dist_sq_);
   this->get_parameter("emergency_consecutive_failures", emergency_consecutive_failures_);
+  this->get_parameter("emergency_max_correction_distance", emergency_max_correction_distance_);
+  this->get_parameter("emergency_min_score_threshold", emergency_min_score_threshold_);
   this->get_parameter("terrain_clearing_threshold", terrain_clearing_threshold_);
 
   RCLCPP_INFO(
     this->get_logger(),
     "Parameters: max_iterations=%d, accumulated_threshold=%d, min_range=%.2f, "
     "min_inlier_ratio=%.2f, max_fitness_error=%.2f, periodic=%s, interval=%.1fs, "
-    "max_correction=%.1fm, emergency_max_dist_sq=%.1f, emergency_after=%d failures",
+    "max_correction=%.1fm, emergency_max_dist_sq=%.1f, emergency_after=%d failures, "
+    "emergency_max_correction=%.1fm, emergency_min_score=%.1f",
     max_iterations_, accumulated_count_threshold_, min_range_, min_inlier_ratio_,
     max_fitness_error_, enable_periodic_relocalization_ ? "true" : "false",
     relocalization_interval_, max_correction_distance_, emergency_max_dist_sq_,
-    emergency_consecutive_failures_);
+    emergency_consecutive_failures_, emergency_max_correction_distance_,
+    emergency_min_score_threshold_);
 
   if (!init_pose_.empty() && init_pose_.size() >= 6) {
     result_t_.translation() << init_pose_[0], init_pose_[1], init_pose_[2];
@@ -382,7 +388,14 @@ bool SmallGicpRelocalizationNode::performEmergencyRegistration()
     this->get_logger(), "Emergency: tested %zu candidates, best_idx=%d, best_score=%.1f",
     candidates.size(), best_idx, best_score);
 
-  bool accepted = (best_idx >= 0);
+  bool accepted = (best_idx >= 0) && (best_score >= emergency_min_score_threshold_);
+  if (best_idx >= 0 && best_score < emergency_min_score_threshold_) {
+    RCLCPP_ERROR(
+      this->get_logger(),
+      "Emergency REJECTED: best_score=%.1f below threshold=%.1f. "
+      "Possible false match, waiting for next cycle.",
+      best_score, emergency_min_score_threshold_);
+  }
   auto result = accepted ? candidates[best_idx].result : candidates[0].result;
 
   if (!accepted) {
@@ -403,6 +416,17 @@ bool SmallGicpRelocalizationNode::performEmergencyRegistration()
     "Emergency accepted: t=[%.3f, %.3f], yaw=%.3f (correction=%.3f m)",
     raw_t.x(), raw_t.y(), yaw,
     (constrained.translation() - result_t_.translation()).norm());
+
+  // 硬限制：Emergency 修正距离不得超过 emergency_max_correction_distance_
+  double emergency_correction = (constrained.translation() - result_t_.translation()).norm();
+  if (emergency_correction > emergency_max_correction_distance_) {
+    RCLCPP_ERROR(
+      this->get_logger(),
+      "Emergency REJECTED: correction %.3f m exceeds emergency_max_correction_distance %.3f m. "
+      "Robot may need manual /initialpose.",
+      emergency_correction, emergency_max_correction_distance_);
+    return false;
+  }
 
   result_t_ = previous_result_t_ = constrained;
   notifyTerrainClearing();
