@@ -168,12 +168,14 @@ small_gicp_relocalization:
     accumulated_count_threshold: 20
     min_range: 0.5
     min_inlier_ratio: 0.3
-    max_fitness_error: 1.0
+    max_fitness_error: 0.05
     enable_periodic_relocalization: true
     relocalization_interval: 5.0
     max_correction_distance: 5.0
     emergency_max_dist_sq: 25.0
     emergency_consecutive_failures: 3
+    emergency_max_correction_distance: 3.0   # Emergency 单次修正上限，超过则拒绝
+    emergency_min_score_threshold: 200000.0  # Emergency 最低匹配分数，低于则拒绝误匹配
     terrain_clearing_threshold: 0.1
     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
     # prior_pcd_file: ""
