@@ -164,11 +164,12 @@ small_gicp_relocalization:
     robot_base_frame: "base_footprint"
     lidar_frame: "front_mid360"
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # [x, y, z, roll, pitch, yaw]
-    max_iterations: 50
+    max_iterations: 150
     accumulated_count_threshold: 20
     min_range: 0.5
     min_inlier_ratio: 0.3
     max_fitness_error: 0.05
+    quality_convergence_threshold: 0.008  # per_point_error 低于此值时视为质量收敛，绕过 converged 标志
     enable_periodic_relocalization: true
     relocalization_interval: 5.0
     max_correction_distance: 5.0
