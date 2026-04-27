@@ -75,6 +75,8 @@ private:
   double max_correction_distance_;
   double emergency_max_dist_sq_;
   int emergency_consecutive_failures_;
+  double emergency_max_correction_distance_{3.0};
+  double emergency_min_score_threshold_{200000.0};
 
   int accumulated_count_;
   std::vector<double> init_pose_;
