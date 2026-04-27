@@ -16,7 +16,7 @@
 
 #include <cmath>
 
-#include "pcl/common/transforms.h"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "pcl_conversions/pcl_conversions.h"
 #include "small_gicp/pcl/pcl_registration.hpp"
 #include "small_gicp/util/downsampling_omp.hpp"
@@ -124,13 +124,6 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   map_clearing_pub_ = this->create_publisher<std_msgs::msg::Float32>("map_clearing", 1);
   cloud_clearing_pub_ = this->create_publisher<std_msgs::msg::Float32>("cloud_clearing", 1);
 
-  rclcpp::QoS latched_qos(1);
-  latched_qos.transient_local();
-  odom_to_lidar_odom_sub_ = this->create_subscription<geometry_msgs::msg::TransformStamped>(
-    "odom_to_lidar_odom", latched_qos,
-    std::bind(
-      &SmallGicpRelocalizationNode::odomToLidarOdomCallback, this, std::placeholders::_1));
-
   pcd_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     "registered_scan", 10,
     std::bind(&SmallGicpRelocalizationNode::registeredPcdCallback, this, std::placeholders::_1));
@@ -146,34 +139,42 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 
 void SmallGicpRelocalizationNode::loadPcdFile(const std::string & file_name)
 {
+  if (file_name.empty()) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "No prior PCD file configured. Target map remains empty; GICP registration will be skipped.");
+    return;
+  }
+
   if (pcl::io::loadPCDFile<pcl::PointXYZ>(file_name, *global_map_) == -1) {
     RCLCPP_ERROR(this->get_logger(), "Couldn't read PCD file: %s", file_name.c_str());
     return;
   }
   RCLCPP_INFO(this->get_logger(), "Loaded global map with %zu points", global_map_->points.size());
+  prepareTargetMap();
 }
 
-void SmallGicpRelocalizationNode::odomToLidarOdomCallback(
-  const geometry_msgs::msg::TransformStamped::SharedPtr msg)
+void SmallGicpRelocalizationNode::prepareTargetMap()
 {
-  if (global_map_ready_) {
+  if (!global_map_ || global_map_->empty()) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Prior PCD map is empty. Target map remains empty; GICP registration will be skipped.");
+    global_map_ready_ = false;
     return;
   }
-  Eigen::Affine3d odom_to_lidar_odom = tf2::transformToEigen(msg->transform);
-  RCLCPP_INFO_STREAM(
-    this->get_logger(), "Received odom_to_lidar_odom from odom_bridge: translation = "
-                          << odom_to_lidar_odom.translation().transpose() << ", rpy = "
-                          << odom_to_lidar_odom.rotation().eulerAngles(0, 1, 2).transpose());
-  prepareTargetMap(odom_to_lidar_odom);
-}
-
-void SmallGicpRelocalizationNode::prepareTargetMap(const Eigen::Affine3d & odom_to_lidar_odom)
-{
-  pcl::transformPointCloud(*global_map_, *global_map_, odom_to_lidar_odom);
 
   target_ = small_gicp::voxelgrid_sampling_omp<
     pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
     *global_map_, global_leaf_size_);
+
+  if (!target_ || target_->empty()) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Target map is empty after downsampling. GICP registration will be skipped.");
+    global_map_ready_ = false;
+    return;
+  }
 
   for (auto & pt : target_->points) {
     pt.z = 0.0f;

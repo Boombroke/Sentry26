@@ -27,7 +27,7 @@
 - `odometry` (`nav_msgs/msg/Odometry`，odom -> robot_base_frame，2D pose + 差速速度语义 `vx / wz`)
 - `registered_scan` (`sensor_msgs/msg/PointCloud2`，odom 系点云，供 terrain_analysis/ext)
 - `lidar_odometry` (`nav_msgs/msg/Odometry`，odom -> lidar_frame，供 terrain_analysis/ext)
-- `odom_to_lidar_odom` (`geometry_msgs/msg/TransformStamped`，latched，odom -> lidar_odom 的静态偏移，供 small_gicp_relocalization 使用，确保与 registered_scan 的坐标变换一致)
+- `odom_to_lidar_odom` (`geometry_msgs/msg/TransformStamped`，latched，odom -> lidar_odom 的静态偏移，主要供 Point-LIO 退出保存 PCD 时转换到 odom/map 系，以及诊断坐标一致性使用；small_gicp_relocalization 不再依赖该话题)
 - `robot_flipped` (`std_msgs/msg/Bool`，底盘翻车检测结果；`true` 表示 roll 或 pitch 超过阈值，与雷达安装角无关)
 
 ## TF 发布
@@ -58,3 +58,7 @@
 `/odometry.pose` 表示 `odom -> robot_base_frame`，因此位置和朝向属于 `odom` 里程计世界系。`/odometry.twist` 按 ROS Odometry 约定表达在 `child_frame_id`，本包发布的是 `robot_base_frame` 机体系速度：差速底盘只填 `linear.x` 和 `angular.z`，`linear.y` 始终置零。
 
 速度由相邻 2D pose 差分得到，因此 LIO 单帧位姿跳变、TF 时间戳异常或长时间空窗都会放大成速度尖峰。本节点会按 dt、速度上限、加速度上限过滤异常值，并对合法速度做轻量低通；过滤只影响 `/odometry.twist`，不会篡改 `/odometry.pose` 或 `odom -> base_frame` TF。
+
+## PCD 坐标系约定
+
+`registered_scan` 始终发布为 odom 系点云。当前建图流程中，Point-LIO 在退出保存 PCD 时订阅本节点 latched 的 `odom_to_lidar_odom`，将原始 `lidar_odom` 系点云转换到 odom/map 系后保存。后续 small_gicp_relocalization 会直接把 `prior_pcd_file` 当作 odom/map 系目标地图使用，不再对旧 `lidar_odom` 系 PCD 做兼容转换；旧 PCD 必须重新建图生成。

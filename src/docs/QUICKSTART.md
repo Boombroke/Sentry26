@@ -118,6 +118,8 @@ ros2 run nav2_map_server map_saver_cli -f <map_name> \
 # 保存 PCD 点云（关闭 Point-LIO 节点时自动保存到 ~/.ros 或 PCD/ 目录）
 ```
 
+先验 PCD 必须与 `registered_scan` 一样处于 odom/map 系；旧流程生成的 `lidar_odom` 系 PCD 不再兼容，需要重新建图生成。
+
 ### 3.4 发一个 Nav Goal 验证
 
 ```bash
@@ -257,4 +259,4 @@ diff logs/*-baseline/launch.log logs/*-tuned/launch.log | head
   - `ros2 topic info /cmd_vel` 的 subscriber 是否有 `rm_serial_driver_node`
   - `/cmd_vel` 类型须为 `geometry_msgs/msg/TwistStamped`（Jazzy Nav2 统一）
 
-- **重定位后机器人在 RViz 中位置异常**：确认先验 PCD 与 2D 占据栅格在同一坐标原点（从同一出生点建图）。
+- **重定位后机器人在 RViz 中位置异常**：确认先验 PCD 与 2D 占据栅格在同一 odom/map 坐标系和坐标原点（从同一出生点建图）；旧 `lidar_odom` 系 PCD 必须重新生成。

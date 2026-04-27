@@ -46,8 +46,7 @@ private:
   void registeredPcdCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
   void periodicRegistrationCallback();
   void loadPcdFile(const std::string & file_name);
-  void prepareTargetMap(const Eigen::Affine3d & odom_to_lidar_odom);
-  void odomToLidarOdomCallback(const geometry_msgs::msg::TransformStamped::SharedPtr msg);
+  void prepareTargetMap();
   bool performRegistration(bool is_periodic);
   bool performEmergencyRegistration();
   void publishTransform();
@@ -56,7 +55,6 @@ private:
 
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
-  rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr odom_to_lidar_odom_sub_;
 
   int num_threads_;
   int num_neighbors_;

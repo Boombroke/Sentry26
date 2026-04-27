@@ -249,7 +249,7 @@ ros2 run nav2_map_server map_saver_cli -f ~/my_map
 - `my_map.pgm`: 栅格图像
 - `my_map.yaml`: 地图元数据（分辨率、原点等）
 
-> **提示**：Point-LIO 在 SLAM 模式下会自动保存 PCD 文件。该 PCD 可作为后续导航模式的先验点云使用。PCD 文件保存路径取决于 Point-LIO 的配置。
+> **提示**：Point-LIO 在 SLAM 模式下会自动保存 PCD 文件。当前流程期望保存结果已经是与 `registered_scan` 一致的 odom/map 系点云，可作为后续导航模式的先验点云使用。旧 `lidar_odom` 系 PCD 不再兼容，必须重新建图生成。PCD 文件保存路径取决于 Point-LIO 的配置。
 
 ### SLAM Toolbox 关键参数
 
