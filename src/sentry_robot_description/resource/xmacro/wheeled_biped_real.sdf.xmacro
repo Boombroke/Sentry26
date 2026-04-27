@@ -13,10 +13,10 @@
     <xmacro_block
         name="wheeled_biped_model"
         model_name="wheeled_biped"
-        chassis_length="0.648"
-        chassis_width="0.650"
+        chassis_length="0.45"
+        chassis_width="0.45"
         chassis_z="0.120"
-        front_lidar_pose="-0.05 0 0.05 0.0 0.2617993877991494 3.141592653589793"
+        front_lidar_pose="-0.17 0 0.10 0.0 0.5235987755982988 3.141592653589793"
         use_sim_sensors="False"
         use_real_sensors="True"
         use_casters="False"
