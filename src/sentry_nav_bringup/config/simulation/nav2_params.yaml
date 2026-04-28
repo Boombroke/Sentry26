@@ -547,6 +547,26 @@ motion_manager:
     max_linear_x: 2.0
     max_angular_z: 6.3
 
+stuck_detector:
+  ros__parameters:
+    use_sim_time: true
+
+    # 输入输出话题
+    odometry_topic: odometry
+    command_topic: cmd_vel
+    motion_state_topic: motion_manager/state
+    recovery_trigger_topic: motion_manager/recovery_trigger
+
+    # 节点调度
+    tick_frequency_hz: 20.0
+
+    # 检测阈值（初值基于 2026-04-28 两个 real_nav_debug bag 覆盖调参）
+    window_s: 3.0
+    cmd_threshold_mps: 0.05
+    position_threshold_m: 0.10
+    hold_s: 1.0
+    cooldown_s: 3.0
+
 waypoint_follower:
   ros__parameters:
     use_sim_time: true
