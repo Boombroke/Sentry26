@@ -33,6 +33,7 @@ def generate_launch_description():
     world = LaunchConfiguration("world")
     use_rviz = LaunchConfiguration("use_rviz")
     use_foxglove = LaunchConfiguration("use_foxglove")
+    use_robot_state_pub = LaunchConfiguration("use_robot_state_pub")
 
     declare_namespace_cmd = DeclareLaunchArgument(
         "namespace",
@@ -64,6 +65,12 @@ def generate_launch_description():
         description="Whether to start foxglove_bridge",
     )
 
+    declare_use_robot_state_pub_cmd = DeclareLaunchArgument(
+        "use_robot_state_pub",
+        default_value="True",
+        description="Whether to start robot_state_publisher in the real-robot one-shot launch",
+    )
+
     navigation_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(launch_dir, "rm_navigation_reality_launch.py")
@@ -74,6 +81,7 @@ def generate_launch_description():
             "world": world,
             "use_rviz": use_rviz,
             "use_foxglove": use_foxglove,
+            "use_robot_state_pub": use_robot_state_pub,
         }.items(),
     )
 
@@ -96,6 +104,7 @@ def generate_launch_description():
     ld.add_action(declare_world_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_foxglove_cmd)
+    ld.add_action(declare_use_robot_state_pub_cmd)
 
     ld.add_action(navigation_cmd)
     ld.add_action(serial_driver_node)

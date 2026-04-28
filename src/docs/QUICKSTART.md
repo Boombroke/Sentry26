@@ -19,8 +19,9 @@ bash src/scripts/setup_env.sh
 4. **安装差速控制器 apt 包**: `ros-jazzy-nav2-regulated-pure-pursuit-controller`、`ros-jazzy-nav2-rotation-shim-controller`
 5. **编译安装 small_gicp v1.0.0**: 从 GitHub 克隆并编译（需要 C++17）
 6. **初始化 rosdep**
-7. **编译工作空间**: `colcon build --symlink-install`
-8. **配置 bashrc（可选）**
+7. **同步源码包到工作空间**: 会逐项补齐后续新增包（例如 `sentry_motion_manager`）
+8. **编译工作空间**: `colcon build --symlink-install`
+9. **配置 bashrc（可选）**
 
 如果希望手动逐步配置，继续阅读下面章节。
 
@@ -251,6 +252,15 @@ diff logs/*-baseline/launch.log logs/*-tuned/launch.log | head
   - 检查 RPP 的 `use_collision_detection`：SLAM 模式下若 costmap 大面积 unknown 会误报碰撞，本项目已在 `nav2_params.yaml` 中关闭（建图完成后可重开）。
   - 检查 `/<ns>/cmd_vel_nav` 是否有 Nav2 平滑输出，以及 `/<ns>/motion_manager/state` 中 `output_enabled=true`。
   - 检查 `/<ns>/cmd_vel` topic 是否单类型（`TwistStamped`，无混合）：`ros2 topic info /red_standard_robot1/cmd_vel`。
+
+- **启动时报 `package 'sentry_motion_manager' not found`**：说明当前 workspace 没有同步或编译底盘运动管理器包。若源码中已有 `src/sentry_motion_manager/`，执行：
+  ```bash
+  cd ~/sentry_ws
+  colcon build --symlink-install --packages-select sentry_motion_manager sentry_nav_bringup --cmake-args -DCMAKE_BUILD_TYPE=Release
+  source install/setup.bash
+  ros2 pkg prefix sentry_motion_manager
+  ```
+  若 `--packages-select` 报找不到包，先同步最新仓库或重新运行 `bash src/scripts/setup_env.sh`，脚本会补齐旧 workspace 中缺失的新增源码包链接。
 
 - **RViz 中无法显示**：检查 namespace 与启动参数的机器人名称一致。
 

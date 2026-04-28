@@ -105,6 +105,24 @@ ros2 action send_goal /red_standard_robot1/navigate_to_pose \
 | `world` | `""` | 地图名称（对应 `map/{simulation,reality}/<world>.yaml`） |
 | `params_file` | `config/{simulation,reality}/nav2_params.yaml` | Nav2 参数文件 |
 | `use_rviz` | `True` | 启动 RViz 可视化 |
+| `use_robot_state_pub` | `True`（`rm_sentry_launch.py`） / `False`（`rm_navigation_reality_launch.py`） | 实车一键启动时默认发布机器人 TF；单独启动导航时按需打开 |
+
+## 常见启动问题
+
+### `package 'sentry_motion_manager' not found`
+
+当前速度链路要求 `velocity_smoother` 输出 `/cmd_vel_nav`，再由 `sentry_motion_manager` 仲裁发布最终 `/cmd_vel`。如果实车 workspace 是旧版本创建的，可能已经有 `sentry_nav_bringup` 链接，但缺少后来新增的 `sentry_motion_manager` 包。
+
+现场恢复：
+
+```bash
+cd ~/sentry_ws
+colcon build --symlink-install --packages-select sentry_motion_manager sentry_nav_bringup --cmake-args -DCMAKE_BUILD_TYPE=Release
+source install/setup.bash
+ros2 pkg prefix sentry_motion_manager
+```
+
+如果 `--packages-select` 提示找不到 `sentry_motion_manager`，先同步最新源码或重新运行 `bash src/scripts/setup_env.sh`；脚本会逐项补齐旧 workspace 中缺失的新增源码包链接。
 
 ## 订阅话题
 

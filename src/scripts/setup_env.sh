@@ -171,12 +171,22 @@ build_workspace() {
         info "已创建工作空间: $WS_DIR"
     fi
 
-    # 链接/复制源码（PROJECT_DIR 即为 src/ 目录，直接链接其中的包）
-    if [ ! -d "$WS_DIR/src/sentry_nav_bringup" ]; then
-        info "将源码链接到工作空间..."
-        ln -sf "$PROJECT_DIR/"* "$WS_DIR/src/" 2>/dev/null || \
-            cp -rs "$PROJECT_DIR/"* "$WS_DIR/src/"
-    fi
+    # 链接/复制源码（PROJECT_DIR 即为 src/ 目录，直接链接其中的包）。
+    # 旧工作空间可能已经有 sentry_nav_bringup，但缺少后续新增包（例如
+    # sentry_motion_manager），因此必须逐项补齐，而不是只检查一个包后跳过。
+    info "同步源码包到工作空间..."
+    for source_path in "$PROJECT_DIR"/*; do
+        [ -e "$source_path" ] || continue
+        package_name="$(basename "$source_path")"
+        target_path="$WS_DIR/src/$package_name"
+
+        if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+            continue
+        fi
+
+        ln -s "$source_path" "$target_path" 2>/dev/null || \
+            cp -rs "$source_path" "$target_path"
+    done
 
     # 安装 ROS 依赖
     info "安装 ROS 包依赖 (rosdep)..."
