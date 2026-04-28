@@ -17,10 +17,15 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
+from launch.conditions import IfCondition
+from launch.events import matches_action
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
+from launch_ros.actions import LifecycleNode, Node
 from launch_ros.descriptions import ParameterFile
+from launch_ros.event_handlers import OnStateTransition
+from launch_ros.events.lifecycle import ChangeState
+from lifecycle_msgs.msg import Transition
 from nav2_common.launch import RewrittenYaml
 
 
@@ -37,7 +42,9 @@ def generate_launch_description():
     log_level = LaunchConfiguration("log_level")
 
     # Variables
-    lifecycle_nodes = ["slam_toolbox", "map_saver"]
+    # Jazzy Nav2 bringup: slam_toolbox manages its own lifecycle (use_lifecycle_manager=false
+    # by default in online_sync_launch.py); lifecycle_manager_slam only manages map_saver.
+    lifecycle_nodes = ["map_saver"]
 
     # Create our own temporary YAML files that include substitutions
     param_substitutions = {"use_sim_time": use_sim_time}
@@ -123,10 +130,11 @@ def generate_launch_description():
         ],
     )
 
-    start_sync_slam_toolbox_node = Node(
+    start_sync_slam_toolbox_node = LifecycleNode(
         package="slam_toolbox",
         executable="sync_slam_toolbox_node",
         name="slam_toolbox",
+        namespace="",
         output="screen",
         respawn=use_respawn,
         respawn_delay=2.0,
@@ -137,6 +145,31 @@ def generate_launch_description():
             ("/map_metadata", "map_metadata"),
             ("/map_updates", "map_updates"),
         ],
+    )
+
+    configure_slam_toolbox_event = EmitEvent(
+        event=ChangeState(
+            lifecycle_node_matcher=matches_action(start_sync_slam_toolbox_node),
+            transition_id=Transition.TRANSITION_CONFIGURE,
+        ),
+        condition=IfCondition(autostart),
+    )
+
+    activate_slam_toolbox_event = RegisterEventHandler(
+        OnStateTransition(
+            target_lifecycle_node=start_sync_slam_toolbox_node,
+            start_state="configuring",
+            goal_state="inactive",
+            entities=[
+                EmitEvent(
+                    event=ChangeState(
+                        lifecycle_node_matcher=matches_action(start_sync_slam_toolbox_node),
+                        transition_id=Transition.TRANSITION_ACTIVATE,
+                    )
+                )
+            ],
+        ),
+        condition=IfCondition(autostart),
     )
 
     start_point_lio_node = Node(
@@ -191,11 +224,15 @@ def generate_launch_description():
 
     # Running Map Saver Server
     ld.add_action(start_map_saver_server_cmd)
-    ld.add_action(start_lifecycle_manager_cmd)
 
     ld.add_action(start_pointcloud_to_laserscan_node)
     ld.add_action(start_sync_slam_toolbox_node)
+    ld.add_action(configure_slam_toolbox_event)
+    ld.add_action(activate_slam_toolbox_event)
     ld.add_action(start_point_lio_node)
     ld.add_action(start_static_transform_node)
+
+    # lifecycle_manager 在被管理节点之后启动，减少 bond 超时误报
+    ld.add_action(start_lifecycle_manager_cmd)
 
     return ld
