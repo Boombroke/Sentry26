@@ -30,4 +30,8 @@ endif()
 
 pluginlib_export_plugin_description_file(nav2_costmap_2d costmap_plugins.xml)
 
-ament_auto_package()
+install(CODE
+  "file(REMOVE \"\${CMAKE_INSTALL_PREFIX}/share/nav2_plugins/behavior_plugin.xml\")"
+)
+
+ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)
