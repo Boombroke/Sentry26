@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PB_NAV2_PLUGINS__LAYERS__INTENSITY_VOXEL_LAYER_HPP_
-#define PB_NAV2_PLUGINS__LAYERS__INTENSITY_VOXEL_LAYER_HPP_
+#ifndef NAV2_PLUGINS__LAYERS__INTENSITY_VOXEL_LAYER_HPP_
+#define NAV2_PLUGINS__LAYERS__INTENSITY_VOXEL_LAYER_HPP_
 
 #include "laser_geometry/laser_geometry.hpp"
 #include "message_filters/subscriber.h"
@@ -112,4 +112,4 @@ private:
 
 }  // namespace nav2_costmap_2d_plugins
 
-#endif  // PB_NAV2_PLUGINS__LAYERS__INTENSITY_VOXEL_LAYER_HPP_
+#endif  // NAV2_PLUGINS__LAYERS__INTENSITY_VOXEL_LAYER_HPP_
