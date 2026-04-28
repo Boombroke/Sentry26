@@ -429,8 +429,8 @@ Nav2 官方差速默认组合。`controller_plugins: ["RotateShim", "FollowPath"
 
 - 差速底盘的 recovery 不能依赖 `vy` 逃逸，所有兜底动作都必须落在 `vx + wz` 语义内。
 - 默认 BT 已移除旧 `<Spin/>` + `<BackUp/>` 主恢复路径，避免贴墙场景继续依赖会从 LIO 抖动中误判成功的反向动作。
-- `BackUpFreeSpace` 代码保留在 `nav2_plugins` 中供后续对比或手动实验，但默认 `behavior_server` 不再加载它；不要删除整个 `nav2_plugins`，因为 `IntensityVoxelLayer` 仍被 costmap 使用。
-- 当前 BT 只保留清图+等待占位；真正贴墙脱困应由后续 `sentry_motion_manager` recovery 状态机通过 `cmd_vel_recovery` 接管，并使用投影位移/进展判断避免抖动误判。
+- `BackUpFreeSpace` 已于 2026 赛季重构时从 `nav2_plugins` 中删除；贴墙脱困由 `sentry_motion_manager` recovery 状态机通过 `cmd_vel_recovery` 接管，使用投影位移/进展判断避免抖动误判。`nav2_plugins` 包仍保留用于提供 `IntensityVoxelLayer`，不要删除整个包。
+- 当前 BT 只保留清图+等待占位；真正贴墙脱困应由 `sentry_motion_manager` recovery 状态机接管。
 
 ### 21. 终端参数（general_goal_checker）
 

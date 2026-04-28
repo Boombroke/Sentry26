@@ -83,7 +83,7 @@ map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → 
 src/
 ├── sentry_nav/                       # 自研导航栈
 │   ├── odom_bridge/                  #   里程计桥接 + 云台雷达 TF 查询
-│   ├── nav2_plugins/                 #   IntensityVoxelLayer（BackUpFreeSpace 保留但不在默认恢复路径）
+│   ├── nav2_plugins/                 #   IntensityVoxelLayer（BackUpFreeSpace 已删除，脱困由 sentry_motion_manager 接管）
 │   └── small_gicp_relocalization/    #   全局重定位节点
 ├── sentry_nav_bringup/               # Launch 文件、Nav2 参数、地图、行为树 XML
 ├── sentry_motion_manager/            # 底盘速度仲裁，Nav2 输出 cmd_vel_nav → 最终 /cmd_vel

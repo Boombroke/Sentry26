@@ -549,7 +549,7 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `Wait` | 原地等待指定时间 |
 | `AssistedTeleop` | 辅助遥控模式 |
 
-`BackUpFreeSpace` 代码仍保留在 `nav2_plugins` 包中（该包还提供 `IntensityVoxelLayer`），但不再作为默认 `behavior_server` 插件或默认 BT 恢复动作加载。
+`BackUpFreeSpace` 已于 2026 赛季重构时从 `nav2_plugins` 中删除。贴墙脱困由 `sentry_motion_manager` recovery 状态机通过 `cmd_vel_recovery` 接管，不再依赖 Nav2 behavior_server 插件路径。`nav2_plugins` 包仍保留用于提供 `IntensityVoxelLayer` 代价地图层。
 
 ### 8.6 Nav2 导航行为树
 

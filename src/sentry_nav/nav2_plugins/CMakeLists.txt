@@ -14,10 +14,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 
-ament_auto_add_library(back_up_free_space_behavior SHARED
-  src/behaviors/back_up_free_space.cpp
-)
-
 ament_auto_add_library(layers SHARED
   src/layers/intensity_voxel_layer.cpp
 )
@@ -32,7 +28,6 @@ find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-pluginlib_export_plugin_description_file(nav2_core behavior_plugin.xml)
 pluginlib_export_plugin_description_file(nav2_costmap_2d costmap_plugins.xml)
 
 ament_auto_package()
