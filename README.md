@@ -133,6 +133,8 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
 
+> 如果旧工作空间启动时报 `package 'sentry_motion_manager' not found`，说明新增的底盘运动管理器包未同步或未编译。先确认 `src/sentry_motion_manager/` 存在，然后执行 `colcon build --symlink-install --packages-select sentry_motion_manager sentry_nav_bringup --cmake-args -DCMAKE_BUILD_TYPE=Release` 并重新 `source install/setup.bash`；若源码中没有该目录，请同步最新仓库或重新运行 `bash src/scripts/setup_env.sh`。
+
 ## 快速开始
 
 ### 仿真模式（两终端启动）
