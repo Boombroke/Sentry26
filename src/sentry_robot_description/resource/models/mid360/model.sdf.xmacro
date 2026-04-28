@@ -23,14 +23,12 @@
       </visual>
 
       <sensor name="${prefix}mid360_imu" type="imu">
-        <ignition_frame_id>${prefix}mid360</ignition_frame_id>
         <always_on>1</always_on>
         <update_rate>200</update_rate>
         <visualize>true</visualize>
       </sensor>
 
       <sensor name="${prefix}mid360_lidar" type="gpu_lidar">
-        <ignition_frame_id>${prefix}mid360</ignition_frame_id>
         <pose>0 0 0.03 0 0 0</pose>
         <always_on>true</always_on>
         <visualize>true</visualize>
@@ -53,12 +51,12 @@
             <min>0.1</min>
             <max>40.0</max>
           </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.01</stddev>
+          </noise>
         </ray>
-        <noise>
-          <type>gaussian</type>
-          <mean>0.0</mean>
-          <stddev>0.01</stddev>
-        </noise>
       </sensor>
     </link>
   </xmacro_define_block>
