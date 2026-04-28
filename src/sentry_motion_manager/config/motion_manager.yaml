@@ -1,0 +1,28 @@
+motion_manager:
+  ros__parameters:
+    command_output_enabled: false
+    command_frame_id: base_footprint
+
+    manager_frequency_hz: 100.0
+    output_frequency_hz: 50.0
+    state_frequency_hz: 10.0
+    diagnostics_frequency_hz: 2.0
+
+    nav_command_topic: cmd_vel_nav
+    recovery_command_topic: cmd_vel_recovery
+    terrain_command_topic: cmd_vel_terrain
+    evasion_command_topic: cmd_vel_evasion
+    manual_command_topic: cmd_vel_manual
+    emergency_stop_topic: emergency_stop
+    output_command_topic: cmd_vel
+    state_topic: motion_manager/state
+    diagnostics_topic: diagnostics
+
+    nav_timeout_s: 0.25
+    recovery_timeout_s: 0.20
+    terrain_timeout_s: 0.20
+    evasion_timeout_s: 0.20
+    manual_timeout_s: 0.20
+
+    max_linear_x: 2.0
+    max_angular_z: 6.3
