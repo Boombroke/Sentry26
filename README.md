@@ -143,7 +143,12 @@ source install/setup.bash
 # === 终端 1：启动 Gazebo（可选 headless:=true 无 GUI） ===
 QT_QPA_PLATFORM=xcb ros2 launch rmu_gazebo_simulator bringup_sim.launch.py
 
-# 等待机器人 spawn 完成后 unpause Gazebo：
+# 等待机器人 spawn 完成后，手动调用 set_performer 服务（每个机器人执行一次）：
+gz service -s /world/default/level/set_performer \
+  --reqtype gz.msgs.StringMsg --reptype gz.msgs.Boolean \
+  --timeout 2000 --req 'data: "red_standard_robot1"'
+
+# 然后 unpause Gazebo：
 gz service -s /world/default/control \
   --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean \
   --timeout 5000 --req 'pause: false'

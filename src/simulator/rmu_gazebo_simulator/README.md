@@ -93,6 +93,26 @@ ros2 launch rmu_gazebo_simulator bringup_sim.launch.py
 > [!NOTE]
 > **注意：需要点击 Gazebo 左下角橙红色的 `启动` 按钮**
 
+等待机器人 spawn 完成后，**手动**调用以下 Gazebo 服务（每个机器人执行一次）：
+
+```sh
+# 注册机器人为 level performer（按实际机器人名称替换）
+gz service -s /world/default/level/set_performer \
+  --reqtype gz.msgs.StringMsg --reptype gz.msgs.Boolean \
+  --timeout 2000 --req 'data: "red_standard_robot1"'
+
+# unpause 仿真
+gz service -s /world/default/control \
+  --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean \
+  --timeout 5000 --req 'pause: false'
+```
+
+> [!NOTE]
+> `set_performer` 服务默认不自动执行。如需恢复自动执行（不推荐），可在 launch 时传入 `auto_set_performer:=true`：
+> ```sh
+> ros2 launch rmu_gazebo_simulator bringup_sim.launch.py auto_set_performer:=true
+> ```
+
 #### 2.3.1 Test Commands
 
 控制机器人移动
