@@ -199,7 +199,8 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=["--ros-args", "--log-level", log_level],
-                # cmd_vel 直出 /cmd_vel（差速底盘消费者默认话题）
+                # Recovery command output is retired from the default BT path until
+                # sentry_motion_manager grows a dedicated Nav2 behavior adapter.
                 remappings=[],
             ),
             Node(
@@ -223,7 +224,7 @@ def generate_launch_description():
                 arguments=["--ros-args", "--log-level", log_level],
                 remappings=[
                     ("cmd_vel", "cmd_vel_controller"),  # remap input
-                    ("cmd_vel_smoothed", "cmd_vel"),             # 差速底盘直接下发 /cmd_vel
+                    ("cmd_vel_smoothed", "cmd_vel_nav"),  # Nav2 output enters motion_manager
                 ],
             ),
             Node(
@@ -275,7 +276,8 @@ def generate_launch_description():
                 plugin="behavior_server::BehaviorServer",
                 name="behavior_server",
                 parameters=[configured_params],
-                # cmd_vel 直出 /cmd_vel（差速底盘消费者默认话题）
+                # Recovery command output is retired from the default BT path until
+                # sentry_motion_manager grows a dedicated Nav2 behavior adapter.
                 remappings=[],
             ),
             ComposableNode(
@@ -283,7 +285,8 @@ def generate_launch_description():
                 plugin="nav2_bt_navigator::BtNavigator",
                 name="bt_navigator",
                 parameters=[configured_params],
-                # cmd_vel 直出 /cmd_vel（差速底盘消费者默认话题）
+                # Recovery command output is retired from the default BT path until
+                # sentry_motion_manager grows a dedicated Nav2 behavior adapter.
                 remappings=[],
             ),
             ComposableNode(
@@ -299,7 +302,7 @@ def generate_launch_description():
                 parameters=[configured_params],
                 remappings=[
                     ("cmd_vel", "cmd_vel_controller"),  # remap input
-                    ("cmd_vel_smoothed", "cmd_vel"),             # 差速底盘直接下发 /cmd_vel
+                    ("cmd_vel_smoothed", "cmd_vel_nav"),  # Nav2 output enters motion_manager
                 ],
             ),
             ComposableNode(

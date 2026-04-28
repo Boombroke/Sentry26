@@ -158,6 +158,7 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
 - Point-LIO 激光惯性里程计
 - small_gicp_relocalization 全局重定位
 - Nav2 栈（RPP + RotationShim + velocity_smoother）
+- sentry_motion_manager 底盘速度仲裁（`cmd_vel_nav` → 最终 `/cmd_vel`）
 - robot_state_publisher + LiDAR 驱动
 - sentry_behavior 行为树
 
@@ -248,6 +249,7 @@ diff logs/*-baseline/launch.log logs/*-tuned/launch.log | head
 
 - **Nav Goal accepted 但机器人不动**：
   - 检查 RPP 的 `use_collision_detection`：SLAM 模式下若 costmap 大面积 unknown 会误报碰撞，本项目已在 `nav2_params.yaml` 中关闭（建图完成后可重开）。
+  - 检查 `/<ns>/cmd_vel_nav` 是否有 Nav2 平滑输出，以及 `/<ns>/motion_manager/state` 中 `output_enabled=true`。
   - 检查 `/<ns>/cmd_vel` topic 是否单类型（`TwistStamped`，无混合）：`ros2 topic info /red_standard_robot1/cmd_vel`。
 
 - **RViz 中无法显示**：检查 namespace 与启动参数的机器人名称一致。
@@ -257,6 +259,6 @@ diff logs/*-baseline/launch.log logs/*-tuned/launch.log | head
 - **实车底盘不响应 cmd_vel**：
   - 下位机固件是否升级（imu 包 27B）
   - `ros2 topic info /cmd_vel` 的 subscriber 是否有 `rm_serial_driver_node`
-  - `/cmd_vel` 类型须为 `geometry_msgs/msg/TwistStamped`（Jazzy Nav2 统一）
+  - `/cmd_vel` 类型须为 `geometry_msgs/msg/TwistStamped`，且由 `motion_manager` 发布
 
 - **重定位后机器人在 RViz 中位置异常**：确认先验 PCD 与 2D 占据栅格在同一 odom/map 坐标系和坐标原点（从同一出生点建图）；旧 `lidar_odom` 系 PCD 必须重新生成。

@@ -528,23 +528,34 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `max_decel` | 仿真 `[-1.5, 0.0, -8.0]` / 实车 `[-2.5, 0.0, -5.0]` | 最大减速度 |
 | `feedback` | `OPEN_LOOP` | 反馈模式。`OPEN_LOOP` 不依赖里程计反馈 |
 
-> velocity_smoother 的输出直接 remap 到 `/cmd_vel`（差速底盘 `chassis_yaw ≡ base_footprint_yaw`，无需坐标旋转）。
+> velocity_smoother 的输出 remap 到 `cmd_vel_nav`，由 `sentry_motion_manager` 仲裁后发布最终 `/cmd_vel`（差速底盘 `chassis_yaw ≡ base_footprint_yaw`，无需坐标旋转）。
+
+### 8.4-B 底盘运动管理器 (sentry_motion_manager)
+
+集成 bringup 会拉起 `sentry_motion_manager`，并在仿真/实车 `nav2_params.yaml` 中设置 `command_output_enabled: true`。单独使用 `sentry_motion_manager/config/motion_manager.yaml` 时默认仍为 `false`，避免未接入上游速度源时误发布运动指令。
+
+| 话题 | 说明 |
+|:---|:---|
+| `cmd_vel_nav` | Nav2 velocity_smoother 输出，作为 navigation 输入 |
+| `cmd_vel_recovery` | 预留给后续 motion-manager recovery 状态机 |
+| `cmd_vel` | motion manager 发布的最终底盘速度，供 Gazebo DiffDrive / rm_serial_driver 消费 |
+| `motion_manager/state` | 当前模式、选中源、输出开关和急停状态摘要 |
 
 ### 8.5 恢复行为插件
 
 | 插件名 | 说明 |
 |:---|:---|
-| `Spin` | 原地旋转以重新观测环境 |
-| `BackUpFreeSpace` | 自定义插件：搜索自由空间并输出差速可执行的后退弧线（`vx + wz`），不依赖 `vy` |
 | `DriveOnHeading` | 沿当前朝向直行一段距离 |
 | `Wait` | 原地等待指定时间 |
 | `AssistedTeleop` | 辅助遥控模式 |
+
+`BackUpFreeSpace` 代码仍保留在 `nav2_plugins` 包中（该包还提供 `IntensityVoxelLayer`），但不再作为默认 `behavior_server` 插件或默认 BT 恢复动作加载。
 
 ### 8.6 Nav2 导航行为树
 
 | 文件 | 用途 |
 |:---|:---|
-| `navigate_to_pose_w_replanning_and_recovery.xml` | 单目标导航：5Hz 重规划 + recovery 首轮即 `Spin → BackUp` |
+| `navigate_to_pose_w_replanning_and_recovery.xml` | 单目标导航：5Hz 重规划 + motion-manager recovery 触发占位（清图+等待，等待后续 adapter） |
 | `navigate_through_poses_w_replanning_and_recovery.xml` | 多航点导航：同上 + 已通过航点自动移除 (radius=0.7m) |
 
 ---

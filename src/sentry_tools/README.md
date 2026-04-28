@@ -211,7 +211,7 @@ ros2 launch serial_driver serial_driver.launch.py device_name:=/dev/pts/4
 
 | 现象 | 看哪里 | 修复 |
 |---|---|---|
-| 机器人不动 | `/cmd_vel` 是否 TwistStamped 单类型 + velocity_smoother 是否 active | 启动导航 launch；检查 `ros2 topic info /cmd_vel` 类型非混合 |
+| 机器人不动 | `/cmd_vel_nav` 是否有 Nav2 输出 + motion_manager 是否发布最终 `/cmd_vel` | 启动导航 launch；检查 `ros2 topic info /cmd_vel` 类型非混合，并查看 `motion_manager/state` |
 | 导航无路径 | planner_server + obstacle_scan + terrain_map | `fix_nav2_deps.sh` + 启动 launch |
 | 定位漂移 | `odom→base_footprint` TF + odometry topic | 检查 point_lio 节点 |
 | RPP 原地旋转不前进 | SLAM unknown costmap 导致 RPP 误报碰撞 | `nav2_params.yaml` 确认 `use_collision_detection: false` |
@@ -336,7 +336,7 @@ python3 src/sentry_tools/serial_visualizer.py
 
 | Topic | 用途 |
 |---|---|
-| `cmd_vel` | Nav2 下发速度（TwistStamped, base_footprint 系，差速链路直通） |
+| `cmd_vel` | motion_manager 发布的最终底盘速度（TwistStamped, base_footprint 系） |
 | `odometry` | 实际速度（base_footprint 系，odom_bridge 位置差分） |
 | `serial/gimbal_joint_state` | 云台关节状态 |
 | `referee/game_status` | 比赛阶段 + 倒计时 |

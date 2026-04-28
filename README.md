@@ -29,6 +29,7 @@ graph LR
         CM --> GP[SmacPlanner2D<br/>全局路径规划]
         GP --> LP[RotationShim + RPP<br/>差速局部控制]
         LP --> VS[Velocity Smoother<br/>vy 锁 0]
+        VS --> MM[sentry_motion_manager<br/>速度仲裁]
     end
 
     subgraph 决策层
@@ -37,7 +38,7 @@ graph LR
     end
 
     subgraph 执行层
-        VS -->|TwistStamped /cmd_vel<br/>base_footprint 系| SER[Gazebo DiffDrive<br/>/ rm_serial_driver]
+        MM -->|TwistStamped /cmd_vel<br/>base_footprint 系| SER[Gazebo DiffDrive<br/>/ rm_serial_driver]
     end
 ```
 
@@ -46,9 +47,10 @@ graph LR
 ```
 controller_server (base_footprint 系, TwistStamped)
   → velocity_smoother (vy 锁 0, TwistStamped)
-    → /cmd_vel (TwistStamped, base_footprint ≡ chassis yaw)
-      ├─► Gazebo DiffDrive 插件
-      └─► rm_serial_driver → 串口下发 (vel_x, vel_w)
+    → /cmd_vel_nav
+      → sentry_motion_manager (输出使能, 仲裁后发布最终 /cmd_vel)
+        ├─► Gazebo DiffDrive 插件
+        └─► rm_serial_driver → 串口下发 (vel_x, vel_w)
 ```
 
 差速底盘 `chassis_yaw ≡ base_footprint_yaw`，无需坐标旋转。
@@ -81,9 +83,10 @@ map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → 
 src/
 ├── sentry_nav/                       # 自研导航栈
 │   ├── odom_bridge/                  #   里程计桥接 + 云台雷达 TF 查询
-│   ├── nav2_plugins/                 #   IntensityVoxelLayer + BackUpFreeSpace
+│   ├── nav2_plugins/                 #   IntensityVoxelLayer（BackUpFreeSpace 保留但不在默认恢复路径）
 │   └── small_gicp_relocalization/    #   全局重定位节点
 ├── sentry_nav_bringup/               # Launch 文件、Nav2 参数、地图、行为树 XML
+├── sentry_motion_manager/            # 底盘速度仲裁，Nav2 输出 cmd_vel_nav → 最终 /cmd_vel
 ├── sentry_behavior/                  # BehaviorTree.CPP 行为树插件
 ├── sentry_robot_description/         # 机器人模型（wheeled_biped_real/sim + shared core）
 ├── serial/                           # rm_serial_driver 串口通信 + 协议生成器

@@ -37,6 +37,7 @@ from nav2_common.launch import ReplaceString, RewrittenYaml
 def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory("sentry_nav_bringup")
+    motion_manager_dir = get_package_share_directory("sentry_motion_manager")
     launch_dir = os.path.join(bringup_dir, "launch")
 
     # Create the launch configuration variables
@@ -204,6 +205,17 @@ def generate_launch_description():
         ]
     )
 
+    motion_manager_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(motion_manager_dir, "launch", "motion_manager_launch.py")
+        ),
+        launch_arguments={
+            "namespace": namespace,
+            "use_sim_time": use_sim_time,
+            "params_file": params_file,
+        }.items(),
+    )
+
     # Create the launch description and populate
     ld = LaunchDescription()
 
@@ -225,5 +237,6 @@ def generate_launch_description():
 
     # Add the actions to launch all of the navigation nodes
     ld.add_action(bringup_cmd_group)
+    ld.add_action(motion_manager_cmd)
 
     return ld

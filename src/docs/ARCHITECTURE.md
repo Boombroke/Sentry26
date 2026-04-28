@@ -32,13 +32,13 @@
                            (map -> odom 修正)      |               |
                                    |               |               v
 [视觉识别 (Armors)] ------> [BehaviorTree.CPP] <---+        [Velocity Smoother]
-                           (高层战术决策)          |        (vy 锁 0, TwistStamped)
-                                   ^               |               |
+                            (高层战术决策)          |        (vy 锁 0, 输出 cmd_vel_nav)
+                                    ^               |               |
 [裁判系统 (Referee)] ------+       |               |               v
-                           |       |               |        [底盘执行器接口]
-[底盘反馈 (Odom)] ---------+-------+               |        (/cmd_vel, base_footprint 系)
-                                                   |               |
-                                                   |               v
+                            |       |               |        [sentry_motion_manager]
+[底盘反馈 (Odom)] ---------+-------+               |        (仲裁后发布 /cmd_vel)
+                                                    |               |
+                                                    |               v
                                                    |        Gazebo DiffDrive / rm_serial_driver
                                                    +------> [云台独立接口]
                                                             (下位机上报 yaw/pitch)
@@ -239,9 +239,10 @@ Nav2 官方差速默认组合。两者通过 `controller_plugins: ["RotateShim",
     - `max_accel_x`: 4.5 m/s²
     - `max_accel_yaw`: 5.0 rad/s²
 - **频率**：必须与 `controller_frequency` 一致（仿真 20Hz，实车 30Hz）。
+- **输出**：`cmd_vel_smoothed` remap 到 `cmd_vel_nav`，作为 `sentry_motion_manager` 的 navigation 输入。
 
-### 4.4 cmd_vel 直通（无坐标旋转）
-差速底盘 `chassis_yaw ≡ base_footprint_yaw`，velocity_smoother 输出的 TwistStamped 在 `base_footprint` 系即等同于 `chassis` 本体系，直接 remap 到 `/cmd_vel` 被 Gazebo DiffDrive 插件 / rm_serial_driver 消费。**无需坐标旋转节点，无自旋叠加。**
+### 4.4 sentry_motion_manager 速度仲裁
+差速底盘 `chassis_yaw ≡ base_footprint_yaw`，velocity_smoother 输出的 TwistStamped 在 `base_footprint` 系即等同于 `chassis` 本体系，先进入 `cmd_vel_nav`，再由 `sentry_motion_manager` 发布最终 `/cmd_vel` 给 Gazebo DiffDrive 插件 / rm_serial_driver 消费。**无需坐标旋转节点，无自旋叠加；下游底盘消费者话题保持不变。**
 
 ---
 
@@ -302,12 +303,8 @@ Nav2 官方差速默认组合。两者通过 `controller_plugins: ["RotateShim",
 
 ### 5.4 Nav2 导航行为树
 系统重写了 Nav2 的默认行为树 `navigate_to_pose_w_replanning_and_recovery.xml`：
-- **频率控制**: 路径重规划频率限制在 3Hz，平衡计算开销与实时性。
-- **恢复策略**: 当路径被阻挡时，依次尝试：
-    1. `ClearLocalCostmap`: 清除局部代价地图。
-    2. `ClearGlobalCostmap`: 清除全局代价地图。
-    3. `BackUp`: 后退一段距离。
-    4. `Spin`: 原地旋转以重新观测环境。
+- **频率控制**: 路径重规划频率限制在 5Hz，平衡计算开销与实时性。
+- **恢复策略**: 旧 `<Spin/>` + `<BackUp/>` 主恢复路径已从默认 BT 中移除；当前只保留清图+等待的 `MotionManagerRecoveryPlaceholder`，确保 BT 可解析，后续由 `sentry_motion_manager` 的 Nav2 recovery 适配器接管贴墙脱困触发。
 - **重试机制**: `RecoveryNode` 设置为最多重试 10 次，防止陷入死循环。
 
 ---

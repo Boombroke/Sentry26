@@ -8,7 +8,7 @@ sentry_nav 是哨兵机器人自主导航系统的顶层元包。它通过依赖
 - **point_lio**: 基于 Point-LIO 算法的激光惯性里程计，提供高精度、高频的位姿估计。
 - **livox_ros_driver2**: Livox 激光雷达的 ROS2 驱动程序，负责原始数据采集。
 - **odom_bridge**: 里程计桥接节点。合并了原 loam_interface 和 sensor_scan_generation，在单次同步回调中完成 lidar_odom→odom 变换、2D 约束、`odom → base_footprint` TF 广播、速度计算和点云转换。云台雷达方案下通过每帧 `lookupTransform(lidar_frame → base_frame)` 消化云台旋转和 Mid360 安装外参对底盘位姿的影响；发布给 Nav2 的 odometry 始终保持 2D 底盘语义。
-- **nav2_plugins**: 自定义 Nav2 插件集合，包含强度体素层 (intensity_voxel_layer) 和 BackUpFreeSpace 恢复行为等。
+- **nav2_plugins**: 自定义 Nav2 插件集合，包含默认 costmap 仍使用的强度体素层 (intensity_voxel_layer)；BackUpFreeSpace 恢复行为代码保留但已退出默认恢复路径。
 - **ign_sim_pointcloud_tool**: 将 Ignition 仿真环境中的原始数据转换为标准点云格式。
 - **pointcloud_to_laserscan**: 将三维点云数据投影为二维激光扫描数据，兼容传统导航算法。
 - **terrain_analysis**: 基础地形分析模块，用于实时检测环境中的障碍物。

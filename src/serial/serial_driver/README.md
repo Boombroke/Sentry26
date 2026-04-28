@@ -131,7 +131,7 @@ ros2 launch rm_serial_driver serial_driver.launch.py device_name:=/dev/ttyUSB0
 
 - ROS 端与电控端的结构体必须保持严格的字节对齐，协议变更时两端必须同步更新。
 - CRC16 校验算法两端必须一致（采用查表法，初始值为 0xFFFF）。
-- `cmd_vel` 订阅的是绝对路径话题，接收的是 Nav2 velocity_smoother 输出的 TwistStamped（`base_footprint` 系）。差速底盘 `chassis_yaw ≡ base_footprint_yaw`，可直接透传至下位机，**无需坐标旋转**。
+- `cmd_vel` 订阅的是绝对路径话题，接收的是 `sentry_motion_manager` 发布的最终 TwistStamped（`base_footprint` 系）。差速底盘 `chassis_yaw ≡ base_footprint_yaw`，可直接透传至下位机，**无需坐标旋转**。
 - 驱动具备自动重连机制，串口断开后会以 1s 为间隔尝试重新打开设备。
 - 本包特有的 CMake 配置将 C++ 标准设为 C++14（项目其他包通常使用 C++17）。
 - `package.xml` 中保留了部分历史遗留的未使用依赖（如 `auto_nav_interfaces`, `visualization_msgs` 等）。
@@ -168,7 +168,7 @@ timestamp_ns,vel_x,vel_w
 ```
 
 - `timestamp_ns`：ROS 时间（纳秒）
-- `vel_x`：base_footprint 系前向线速度（m/s），直接透传自 Nav2 velocity_smoother
+- `vel_x`：base_footprint 系前向线速度（m/s），直接透传自最终 `/cmd_vel`
 - `vel_w`：角速度（rad/s）
 
 ### 离线分析

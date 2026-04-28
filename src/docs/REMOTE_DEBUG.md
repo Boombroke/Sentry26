@@ -108,7 +108,7 @@ sudo ufw allow 8765/tcp
 |---------|------|---------|
 | **3D** | 地图 + 路径 + 机器人 + 点云 | `/map`, `/plan`, `/tf`, `/scan` |
 | **Map** | 2D costmap 细节 | `/global_costmap/costmap` 或 `/local_costmap/costmap` |
-| **Plot** | 速度/位置曲线 | `/cmd_vel`, `/odometry` |
+| **Plot** | 速度/位置曲线 | `/cmd_vel_nav`, `/cmd_vel`, `/odometry` |
 | **Log** | ROS 日志 | `/rosout` |
 | **Topic List** | 话题频率监控 | 自动发现 |
 
@@ -210,7 +210,7 @@ tailscale ip -4
 ros2 run foxglove_bridge foxglove_bridge --ros-args \
     -p port:=8765 \
     -p address:="0.0.0.0" \
-    -p topic_whitelist:="['/map', '/plan', '/tf', '/tf_static', '/scan', '/global_costmap/costmap', '/local_costmap/costmap', '/odometry', '/cmd_vel', '/rosout']"
+    -p topic_whitelist:="['/map', '/plan', '/tf', '/tf_static', '/scan', '/global_costmap/costmap', '/local_costmap/costmap', '/odometry', '/cmd_vel_nav', '/cmd_vel', '/motion_manager/state', '/rosout']"
 ```
 
 ---

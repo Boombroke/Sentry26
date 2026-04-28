@@ -2,7 +2,7 @@
 
 `sentry_motion_manager` 是哨兵底盘运动管理器的基础包。它位于 Nav2 / recovery / terrain / evasion / manual 等上游速度源与最终 `/cmd_vel` 执行链路之间，用于统一做速度仲裁、恢复状态机、Nav2 适配和安全限幅。
 
-当前版本提供可扩展骨架、命令仲裁、安全限幅/加速度限制和第一版贴墙/卡住脱困恢复状态机。节点会订阅各类计划速度源，但默认 `command_output_enabled=false`，因此最终 `/cmd_vel` 仍保持零速；恢复状态机会独立发布 `cmd_vel_recovery` 并进入统一仲裁，方便后续接入 Nav2 行为或上层卡住检测。
+当前版本提供可扩展骨架、命令仲裁、安全限幅/加速度限制和第一版贴墙/卡住脱困恢复状态机。节点会订阅各类计划速度源，但独立配置默认 `command_output_enabled=false`，因此输出始终为零速 `geometry_msgs/msg/TwistStamped`；`sentry_nav_bringup` 的仿真/实车集成参数会显式覆盖为 `true`，让 Nav2 的 `cmd_vel_nav` 经本包仲裁后发布最终 `/cmd_vel`。恢复状态机会独立发布 `cmd_vel_recovery` 并进入统一仲裁，方便后续接入 Nav2 行为或上层卡住检测。
 
 ## 节点
 
@@ -100,7 +100,7 @@ ros2 topic pub --once /motion_manager/recovery_trigger std_msgs/msg/Bool "{data:
 ## 后续扩展点
 
 1. **恢复集成**：将当前 `motion_manager/recovery_trigger` 替换或包装为 Nav2 行为/服务，并接入上层卡住检测。
-2. **Nav2 adapter**：将 Nav2 输出重映射到 `cmd_vel_nav`，由本包统一输出最终 `/cmd_vel`。
+2. **Nav2 recovery adapter**：当前 bringup 已将 Nav2 平滑输出重映射到 `cmd_vel_nav` 并由本包统一输出最终 `/cmd_vel`；后续还需增加 BT/recovery 触发适配，将贴墙脱困命令送入 `cmd_vel_recovery`。
 3. **安全约束**：接入碰撞预测、底盘反馈和故障降级策略。
 
 ## 使用
@@ -108,6 +108,8 @@ ros2 topic pub --once /motion_manager/recovery_trigger std_msgs/msg/Bool "{data:
 ```bash
 ros2 launch sentry_motion_manager motion_manager_launch.py
 ```
+
+在导航集成中请通过 `sentry_nav_bringup` 启动；该路径会传入带 namespace root key 的 `nav2_params.yaml`，并设置 `command_output_enabled: true`。直接启动本包 launch 时仍使用安全默认配置，不会透传上游速度。
 
 单包构建：
 

@@ -10,6 +10,8 @@
 
 `nav2_plugins` 是一个用于扩展 `Navigation2`（Nav2）框架的插件库，当前提供提供了一些额外的行为逻辑和代价地图层以增强机器人在导航过程中灵活性。
 
+> 当前默认导航 bringup 仍使用 `IntensityVoxelLayer`，但不再加载 `BackUpFreeSpace` 作为默认恢复行为。贴墙脱困后续由 `sentry_motion_manager` 的 recovery 状态机接管；本插件保留用于对比、手动实验和历史兼容。
+
 ## 2. Plugins
 
 ### 2.1 Behaviors
@@ -34,7 +36,7 @@
 - `unknown_cost_threshold`: costmap cell 达到该值即视为不可穿越，默认 253 表示 unknown/lethal 都阻断恢复射线（default：253）。
 - `visualize`: 是否启用可视化功能。启用后会在 RViz 中显示自由空间和目标位置（default：false）。
 
-**Example:**
+**Optional example (not used by default bringup):**
 
 ```yaml
 behavior_server:

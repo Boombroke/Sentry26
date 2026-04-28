@@ -31,22 +31,12 @@
       <ReactiveFallback name="RecoveryFallback">
         <GoalUpdated/>
         <RoundRobin name="RecoveryActions">
-          <Spin spin_dist="1.57"/>
-          <BackUp backup_dist="0.6"
-                  backup_speed="0.2"/>
-          <Sequence name="ClearAndWait">
+          <Sequence name="MotionManagerRecoveryPlaceholder">
+            <!-- sentry_motion_manager owns /cmd_vel now. Keep this BT parseable
+                 until a dedicated Nav2 recovery trigger adapter is available. -->
             <ClearEntireCostmap name="ClearLocalCostmap-Subtree"
                                 service_name="local_costmap/clear_entirely_local_costmap"/>
             <ClearEntireCostmap name="ClearGlobalCostmap-Subtree"
-                                service_name="global_costmap/clear_entirely_global_costmap"/>
-            <Wait wait_duration="1"/>
-          </Sequence>
-          <Sequence name="BackUpThenClear">
-            <BackUp backup_dist="0.6"
-                    backup_speed="0.2"/>
-            <ClearEntireCostmap name="ClearLocalCostmap-PostBackup"
-                                service_name="local_costmap/clear_entirely_local_costmap"/>
-            <ClearEntireCostmap name="ClearGlobalCostmap-PostBackup"
                                 service_name="global_costmap/clear_entirely_global_costmap"/>
             <Wait wait_duration="1"/>
           </Sequence>
