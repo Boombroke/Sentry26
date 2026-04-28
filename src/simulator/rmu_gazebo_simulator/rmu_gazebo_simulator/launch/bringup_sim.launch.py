@@ -29,6 +29,8 @@ def generate_launch_description():
     manual_gz = LaunchConfiguration("manual_gz")
     headless = LaunchConfiguration("headless")
     spawn_delay = LaunchConfiguration("spawn_delay")
+    auto_set_performer = LaunchConfiguration("auto_set_performer")
+    enable_pose_bridge = LaunchConfiguration("enable_pose_bridge")
 
     declare_manual_gz_cmd = DeclareLaunchArgument(
         "manual_gz",
@@ -46,6 +48,25 @@ def generate_launch_description():
         "spawn_delay",
         default_value="5.0",
         description="Seconds to wait before spawning robots (gives Gazebo time to stabilize)",
+    )
+
+    declare_auto_set_performer_cmd = DeclareLaunchArgument(
+        "auto_set_performer",
+        default_value="false",
+        description=(
+            "是否自动调用 /world/default/level/set_performer 服务。"
+            "默认 false，需要手动执行该服务。"
+        ),
+    )
+
+    declare_enable_pose_bridge_cmd = DeclareLaunchArgument(
+        "enable_pose_bridge",
+        default_value="false",
+        description=(
+            "是否启动 pose_bridge 节点（转发至 referee_system.launch.py）。"
+            "默认 false，因为 pose_bridge 当前存在构造函数竞态导致 SIGSEGV，"
+            "且导航栈不依赖 /referee_system/pose_info。"
+        ),
     )
 
     gazebo_launch = IncludeLaunchDescription(
@@ -67,13 +88,17 @@ def generate_launch_description():
         launch_arguments={
             "gz_world_path": gz_world_path,
             "world": selected_world,
+            "auto_set_performer": auto_set_performer,
         }.items(),
     )
 
     referee_system_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_simulator, "launch", "referee_system.launch.py")
-        )
+        ),
+        launch_arguments={
+            "enable_pose_bridge": enable_pose_bridge,
+        }.items(),
     )
 
     # When Gazebo is auto-launched, delay spawning to let it stabilize
@@ -91,6 +116,7 @@ def generate_launch_description():
         launch_arguments={
             "gz_world_path": gz_world_path,
             "world": selected_world,
+            "auto_set_performer": auto_set_performer,
         }.items(),
         condition=IfCondition(manual_gz),
     )
@@ -99,6 +125,9 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(pkg_simulator, "launch", "referee_system.launch.py")
         ),
+        launch_arguments={
+            "enable_pose_bridge": enable_pose_bridge,
+        }.items(),
         condition=IfCondition(manual_gz),
     )
 
@@ -107,6 +136,8 @@ def generate_launch_description():
     ld.add_action(declare_manual_gz_cmd)
     ld.add_action(declare_headless_cmd)
     ld.add_action(declare_spawn_delay_cmd)
+    ld.add_action(declare_auto_set_performer_cmd)
+    ld.add_action(declare_enable_pose_bridge_cmd)
 
     ld.add_action(gazebo_launch)
     ld.add_action(delayed_spawn)

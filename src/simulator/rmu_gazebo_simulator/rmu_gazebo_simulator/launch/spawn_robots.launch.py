@@ -3,7 +3,9 @@ import os
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from nav2_common.launch import ReplaceString
 from sdformat_tools.urdf_generator import UrdfGenerator
@@ -44,6 +46,20 @@ def generate_launch_description():
     xmacro.set_xml_file(robot_xmacro_path)
 
     ld = LaunchDescription()
+
+    auto_set_performer_arg = DeclareLaunchArgument(
+        "auto_set_performer",
+        default_value="false",
+        description=(
+            "是否自动调用 /world/default/level/set_performer 服务。"
+            "默认 false，需要手动执行：\n"
+            "  gz service -s /world/default/level/set_performer "
+            "--reqtype gz.msgs.StringMsg --reptype gz.msgs.Boolean "
+            "--timeout 2000 --req 'data: \"<robot_name>\"'"
+        ),
+    )
+    ld.add_action(auto_set_performer_arg)
+    auto_set_performer = LaunchConfiguration("auto_set_performer")
 
     for robot in robots:
         # Generate SDF from xmacro
@@ -116,6 +132,11 @@ def generate_launch_description():
 
         # Execute service call after spawning robots
         # https://gazebosim.org/api/gazebo/6.9/levels.html#Runtime-performers
+        # 默认不自动执行；需要时传入 auto_set_performer:=true，
+        # 或手动运行：
+        #   gz service -s /world/default/level/set_performer \
+        #     --reqtype gz.msgs.StringMsg --reptype gz.msgs.Boolean \
+        #     --timeout 2000 --req 'data: "<robot_name>"'
         set_performer_service = ExecuteProcess(
             cmd=[
                 "gz",
@@ -132,6 +153,7 @@ def generate_launch_description():
                 f'data: "{robot["name"]}"',
             ],
             output="screen",
+            condition=IfCondition(auto_set_performer),
         )
 
         ld.add_action(spawn_robot)
