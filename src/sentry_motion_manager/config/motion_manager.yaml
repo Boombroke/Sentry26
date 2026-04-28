@@ -26,3 +26,5 @@ motion_manager:
 
     max_linear_x: 2.0
     max_angular_z: 6.3
+    max_linear_accel: 3.0
+    max_angular_accel: 12.0

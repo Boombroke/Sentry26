@@ -1,8 +1,8 @@
 # sentry_motion_manager
 
-`sentry_motion_manager` 是哨兵底盘运动管理器的基础包。它位于 Nav2 / recovery / terrain / manual 等上游速度源与最终 `/cmd_vel` 执行链路之间，后续用于统一做速度仲裁、恢复状态机、Nav2 适配和安全限幅。
+`sentry_motion_manager` 是哨兵底盘运动管理器的基础包。它位于 Nav2 / recovery / terrain / evasion / manual 等上游速度源与最终 `/cmd_vel` 执行链路之间，用于统一做速度仲裁、恢复状态机、Nav2 适配和安全限幅。
 
-当前提交只提供可扩展骨架和安全默认行为：节点会订阅各类计划速度源，但默认 `command_output_enabled=false`，因此输出始终为零速 `geometry_msgs/msg/TwistStamped`。后续功能分支可以在不重写包结构的前提下扩展 `MotionSource`、`MotionMode`、`RecoveryPhase`、`MotionCommand` 和 `MotionState`。
+节点会订阅各类计划速度源，但默认 `command_output_enabled=false`，因此输出始终为零速 `geometry_msgs/msg/TwistStamped`。后续功能分支可以在不重写包结构的前提下扩展 `MotionSource`、`MotionMode`、`RecoveryPhase`、`MotionCommand` 和 `MotionState`。
 
 ## 节点
 
@@ -45,17 +45,29 @@
 ## 安全默认值
 
 - `command_output_enabled=false`：默认不透传任何上游速度，只发布零速。
-- 所有输入源都有超时门控，过期命令不会被选中。
+- `command_output_enabled=true` 时也只允许新鲜且有效的上游命令输出；无新鲜命令、急停或输出关闭时仍发布零速。
+- 仲裁优先级固定为：emergency stop > manual > recovery > terrain > evasion > navigation。
+- 所有输入源都有超时门控，过期命令不会被选中；输出 tick 会按 `output_frequency_hz` 重新仲裁，避免旧命令残留。
 - 输出强制差速语义：`linear.y`、`linear.z`、`angular.x`、`angular.y` 置零，仅保留 `linear.x` 和 `angular.z`。
-- 输出限幅默认 `max_linear_x=2.0 m/s`、`max_angular_z=6.3 rad/s`。
+- 输出速度限幅默认 `max_linear_x=2.0 m/s`、`max_angular_z=6.3 rad/s`。
+- 输出加速度限幅默认 `max_linear_accel=3.0 m/s^2`、`max_angular_accel=12.0 rad/s^2`，基于上一帧实际发布命令和本帧发布时间差计算。
 - 急停优先级高于所有速度源。
+
+## 关键参数
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `command_output_enabled` | `false` | 是否允许新鲜上游命令进入最终 `/cmd_vel`；关闭时发布零速 |
+| `max_linear_x` | `2.0` | `linear.x` 速度绝对值上限，单位 m/s |
+| `max_angular_z` | `6.3` | `angular.z` 速度绝对值上限，单位 rad/s |
+| `max_linear_accel` | `3.0` | `linear.x` 加速度绝对值上限，单位 m/s^2 |
+| `max_angular_accel` | `12.0` | `angular.z` 加速度绝对值上限，单位 rad/s^2 |
 
 ## 后续扩展点
 
-1. **命令仲裁**：在 `MotionSource` 优先级基础上实现 E-stop > manual > safety/recovery > terrain traverse > evasive spin > navigation。
-2. **恢复状态机**：扩展 `RecoveryPhase`，实现先直线后退，再低曲率/弧线脱困；进展判断使用投影位移，避免累计抖动误判。
-3. **Nav2 adapter**：将 Nav2 输出重映射到 `cmd_vel_nav`，由本包统一输出最终 `/cmd_vel`。
-4. **安全约束**：接入碰撞预测、速度平滑、底盘反馈和故障降级策略。
+1. **恢复状态机**：扩展 `RecoveryPhase`，实现先直线后退，再低曲率/弧线脱困；进展判断使用投影位移，避免累计抖动误判。
+2. **Nav2 adapter**：将 Nav2 输出重映射到 `cmd_vel_nav`，由本包统一输出最终 `/cmd_vel`。
+3. **安全约束**：接入碰撞预测、底盘反馈和故障降级策略。
 
 ## 使用
 

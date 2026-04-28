@@ -46,6 +46,8 @@ diagnostic_msgs::msg::KeyValue makeKeyValue(const std::string & key, const std::
   return item;
 }
 
+double finiteOrZero(double value) { return std::isfinite(value) ? value : 0.0; }
+
 }  // namespace
 
 std::string toString(MotionSource source)
@@ -115,6 +117,11 @@ MotionManagerNode::MotionManagerNode(const rclcpp::NodeOptions & options)
     {MotionSource::kEvasion, "", 0.0, nullptr, MotionCommand{MotionSource::kEvasion}},
     {MotionSource::kNavigation, "", 0.0, nullptr, MotionCommand{MotionSource::kNavigation}},
   }},
+  state_(),
+  selected_command_(),
+  last_published_command_(),
+  last_publish_stamp_(0, 0, RCL_SYSTEM_TIME),
+  has_published_command_(false),
   command_output_enabled_(false),
   command_frame_id_("base_footprint"),
   manager_frequency_hz_(100.0),
@@ -122,7 +129,9 @@ MotionManagerNode::MotionManagerNode(const rclcpp::NodeOptions & options)
   state_frequency_hz_(10.0),
   diagnostics_frequency_hz_(2.0),
   max_linear_x_(2.0),
-  max_angular_z_(6.3)
+  max_angular_z_(6.3),
+  max_linear_accel_(3.0),
+  max_angular_accel_(12.0)
 {
   command_output_enabled_ = this->declare_parameter<bool>("command_output_enabled", false);
   command_frame_id_ = this->declare_parameter<std::string>("command_frame_id", command_frame_id_);
@@ -134,6 +143,8 @@ MotionManagerNode::MotionManagerNode(const rclcpp::NodeOptions & options)
     declarePositiveDouble("diagnostics_frequency_hz", diagnostics_frequency_hz_);
   max_linear_x_ = declarePositiveDouble("max_linear_x", max_linear_x_);
   max_angular_z_ = declarePositiveDouble("max_angular_z", max_angular_z_);
+  max_linear_accel_ = declarePositiveDouble("max_linear_accel", max_linear_accel_);
+  max_angular_accel_ = declarePositiveDouble("max_angular_accel", max_angular_accel_);
 
   source_slots_[sourceIndex(MotionSource::kNavigation)].topic =
     this->declare_parameter<std::string>("nav_command_topic", "cmd_vel_nav");
@@ -184,6 +195,7 @@ MotionManagerNode::MotionManagerNode(const rclcpp::NodeOptions & options)
     this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(diagnostics_topic, 1);
 
   selected_command_ = zeroCommand(this->now());
+  last_published_command_ = selected_command_;
   state_.output_enabled = command_output_enabled_;
 
   manager_timer_ = this->create_wall_timer(
@@ -220,9 +232,10 @@ void MotionManagerNode::emergencyStopCallback(const std_msgs::msg::Bool::SharedP
   state_.emergency_stop = msg->data;
 }
 
-void MotionManagerNode::updateSelectedCommand()
+void MotionManagerNode::updateSelectedCommand() { selectCommand(this->now()); }
+
+void MotionManagerNode::selectCommand(const rclcpp::Time & now)
 {
-  const auto now = this->now();
   state_.output_enabled = command_output_enabled_;
 
   if (state_.emergency_stop) {
@@ -232,7 +245,8 @@ void MotionManagerNode::updateSelectedCommand()
     return;
   }
 
-  for (const auto & slot : source_slots_) {
+  for (const auto source : kPriorityOrder) {
+    const auto & slot = source_slots_[sourceIndex(source)];
     if (isCommandFresh(slot.latest_command, slot.timeout_s, now)) {
       state_.mode = modeForSource(slot.source);
       state_.selected_source = slot.source;
@@ -249,12 +263,15 @@ void MotionManagerNode::updateSelectedCommand()
 
 void MotionManagerNode::publishCommand()
 {
+  const auto now = this->now();
+  selectCommand(now);
+
   if (!command_output_enabled_ || state_.emergency_stop || !state_.has_fresh_command) {
-    command_pub_->publish(zeroCommand(this->now()));
+    publishAndRemember(zeroCommand(now));
     return;
   }
 
-  command_pub_->publish(selected_command_);
+  publishAndRemember(limitAcceleration(selected_command_, now));
 }
 
 void MotionManagerNode::publishState()
@@ -298,7 +315,7 @@ bool MotionManagerNode::isCommandFresh(
     return false;
   }
 
-  const rclcpp::Time command_stamp(command.twist.header.stamp);
+  const rclcpp::Time command_stamp(command.twist.header.stamp, now.get_clock_type());
   const auto age = now - command_stamp;
   return age.seconds() >= 0.0 && age.seconds() <= timeout_s;
 }
@@ -376,13 +393,53 @@ geometry_msgs::msg::TwistStamped MotionManagerNode::clampCommand(
     clamped.header.frame_id = command_frame_id_;
   }
 
-  clamped.twist.linear.x = std::clamp(clamped.twist.linear.x, -max_linear_x_, max_linear_x_);
+  clamped.twist.linear.x =
+    std::clamp(finiteOrZero(clamped.twist.linear.x), -max_linear_x_, max_linear_x_);
   clamped.twist.linear.y = 0.0;
   clamped.twist.linear.z = 0.0;
   clamped.twist.angular.x = 0.0;
   clamped.twist.angular.y = 0.0;
-  clamped.twist.angular.z = std::clamp(clamped.twist.angular.z, -max_angular_z_, max_angular_z_);
+  clamped.twist.angular.z =
+    std::clamp(finiteOrZero(clamped.twist.angular.z), -max_angular_z_, max_angular_z_);
   return clamped;
+}
+
+geometry_msgs::msg::TwistStamped MotionManagerNode::limitAcceleration(
+  const geometry_msgs::msg::TwistStamped & command, const rclcpp::Time & stamp) const
+{
+  auto limited = clampCommand(command, stamp);
+
+  const double previous_linear_x =
+    has_published_command_ ? last_published_command_.twist.linear.x : 0.0;
+  const double previous_angular_z =
+    has_published_command_ ? last_published_command_.twist.angular.z : 0.0;
+  const double elapsed_s =
+    has_published_command_ ? (stamp - last_publish_stamp_).seconds() : (1.0 / output_frequency_hz_);
+
+  limited.twist.linear.x =
+    limitAxisAcceleration(limited.twist.linear.x, previous_linear_x, max_linear_accel_, elapsed_s);
+  limited.twist.angular.z = limitAxisAcceleration(
+    limited.twist.angular.z, previous_angular_z, max_angular_accel_, elapsed_s);
+  return limited;
+}
+
+double MotionManagerNode::limitAxisAcceleration(
+  double target, double previous, double max_accel, double elapsed_s) const
+{
+  if (elapsed_s <= 0.0) {
+    return previous;
+  }
+
+  const double max_delta = max_accel * elapsed_s;
+  return std::clamp(target, previous - max_delta, previous + max_delta);
+}
+
+void MotionManagerNode::publishAndRemember(const geometry_msgs::msg::TwistStamped & command)
+{
+  command_pub_->publish(command);
+  last_published_command_ = command;
+  last_publish_stamp_ = rclcpp::Time(command.header.stamp, this->now().get_clock_type());
+  has_published_command_ = true;
 }
 
 }  // namespace sentry_motion_manager

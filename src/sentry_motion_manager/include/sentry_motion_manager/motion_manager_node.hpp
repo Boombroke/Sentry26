@@ -46,10 +46,15 @@ private:
   };
 
   static constexpr std::size_t kSourceCount = 5;
+  // Arbitration priority after emergency stop: manual > recovery > terrain > evasion > navigation.
+  inline static constexpr std::array<MotionSource, kSourceCount> kPriorityOrder{
+    MotionSource::kManual, MotionSource::kRecovery, MotionSource::kTerrain, MotionSource::kEvasion,
+    MotionSource::kNavigation};
 
   void commandCallback(MotionSource source, const geometry_msgs::msg::TwistStamped::SharedPtr msg);
   void emergencyStopCallback(const std_msgs::msg::Bool::SharedPtr msg);
   void updateSelectedCommand();
+  void selectCommand(const rclcpp::Time & now);
   void publishCommand();
   void publishState();
   void publishDiagnostics();
@@ -63,10 +68,18 @@ private:
   geometry_msgs::msg::TwistStamped zeroCommand(const rclcpp::Time & stamp) const;
   geometry_msgs::msg::TwistStamped clampCommand(
     const geometry_msgs::msg::TwistStamped & command, const rclcpp::Time & stamp) const;
+  geometry_msgs::msg::TwistStamped limitAcceleration(
+    const geometry_msgs::msg::TwistStamped & command, const rclcpp::Time & stamp) const;
+  double limitAxisAcceleration(
+    double target, double previous, double max_accel, double elapsed_s) const;
+  void publishAndRemember(const geometry_msgs::msg::TwistStamped & command);
 
   std::array<SourceSlot, kSourceCount> source_slots_;
   MotionState state_;
   geometry_msgs::msg::TwistStamped selected_command_;
+  geometry_msgs::msg::TwistStamped last_published_command_;
+  rclcpp::Time last_publish_stamp_;
+  bool has_published_command_;
 
   bool command_output_enabled_;
   std::string command_frame_id_;
@@ -76,6 +89,8 @@ private:
   double diagnostics_frequency_hz_;
   double max_linear_x_;
   double max_angular_z_;
+  double max_linear_accel_;
+  double max_angular_accel_;
 
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr emergency_stop_sub_;
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr command_pub_;
