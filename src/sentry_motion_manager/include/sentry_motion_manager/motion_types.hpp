@@ -41,11 +41,12 @@ enum class MotionMode {
 };
 
 enum class RecoveryPhase {
-  kInactive,
-  kStraightReverse,
+  kIdleDiagnose,
+  kStraightRelease,
+  kLowCurvatureRelease,
   kArcEscape,
-  kFailed,
   kSucceeded,
+  kFailed,
 };
 
 struct MotionCommand
@@ -59,7 +60,7 @@ struct MotionState
 {
   MotionMode mode{MotionMode::kIdle};
   MotionSource selected_source{MotionSource::kNavigation};
-  RecoveryPhase recovery_phase{RecoveryPhase::kInactive};
+  RecoveryPhase recovery_phase{RecoveryPhase::kIdleDiagnose};
   bool output_enabled{false};
   bool emergency_stop{false};
   bool has_fresh_command{false};

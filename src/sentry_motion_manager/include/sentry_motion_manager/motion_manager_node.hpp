@@ -22,8 +22,10 @@
 
 #include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sentry_motion_manager/motion_types.hpp"
+#include "sentry_motion_manager/recovery_state_machine.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/string.hpp"
 
@@ -53,8 +55,11 @@ private:
 
   void commandCallback(MotionSource source, const geometry_msgs::msg::TwistStamped::SharedPtr msg);
   void emergencyStopCallback(const std_msgs::msg::Bool::SharedPtr msg);
+  void recoveryTriggerCallback(const std_msgs::msg::Bool::SharedPtr msg);
+  void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void updateSelectedCommand();
   void selectCommand(const rclcpp::Time & now);
+  void publishRecoveryCommand(const rclcpp::Time & stamp);
   void publishCommand();
   void publishState();
   void publishDiagnostics();
@@ -80,8 +85,11 @@ private:
   geometry_msgs::msg::TwistStamped last_published_command_;
   rclcpp::Time last_publish_stamp_;
   bool has_published_command_;
+  RecoveryStateMachine recovery_state_machine_;
 
   bool command_output_enabled_;
+  bool recovery_trigger_active_;
+  bool recovery_command_was_active_;
   std::string command_frame_id_;
   double manager_frequency_hz_;
   double output_frequency_hz_;
@@ -93,7 +101,10 @@ private:
   double max_angular_accel_;
 
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr emergency_stop_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr recovery_trigger_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometry_sub_;
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr command_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr recovery_command_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_pub_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_pub_;
 

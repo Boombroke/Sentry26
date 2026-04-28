@@ -29,12 +29,18 @@ install(FILES README.md
 
 if(BUILD_TESTING)
   set(ament_cmake_clang_format_CONFIG_FILE "${CMAKE_SOURCE_DIR}/.clang-format")
+  find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_lint_auto REQUIRED)
   list(APPEND AMENT_LINT_AUTO_EXCLUDE
     ament_cmake_uncrustify
     ament_cmake_flake8
   )
   ament_lint_auto_find_test_dependencies()
+
+  ament_add_gtest(recovery_state_machine_test
+    test/recovery_state_machine_test.cpp
+  )
+  target_link_libraries(recovery_state_machine_test ${PROJECT_NAME})
 endif()
 
 ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)

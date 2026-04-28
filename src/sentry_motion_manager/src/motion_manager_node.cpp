@@ -93,16 +93,18 @@ std::string toString(MotionMode mode)
 std::string toString(RecoveryPhase phase)
 {
   switch (phase) {
-    case RecoveryPhase::kInactive:
-      return "inactive";
-    case RecoveryPhase::kStraightReverse:
-      return "straight_reverse";
+    case RecoveryPhase::kIdleDiagnose:
+      return "idle_diagnose";
+    case RecoveryPhase::kStraightRelease:
+      return "straight_release";
+    case RecoveryPhase::kLowCurvatureRelease:
+      return "low_curvature_release";
     case RecoveryPhase::kArcEscape:
       return "arc_escape";
-    case RecoveryPhase::kFailed:
-      return "failed";
     case RecoveryPhase::kSucceeded:
       return "succeeded";
+    case RecoveryPhase::kFailed:
+      return "failed";
   }
 
   return "unknown";
@@ -122,7 +124,10 @@ MotionManagerNode::MotionManagerNode(const rclcpp::NodeOptions & options)
   last_published_command_(),
   last_publish_stamp_(0, 0, RCL_SYSTEM_TIME),
   has_published_command_(false),
+  recovery_state_machine_(),
   command_output_enabled_(false),
+  recovery_trigger_active_(false),
+  recovery_command_was_active_(false),
   command_frame_id_("base_footprint"),
   manager_frequency_hz_(100.0),
   output_frequency_hz_(50.0),
@@ -170,6 +175,9 @@ MotionManagerNode::MotionManagerNode(const rclcpp::NodeOptions & options)
 
   const auto emergency_stop_topic =
     this->declare_parameter<std::string>("emergency_stop_topic", "emergency_stop");
+  const auto recovery_trigger_topic = this->declare_parameter<std::string>(
+    "recovery_trigger_topic", "motion_manager/recovery_trigger");
+  const auto odometry_topic = this->declare_parameter<std::string>("odometry_topic", "odometry");
   const auto output_command_topic =
     this->declare_parameter<std::string>("output_command_topic", "cmd_vel");
   const auto state_topic =
@@ -177,7 +185,49 @@ MotionManagerNode::MotionManagerNode(const rclcpp::NodeOptions & options)
   const auto diagnostics_topic =
     this->declare_parameter<std::string>("diagnostics_topic", "diagnostics");
 
+  RecoveryStateMachineConfig recovery_config;
+  recovery_config.command_frame_id = command_frame_id_;
+  recovery_config.diagnose_timeout_s =
+    declarePositiveDouble("recovery_diagnose_timeout_s", recovery_config.diagnose_timeout_s);
+  recovery_config.no_progress_timeout_s =
+    declarePositiveDouble("recovery_no_progress_timeout_s", recovery_config.no_progress_timeout_s);
+  recovery_config.min_progress_delta_m =
+    declarePositiveDouble("recovery_min_progress_delta_m", recovery_config.min_progress_delta_m);
+  recovery_config.minimum_projected_success_m = declarePositiveDouble(
+    "recovery_minimum_projected_success_m", recovery_config.minimum_projected_success_m);
+  recovery_config.turn_direction =
+    this->declare_parameter<double>("recovery_turn_direction", recovery_config.turn_direction);
+  recovery_config.straight_release_distance_m = declarePositiveDouble(
+    "recovery_straight_release_distance_m", recovery_config.straight_release_distance_m);
+  recovery_config.straight_release_speed_mps = this->declare_parameter<double>(
+    "recovery_straight_release_speed_mps", recovery_config.straight_release_speed_mps);
+  recovery_config.straight_release_timeout_s = declarePositiveDouble(
+    "recovery_straight_release_timeout_s", recovery_config.straight_release_timeout_s);
+  recovery_config.low_curvature_release_distance_m = declarePositiveDouble(
+    "recovery_low_curvature_release_distance_m", recovery_config.low_curvature_release_distance_m);
+  recovery_config.low_curvature_release_speed_mps = this->declare_parameter<double>(
+    "recovery_low_curvature_release_speed_mps", recovery_config.low_curvature_release_speed_mps);
+  recovery_config.low_curvature_angular_z_radps = declarePositiveDouble(
+    "recovery_low_curvature_angular_z_radps", recovery_config.low_curvature_angular_z_radps);
+  recovery_config.low_curvature_max_angular_z_radps = declarePositiveDouble(
+    "recovery_low_curvature_max_angular_z_radps",
+    recovery_config.low_curvature_max_angular_z_radps);
+  recovery_config.low_curvature_release_timeout_s = declarePositiveDouble(
+    "recovery_low_curvature_release_timeout_s", recovery_config.low_curvature_release_timeout_s);
+  recovery_config.arc_escape_distance_m =
+    declarePositiveDouble("recovery_arc_escape_distance_m", recovery_config.arc_escape_distance_m);
+  recovery_config.arc_escape_speed_mps = this->declare_parameter<double>(
+    "recovery_arc_escape_speed_mps", recovery_config.arc_escape_speed_mps);
+  recovery_config.arc_escape_angular_z_radps = declarePositiveDouble(
+    "recovery_arc_escape_angular_z_radps", recovery_config.arc_escape_angular_z_radps);
+  recovery_config.arc_escape_timeout_s =
+    declarePositiveDouble("recovery_arc_escape_timeout_s", recovery_config.arc_escape_timeout_s);
+  recovery_state_machine_.configure(recovery_config);
+
   for (auto & slot : source_slots_) {
+    if (slot.source == MotionSource::kRecovery) {
+      continue;
+    }
     slot.subscription = this->create_subscription<geometry_msgs::msg::TwistStamped>(
       slot.topic, rclcpp::SystemDefaultsQoS(),
       [this, source = slot.source](const geometry_msgs::msg::TwistStamped::SharedPtr msg) {
@@ -188,8 +238,16 @@ MotionManagerNode::MotionManagerNode(const rclcpp::NodeOptions & options)
   emergency_stop_sub_ = this->create_subscription<std_msgs::msg::Bool>(
     emergency_stop_topic, rclcpp::SystemDefaultsQoS(),
     std::bind(&MotionManagerNode::emergencyStopCallback, this, std::placeholders::_1));
+  recovery_trigger_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+    recovery_trigger_topic, rclcpp::SystemDefaultsQoS(),
+    std::bind(&MotionManagerNode::recoveryTriggerCallback, this, std::placeholders::_1));
+  odometry_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+    odometry_topic, rclcpp::SensorDataQoS(),
+    std::bind(&MotionManagerNode::odometryCallback, this, std::placeholders::_1));
 
   command_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(output_command_topic, 1);
+  recovery_command_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(
+    source_slots_[sourceIndex(MotionSource::kRecovery)].topic, 1);
   state_pub_ = this->create_publisher<std_msgs::msg::String>(state_topic, 1);
   diagnostics_pub_ =
     this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(diagnostics_topic, 1);
@@ -232,6 +290,31 @@ void MotionManagerNode::emergencyStopCallback(const std_msgs::msg::Bool::SharedP
   state_.emergency_stop = msg->data;
 }
 
+void MotionManagerNode::recoveryTriggerCallback(const std_msgs::msg::Bool::SharedPtr msg)
+{
+  const auto now = this->now();
+  if (msg->data && !recovery_trigger_active_) {
+    recovery_state_machine_.start(now.seconds());
+    recovery_trigger_active_ = true;
+    RCLCPP_INFO(this->get_logger(), "Recovery state machine triggered.");
+    return;
+  }
+
+  if (!msg->data && recovery_trigger_active_) {
+    recovery_state_machine_.cancel();
+    recovery_trigger_active_ = false;
+    source_slots_[sourceIndex(MotionSource::kRecovery)].latest_command.valid = false;
+    recovery_command_pub_->publish(recovery_state_machine_.command(now));
+    recovery_command_was_active_ = false;
+    RCLCPP_INFO(this->get_logger(), "Recovery state machine cancelled.");
+  }
+}
+
+void MotionManagerNode::odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
+{
+  recovery_state_machine_.updateOdometry(*msg);
+}
+
 void MotionManagerNode::updateSelectedCommand() { selectCommand(this->now()); }
 
 void MotionManagerNode::selectCommand(const rclcpp::Time & now)
@@ -239,10 +322,27 @@ void MotionManagerNode::selectCommand(const rclcpp::Time & now)
   state_.output_enabled = command_output_enabled_;
 
   if (state_.emergency_stop) {
+    recovery_state_machine_.cancel();
+    recovery_trigger_active_ = false;
+    state_.recovery_phase = recovery_state_machine_.phase();
+    publishRecoveryCommand(now);
     state_.mode = MotionMode::kEmergencyStop;
     state_.has_fresh_command = false;
     selected_command_ = zeroCommand(now);
     return;
+  }
+
+  recovery_state_machine_.update(now.seconds());
+  state_.recovery_phase = recovery_state_machine_.phase();
+  publishRecoveryCommand(now);
+
+  auto & recovery_slot = source_slots_[sourceIndex(MotionSource::kRecovery)];
+  if (recovery_state_machine_.hasCommand()) {
+    recovery_slot.latest_command.source = MotionSource::kRecovery;
+    recovery_slot.latest_command.twist = recovery_state_machine_.command(now);
+    recovery_slot.latest_command.valid = true;
+  } else {
+    recovery_slot.latest_command.valid = false;
   }
 
   for (const auto source : kPriorityOrder) {
@@ -259,6 +359,20 @@ void MotionManagerNode::selectCommand(const rclcpp::Time & now)
   state_.mode = MotionMode::kIdle;
   state_.has_fresh_command = false;
   selected_command_ = zeroCommand(now);
+}
+
+void MotionManagerNode::publishRecoveryCommand(const rclcpp::Time & stamp)
+{
+  if (recovery_state_machine_.hasCommand()) {
+    recovery_command_pub_->publish(recovery_state_machine_.command(stamp));
+    recovery_command_was_active_ = true;
+    return;
+  }
+
+  if (recovery_command_was_active_) {
+    recovery_command_pub_->publish(recovery_state_machine_.command(stamp));
+    recovery_command_was_active_ = false;
+  }
 }
 
 void MotionManagerNode::publishCommand()
@@ -280,6 +394,7 @@ void MotionManagerNode::publishState()
   std::ostringstream stream;
   stream << "mode=" << toString(state_.mode) << " source=" << toString(state_.selected_source)
          << " recovery_phase=" << toString(state_.recovery_phase)
+         << " recovery_projected_progress_m=" << recovery_state_machine_.projectedProgress()
          << " output_enabled=" << (state_.output_enabled ? "true" : "false")
          << " emergency_stop=" << (state_.emergency_stop ? "true" : "false")
          << " has_fresh_command=" << (state_.has_fresh_command ? "true" : "false");
@@ -295,11 +410,21 @@ void MotionManagerNode::publishDiagnostics()
   diagnostic_msgs::msg::DiagnosticStatus status;
   status.name = "sentry_motion_manager";
   status.hardware_id = "motion_manager";
-  status.level = state_.emergency_stop ? diagnostic_msgs::msg::DiagnosticStatus::WARN
-                                       : diagnostic_msgs::msg::DiagnosticStatus::OK;
-  status.message = state_.emergency_stop ? "emergency stop active" : "motion manager ready";
+  status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+  status.message = "motion manager ready";
+  if (state_.recovery_phase == RecoveryPhase::kFailed) {
+    status.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+    status.message = "recovery failed";
+  }
+  if (state_.emergency_stop) {
+    status.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+    status.message = "emergency stop active";
+  }
   status.values.push_back(makeKeyValue("mode", toString(state_.mode)));
   status.values.push_back(makeKeyValue("selected_source", toString(state_.selected_source)));
+  status.values.push_back(makeKeyValue("recovery_phase", toString(state_.recovery_phase)));
+  status.values.push_back(makeKeyValue(
+    "recovery_projected_progress_m", std::to_string(recovery_state_machine_.projectedProgress())));
   status.values.push_back(makeKeyValue("output_enabled", state_.output_enabled ? "true" : "false"));
   status.values.push_back(
     makeKeyValue("has_fresh_command", state_.has_fresh_command ? "true" : "false"));

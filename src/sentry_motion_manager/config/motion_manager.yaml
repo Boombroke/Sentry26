@@ -14,6 +14,8 @@ motion_manager:
     evasion_command_topic: cmd_vel_evasion
     manual_command_topic: cmd_vel_manual
     emergency_stop_topic: emergency_stop
+    recovery_trigger_topic: motion_manager/recovery_trigger
+    odometry_topic: odometry
     output_command_topic: cmd_vel
     state_topic: motion_manager/state
     diagnostics_topic: diagnostics
@@ -28,3 +30,24 @@ motion_manager:
     max_angular_z: 6.3
     max_linear_accel: 3.0
     max_angular_accel: 12.0
+
+    recovery_diagnose_timeout_s: 1.0
+    recovery_no_progress_timeout_s: 1.0
+    recovery_min_progress_delta_m: 0.02
+    recovery_minimum_projected_success_m: 0.05
+    recovery_turn_direction: 1.0
+
+    recovery_straight_release_distance_m: 0.25
+    recovery_straight_release_speed_mps: -0.15
+    recovery_straight_release_timeout_s: 3.0
+
+    recovery_low_curvature_release_distance_m: 0.20
+    recovery_low_curvature_release_speed_mps: -0.15
+    recovery_low_curvature_angular_z_radps: 0.35
+    recovery_low_curvature_max_angular_z_radps: 0.50
+    recovery_low_curvature_release_timeout_s: 3.0
+
+    recovery_arc_escape_distance_m: 0.35
+    recovery_arc_escape_speed_mps: -0.20
+    recovery_arc_escape_angular_z_radps: 0.80
+    recovery_arc_escape_timeout_s: 3.5
