@@ -9,6 +9,7 @@
 - 可组合节点：`sentry_motion_manager::MotionManagerNode`
 - 可执行入口：`sentry_motion_manager_node`
 - 默认节点名：`motion_manager`
+- 卡住检测节点：`sentry_motion_manager::StuckDetectorNode`（可执行入口 `stuck_detector_node`，默认节点名 `stuck_detector`，由包内 launch 默认一并启动）
 
 ## 频率设计
 
@@ -97,9 +98,39 @@ ros2 topic pub --once /motion_manager/recovery_trigger std_msgs/msg/Bool "{data:
 | `max_linear_accel` | `3.0` | `linear.x` 加速度绝对值上限，单位 m/s^2 |
 | `max_angular_accel` | `12.0` | `angular.z` 加速度绝对值上限，单位 rad/s^2 |
 
+## StuckDetector
+
+`StuckDetector` 是包内纯 C++ 的卡住检测器，`StuckDetectorNode` 负责 ROS 接入，共同补齐 `recovery_trigger` 的上游触发源，解决"贴墙但恢复状态机从不启动"的问题。
+
+订阅/发布：
+
+| 方向 | 话题 | 类型 | 说明 |
+| --- | --- | --- | --- |
+| 订阅 | `odometry` | `nav_msgs/msg/Odometry` | 位置窗口用于判"是否真的没动" |
+| 订阅 | `cmd_vel` | `geometry_msgs/msg/TwistStamped` | 命令窗口用于判"是否在发有效命令" |
+| 订阅 | `motion_manager/state` | `std_msgs/msg/String` | 解析 `recovery_phase`，`succeeded`/`failed` 时发 trigger=false 进入冷却 |
+| 发布 | `motion_manager/recovery_trigger` | `std_msgs/msg/Bool` | 上升沿触发 `RecoveryStateMachine` |
+
+检测逻辑：
+
+1. 每次 tick（`tick_frequency_hz`，默认 20Hz）都裁剪 `window_s` 外的旧样本，计算窗口内 `|cmd.linear.x|` 均值与**最大位移**（离起点最远的一帧到起点的欧氏距离，能识别"原地小幅抖动"）
+2. 当 `cmd_mean > cmd_threshold_mps` 且 `max_displacement < position_threshold_m` 持续 `hold_s` 秒，且距离上次触发结束 ≥ `cooldown_s`，则发 `recovery_trigger=true`
+3. 上位层（`MotionManagerNode`）执行完 `RecoveryStateMachine` 后在 `motion_manager/state` 里把 `recovery_phase` 置为 `succeeded`/`failed`，`StuckDetectorNode` 收到后发 `trigger=false` 并进入冷却
+
+关键参数（默认值基于 2026-04-28 两个 `real_nav_debug` bag 覆盖调参）：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `window_s` | `3.0` | 滑动窗口长度（s） |
+| `cmd_threshold_mps` | `0.05` | 命令均值下限（低于视为"没在下发"不判卡） |
+| `position_threshold_m` | `0.10` | 窗口内最大位移阈值（低于视为无进展） |
+| `hold_s` | `1.0` | 去抖保持时间 |
+| `cooldown_s` | `3.0` | 触发结束后的冷却时间 |
+| `tick_frequency_hz` | `20.0` | 节点内部 tick 频率 |
+
 ## 后续扩展点
 
-1. **恢复集成**：将当前 `motion_manager/recovery_trigger` 替换或包装为 Nav2 行为/服务，并接入上层卡住检测。
+1. **触发接口升级**：未来若需要按卡住原因（打滑 / 撞墙 / 原地打转）分派不同脱困策略，可把 `std_msgs/Bool` 替换为带 `reason` 字段的自定义 msg，并在 StuckDetector 中接入 IMU 线加速度分类。
 2. **Nav2 recovery adapter**：当前 bringup 已将 Nav2 平滑输出重映射到 `cmd_vel_nav` 并由本包统一输出最终 `/cmd_vel`；后续还需增加 BT/recovery 触发适配，将贴墙脱困命令送入 `cmd_vel_recovery`。
 3. **安全约束**：接入碰撞预测、底盘反馈和故障降级策略。
 
