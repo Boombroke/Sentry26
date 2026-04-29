@@ -26,8 +26,8 @@ graph LR
     subgraph 规划层
         GICP --> CM[Nav2 Costmap<br/>IntensityVoxelLayer]
         TA --> CM
-        CM --> GP[SmacPlanner2D<br/>全局路径规划]
-        GP --> LP[RotationShim + RPP<br/>差速局部控制]
+        CM --> GP[SmacPlannerHybrid<br/>全局路径规划]
+        GP --> LP[局部控制器<br/>仿真: MPPI DiffDrive<br/>实车: RotationShim + RPP]
         LP --> VS[Velocity Smoother<br/>vy 锁 0]
         VS --> MM[sentry_motion_manager<br/>速度仲裁]
     end
@@ -46,6 +46,7 @@ graph LR
 
 ```
 controller_server (base_footprint 系, TwistStamped)
+  仿真: MPPI DiffDrive  /  实车: RotationShim + RPP
   → velocity_smoother (vy 锁 0, TwistStamped)
     → /cmd_vel_nav
       → sentry_motion_manager (输出使能, 仲裁后发布最终 /cmd_vel)
@@ -53,7 +54,7 @@ controller_server (base_footprint 系, TwistStamped)
         └─► rm_serial_driver → 串口下发 (vel_x, vel_w)
 ```
 
-差速底盘 `chassis_yaw ≡ base_footprint_yaw`，无需坐标旋转。
+差速底盘 `chassis_yaw ≡ base_footprint_yaw`，无需坐标旋转。仿真 `config/simulation/nav2_params.yaml` 已切换到 MPPI-only 的 `FollowPath`（Phase A），实车 `config/reality/nav2_params.yaml` 仍保留 RotationShim + RPP，后续单独迁移。
 
 ### TF 树（6 层）
 
@@ -67,7 +68,8 @@ map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → 
 
 ## 功能特性
 
-- **差速轮足导航**：RPP + RotationShim 控制器组合，Nav2 官方差速默认
+- **差速轮足导航**：仿真 Phase A 使用 MPPI DiffDrive 单控制器；实车仍保留 Nav2 官方 RPP + RotationShim 组合，待 A 阶段评估后再单独迁移
+- **分阶段路线图**：今日 A+B 已完成。A 阶段仿真 MPPI 控制器已落地；B 阶段地形 / 代价地图语义审查已完成，结论是保持现有 YAML 参数（`clearDyObs=False`、`robot_radius=0.46 / inflation_radius=0.90`、低矮障碍链路 `preprocess.blind=0.35 / min_obstacle_intensity=0.05 / minBlockPointNum=5`、Point-LIO gravity/blind/range 不动），无数值变更。C 阶段语义 Route Graph、D 阶段 Smac Lattice/ConstrainedSmoother/MINCO 均为未来门控目标，尚未实装（MINCO 属可选工具，非必需）。C 启动门控：rmuc_2026 窄道/高低 smoke 稳定 + MPPI 频率稳定 + `slam:=False` 先验资源齐备；D 启动门控：C 语义 Route Graph 稳定 + 有证据证明 MPPI + costmap + 路径语义仍解决不了某类场景。详见 [`src/docs/ARCHITECTURE.md` §4.5](src/docs/ARCHITECTURE.md#45-分阶段导航路线图)
 - **高频定位**：Point-LIO 激光惯性紧耦合 + small_gicp 全局重定位
 - **地形感知**：基于 intensity 的体素代价地图层，支持坡道/台阶检测
 - **行为决策**：BehaviorTree.CPP 行为树，支持进攻/防守/补给/巡逻状态切换

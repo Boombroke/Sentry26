@@ -129,7 +129,7 @@ ros2 action send_goal /red_standard_robot1/navigate_to_pose \
   "{pose: {header: {frame_id: map}, pose: {position: {x: 2.0, y: 0.0}, orientation: {w: 1.0}}}}"
 ```
 
-差速车会**先原地旋转到目标方向**（RotationShim 触发），然后直线前进（RPP 跟随）。`SUCCEEDED` 意味着到达 xy_goal_tolerance 内。
+差速车会朝目标方向移动（仿真 MPPI DiffDrive 采样最优轨迹；实车 RotationShim 先原地转到方向后交给 RPP 跟随）。`SUCCEEDED` 意味着到达 xy_goal_tolerance 内。
 
 ### 3.5 可用仿真世界
 
@@ -158,7 +158,7 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
 - rm_serial_driver 串口通信
 - Point-LIO 激光惯性里程计
 - small_gicp_relocalization 全局重定位
-- Nav2 栈（RPP + RotationShim + velocity_smoother）
+- Nav2 栈（实车本地控制器仍为 RPP + RotationShim；仿真已切到 MPPI DiffDrive） + velocity_smoother
 - sentry_motion_manager 底盘速度仲裁（`cmd_vel_nav` → 最终 `/cmd_vel`）
 - robot_state_publisher + LiDAR 驱动
 - sentry_behavior 行为树

@@ -82,7 +82,7 @@ Nav2 bt_navigator (导航 BT)
     │  决定 "怎么去"
     │  ComputePathToPose → FollowPath
     v
-RotationShimController + RegulatedPurePursuitController (局部控制，差速)
+局部控制器（仿真: MPPI DiffDrive；实车: RotationShim + RPP）
 ```
 
 - **游戏策略层** (`sentry_behavior/behavior_trees/`): BTCPP_format="4"，根据裁判系统、视觉识别等信息决定巡逻路线和战术切换。
@@ -438,53 +438,60 @@ ros2 launch sentry_nav_bringup rm_multi_navigation_simulation_launch.py \
 
 ### 8.1 全局规划器 - SmacPlannerHybrid
 
-差速轮足方案下仿真和实车均使用 SmacPlannerHybrid + DUBIN 运动模型，直接规划带朝向约束的弧形路径，再由 RotationShim + RPP 跟随。
+差速轮足方案下仿真和实车均使用 SmacPlannerHybrid，但运动模型按场景区分：仿真 `motion_model_for_search: DUBIN`（只规划前进弧线），实车 `motion_model_for_search: REEDS_SHEPP`（支持倒车原语，配合 RPP `allow_reversing: true` 使用，后置雷达场景可优先走后向感知）。规划输出为带朝向的平滑路径，仿真下由 MPPI DiffDrive 跟随，实车下由 RotationShim + RPP 跟随。
 
-| 参数 | 默认值 | 说明 |
+| 参数 | 仿真 | 实车 | 说明 |
+|:---|:---|:---|:---|
+| `tolerance` | `0.5` | `0.5` | 目标附近搜索容差 (m) |
+| `allow_unknown` | `true` | `true` | 未知区域是否视为可通行 |
+| `motion_model_for_search` | `DUBIN` | `REEDS_SHEPP` | 仿真只前进；实车启用倒车 |
+| `reverse_penalty` | `2.1` | `1.0` | 实车不额外惩罚倒车；仿真偏向前进 |
+| `angle_quantization_bins` | `72` | `72` | 航向量化，5° 一档 |
+| `minimum_turning_radius` | `0.25` | `0.25` | 最小转弯半径 (m) |
+| `cost_penalty` | `2.0` | `2.0` | 靠近高代价区域的惩罚 |
+| `max_iterations` | `1000000` | `1000000` | 最大搜索迭代次数 |
+| `max_planning_time` | `1.5` | `1.5` | 单次规划最长耗时 (s) |
+| `smoother.max_iterations` | `1000` | `1000` | 路径平滑迭代次数 |
+| `smoother.w_smooth` | `0.3` | `0.3` | 平滑权重 |
+| `smoother.w_data` | `0.2` | `0.2` | 数据保真权重 |
+
+> 当前代码已落在 SmacPlannerHybrid；若未来要切回 SmacPlanner2D，必须连同下游控制器（仿真 MPPI / 实车 RPP）跟随表现一起重新验证。
+
+### 8.2 局部控制器（分阶段迁移中）
+
+**当前状态**（2026 赛季）：
+- **仿真 `config/simulation/nav2_params.yaml`（Phase A 已落地）**：`controller_plugins: ["FollowPath"]`，`FollowPath = nav2_mppi_controller::MPPIController`，`motion_model: "DiffDrive"`。详细调参见 [TUNING_GUIDE.md 六-B](TUNING_GUIDE.md)。
+- **实车 `config/reality/nav2_params.yaml`（未迁移）**：仍使用 Nav2 官方差速默认组合 `["RotateShim", "FollowPath"]`，`FollowPath = RegulatedPurePursuitController`。以下参数表仅适用于实车配置。
+
+Nav2 官方差速默认组合（实车），`controller_plugins: ["RotateShim", "FollowPath"]`：
+
+**RotateShim**（实车参数）：
+| 参数 | 实车 | 说明 |
 |:---|:---|:---|
-| `tolerance` | `0.5` | 目标附近搜索容差 (m) |
-| `allow_unknown` | `true` | 未知区域是否视为可通行 |
-| `motion_model_for_search` | `DUBIN` | 差速前进弧线搜索模型 |
-| `angle_quantization_bins` | `72` | 航向量化，5° 一档 |
-| `minimum_turning_radius` | `0.25` | 最小转弯半径 (m) |
-| `cost_penalty` | `2.0` | 靠近高代价区域的惩罚 |
-| `max_iterations` | `1000000` | 最大搜索迭代次数 |
-| `max_planning_time` | `1.5` | 单次规划最长耗时 (s) |
-| `smoother.max_iterations` | `1000` | 路径平滑迭代次数 |
-| `smoother.w_smooth` | `0.3` | 平滑权重 |
-| `smoother.w_data` | `0.2` | 数据保真权重 |
+| `angular_dist_threshold` | `3.14` | 接近 180°，几乎总让 RPP 先接管；只有近似掉头才会先原地转 |
+| `forward_sampling_distance` | `0.5` | 路径方向采样距离 |
+| `rotate_to_heading_angular_vel` | `1.2` | 原地旋转角速度 (rad/s) |
+| `max_angular_accel` | `2.5` | 角加速度上限 |
+| `simulate_ahead_time` | `1.0` | 碰撞检查预测窗 |
+| `primary_controller` | `nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController` | 委托的主控制器 |
 
-> 当前代码已落在 SmacPlannerHybrid；若未来要切回 SmacPlanner2D，必须连同 RPP 跟随表现一起重新验证。
-
-### 8.2 局部控制器 - RotationShim + RegulatedPurePursuit
-
-Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"]`：
-
-**RotateShim**：
-| 参数 | 仿真 | 实车 | 说明 |
-|:---|:---|:---|:---|
-| `angular_dist_threshold` | `0.785` | `1.571` | 仿真更保守，45° 以上先原地旋转；实车目前保留 90° 起转 |
-| `forward_sampling_distance` | `0.5` | `0.5` | 路径方向采样距离 |
-| `rotate_to_heading_angular_vel` | `1.2` | `1.2` | 原地旋转角速度 (rad/s) |
-| `max_angular_accel` | `2.5` | `2.5` | 角加速度上限 |
-| `simulate_ahead_time` | `1.0` | `1.0` | 碰撞检查预测窗 |
-| `primary_controller` | `nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController` | 同左 | 委托的主控制器 |
-
-**FollowPath (RPP)**：
-| 参数 | 仿真 | 实车 | 说明 |
-|:---|:---|:---|:---|
-| `desired_linear_vel` | `1.5` | `1.0` | 期望线速度 (m/s)，仿真优先稳住起步与贴障场景 |
-| `lookahead_dist` | `1.2` | `1.0` | 基础前瞻距离 |
-| `min_lookahead_dist` | `0.6` | `0.5` | velocity-scaled lookahead 下限 |
-| `max_lookahead_dist` | `1.5` | `1.2` | velocity-scaled lookahead 上限 |
-| `use_regulated_linear_velocity_scaling` | `true` | `true` | 启用曲率 + 接近减速 |
-| `regulated_linear_scaling_min_radius` | `0.5` | `0.5` | 触发曲率降速的半径 |
-| `regulated_linear_scaling_min_speed` | `0.3` | `0.3` | 曲率降速速度下限 |
-| `use_rotate_to_heading` | `false` | `false` | 哨兵底盘不要求终端对齐 yaw |
-| `rotate_to_heading_min_angle` | `0.785` | `0.785` | 终端旋转触发角度 |
-| `use_collision_detection` | `slam:=True` 时 `false`，`slam:=False` 时 `true` | 同左 | launch 根据模式自动切换前向碰撞预测 |
-| `allow_reversing` | `false` | `false` | 差速不倒车 |
-| `transform_tolerance` | `0.1` | `0.1` | TF 容差 |
+**FollowPath (RPP)**（实车参数）：
+| 参数 | 实车 | 说明 |
+|:---|:---|:---|
+| `desired_linear_vel` | `0.8` | 期望线速度 (m/s)，略降巡航给后向感知更多反应裕度 |
+| `lookahead_dist` | `1.0` | 基础前瞻距离 |
+| `min_lookahead_dist` | `0.5` | velocity-scaled lookahead 下限 |
+| `max_lookahead_dist` | `1.2` | velocity-scaled lookahead 上限 |
+| `use_regulated_linear_velocity_scaling` | `true` | 启用曲率 + 接近减速 |
+| `regulated_linear_scaling_min_radius` | `0.5` | 触发曲率降速的半径 |
+| `regulated_linear_scaling_min_speed` | `0.3` | 曲率降速速度下限 |
+| `use_rotate_to_heading` | `false` | 哨兵由云台瞄准，底盘不要求终端对齐 yaw |
+| `rotate_to_heading_min_angle` | `0.785` | 终端旋转触发角度（仅在 `use_rotate_to_heading: true` 时生效） |
+| `max_angular_accel` | `2.5` | 角加速度上限 (rad/s²) |
+| `rotate_to_heading_angular_vel` | `1.2` | 原地/终端旋转角速度 (rad/s) |
+| `use_collision_detection` | YAML `false`，`slam:=False` 时 launch 改 `true` | launch 根据模式自动切换前向碰撞预测 |
+| `allow_reversing` | `true` | 允许倒车跟踪路径，后置雷达场景可优先使用后向感知 |
+| `transform_tolerance` | `0.1` | TF 容差 |
 
 ### 8.3 代价地图 (Costmap2D)
 
@@ -497,12 +504,13 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `width` | `5.0` | `5.0` | 滚动窗口宽度 (m) |
 | `height` | `5.0` | `5.0` | 滚动窗口高度 (m) |
 | `resolution` | `0.05` | `0.05` | 分辨率 (m/像素) |
-| `robot_radius` | `0.46` | `0.46` | 0.648×0.650 轮足底盘外接圆半径 (m) |
+| `robot_radius` | `0.46` | `0.318` | Nav2 圆形 footprint 半径 (m)，以各环境配置为准 |
+| `inflation_radius` | `0.90` | `0.61` | 障碍膨胀半径，以各环境配置为准 |
+| `cost_scaling_factor` | `8.0` | `8.0` | 陡峭梯度，推路径远离贴边 |
 
 > 注：仿真模型中的 `chassis` 盒体已缩到实车的 65% 以减少 LiDAR 自遮挡，但 Nav2 的
-> `robot_radius` 仍保持 `0.46`，故规划和避障依旧按更保守的实车 footprint 执行。
-| `inflation_radius` | `0.90` | `0.90` | 车身 0.46 + 额外缓冲 0.44 (m) |
-| `cost_scaling_factor` | `8.0` | `8.0` | 陡峭梯度，推路径远离贴边 |
+> `robot_radius` 仍保持 `0.46`，故规划和避障依旧按更保守的 footprint 执行；实车当前配置
+> 使用 `robot_radius=0.318` 与 `inflation_radius=0.61`，不要把仿真值直接套到实车。
 
 **插件层顺序**：`static_layer` → `IntensityVoxelLayer` → `inflation_layer`
 
@@ -640,28 +648,30 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `useSorting` | `true` | `true` | 使用分位数地面估计（支持坡道识别）。**不可与 considerDrop 同时启用** |
 | `quantileZ` | `0.2` | `0.2` | Z 方向分位数（仅 useSorting=true 时生效） |
 | `considerDrop` | `false` | `false` | 考虑凹地形（绝对高度差） |
-| `clearDyObs` | `true` | `true` | 清除动态障碍物 |
-| `minDyObsDis` | `0.3` | `0.5` | 动态障碍物最小检测距离 (m) |
-| `vehicleHeight` | `0.5` | `0.55` | 机器人高度 (m)，仅处理低于此高度的点 |
+| `clearDyObs` | `false` | `false` | 不主动清除动态障碍物，保留在 costmap 中参与避障 |
+| `minDyObsDis` | `0.5` | `0.5` | 动态障碍物最小检测距离 (m)，仅在 clearDyObs=true 时生效 |
+| `vehicleHeight` | `0.70` | `0.70` | 机器人高度 (m)，仅处理低于此高度的点 |
 | `minRelZ` | `-1.5` | `-1.5` | 有效点最低相对高度 (m) |
-| `maxRelZ` | `0.5` | `0.5` | 有效点最高相对高度 (m) |
+| `maxRelZ` | `1.0` | `1.0` | 有效点最高相对高度 (m) |
 | `disRatioZ` | `0.2` | `0.2` | Z 范围随距离缩放因子（坡道补偿） |
-| `minBlockPointNum` | `10` | `10` | 每个体素块最少点数 |
+| `minBlockPointNum` | `5` | `5` | 每个体素块最少点数，较低值用于保留低矮/薄障碍物 |
 | `noDataObstacle` | `false` | `false` | 无数据区域视为障碍物 |
 
 ### 10.2 Terrain Analysis Ext (全局地形)
 
 订阅 `terrain_map`，发布 `terrain_map_ext` → 供**全局代价地图** IntensityVoxelLayer 使用。
 
-| 参数 | 默认值 | 说明 |
-|:---|:---|:---|
-| `scanVoxelSize` | `0.1` | 更粗的降采样（全局范围） |
-| `decayTime` | `0.2` | 更快衰减以保持全局地图新鲜度 |
-| `clearingDis` | `20.0` | 扩展清除距离 (m) |
-| `vehicleHeight` | `1.0` | 更高的过滤阈值 |
-| `localTerrainMapRadius` | `4.0` | 局部地形地图半径 (m) |
-| `ceilingFilteringThre` | `2.0` | 天花板过滤阈值 (m) |
-| `checkTerrainConn` | `false` | 检查地形连通性 |
+| 参数 | 仿真 | 实车 | 说明 |
+|:---|:---|:---|:---|
+| `scanVoxelSize` | `0.1` | `0.1` | 更粗的降采样（全局范围） |
+| `decayTime` | `1.0` | `1.0` | 点云衰减时间，兼顾动态响应和机身旋转覆盖 |
+| `clearingDis` | `10.0` | `10.0` | 扩展清除距离 (m) |
+| `vehicleHeight` | `0.8` | `0.8` | 更高的过滤阈值 |
+| `upperBoundZ` | `1.0` | `1.0` | 有效点最高相对高度 (m) |
+| `disRatioZ` | `0.2` | `0.2` | Z 范围随距离缩放因子（坡道补偿） |
+| `localTerrainMapRadius` | `4.0` | `4.0` | 局部地形地图半径 (m) |
+| `ceilingFilteringThre` | `0.8` | `0.8` | 天花板过滤阈值 (m) |
+| `checkTerrainConn` | `true` | `true` | 检查地形连通性，用于过滤天花板/高处结构 |
 
 ---
 
@@ -733,12 +743,15 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | | `num_threads` | `4` | `8` | 实车算力更强 |
 | **Nav2** | `controller_frequency` | `20.0` | `30.0` | 实车需要更高控制频率 |
 | | `costmap update_frequency` | `10.0` | `30.0` | 实车实时性要求更高 |
-| | `planner plugin` | `SmacPlannerHybrid` | `SmacPlannerHybrid` | 差速方案仿真/实车统一 |
-| | `desired_linear_vel (RPP)` | `1.5` | `1.0` | 仿真优先稳起步，实车保守起步 |
-| | `robot_radius` | `0.46` | `0.46` | 与轮足底盘外接圆一致 |
-| | `inflation_radius` | `0.90` | `0.90` | 差速方案统一 |
-| **地形** | `vehicleHeight` | `0.5` | `0.55` | 实车高度不同 |
-| | `minDyObsDis` | `0.3` | `0.5` | 实车动态障碍检测距离更大 |
+| | `planner plugin` | `SmacPlannerHybrid` (DUBIN) | `SmacPlannerHybrid` (REEDS_SHEPP) | 仿真只前进；实车启用倒车原语配合 RPP `allow_reversing: true` |
+| | `local controller plugin` | `nav2_mppi_controller::MPPIController (DiffDrive)` | `RotateShim + RPP` | 仿真 Phase A 已切到 MPPI；实车未迁移 |
+| | `desired_linear_vel (RPP)` | N/A (MPPI) | `0.8` | 仿真 MPPI 由 `vx_max=1.5` 约束；实车 RPP 略降巡航以给后向感知更多反应裕度 |
+| | `robot_radius` | `0.46` | `0.318` | 仿真保持保守 footprint；实车按 reality 配置 |
+| | `inflation_radius` | `0.90` | `0.61` | 仿真保留更大缓冲；实车按 reality 配置 |
+| **地形** | `clearDyObs` | `false` | `false` | 动态障碍必须保留在 costmap 中用于避障 |
+| | `vehicleHeight` | `0.70` | `0.70` | terrain_analysis 当前一致 |
+| | `terrain_ext.vehicleHeight` | `0.8` | `0.8` | terrain_analysis_ext 当前一致 |
+| | `minDyObsDis` | `0.5` | `0.5` | 仅在 clearDyObs=true 时生效；当前两端均关闭动态清除 |
 
 ---
 
@@ -748,7 +761,7 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 
 - 增大 `inflation_radius`（如 0.90 → 1.0）
 - 增大 `robot_radius`（确保覆盖实际外形）
-- 降低 `desired_linear_vel`（RPP 期望线速度），同步检查 velocity_smoother 的 `max_velocity[0]`
+- 降低 `desired_linear_vel`（实车 RPP 期望线速度）或 `vx_max`（仿真 MPPI 上限），同步检查 velocity_smoother 的 `max_velocity[0]`
 - 检查 `costmap update_frequency` 是否足够高
 - 检查导航模式是否已由 launch 将 `use_collision_detection` 自动打开
 

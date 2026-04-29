@@ -6,6 +6,13 @@
 
 sentry_nav_bringup 是哨兵机器人导航系统的核心启动配置包。它整合了所有 launch 脚本、Nav2 参数配置、地图数据、点云文件、RViz 配置文件以及行为树 XML 定义。
 
+## 局部控制器阶段化迁移
+
+- **仿真 `config/simulation/nav2_params.yaml`（Phase A 已落地）**：`controller_plugins: ["FollowPath"]`，`FollowPath` 为 `nav2_mppi_controller::MPPIController`，`motion_model: "DiffDrive"`，锁 `vy_max=0 / vy_std=0`，今日 `vx_min=0`（不倒车）。Horizon 约束 `time_steps × model_dt × vx_max < local_costmap_half_width`，当前 `32 × 0.05 × 1.5 = 2.4m < 2.5m`。控制器频率 `controller_frequency` 与 `velocity_smoother.smoothing_frequency` 必须保持相等（当前仿真 20Hz）。
+- **实车 `config/reality/nav2_params.yaml`（未迁移）**：仍使用 Nav2 官方差速默认组合 `RotateShim + FollowPath(RegulatedPurePursuitController)`，待仿真 A 阶段评估稳定后再单独迁移；本次改动不涉及实车配置。
+- **运行时无 RPP 回退**：仿真下没有 MPPI→RPP 的 runtime fallback，回退只能通过 git/config 重新部署旧的 RPP/RotationShim 配置。
+- **C/D 阶段未实装**：语义 Route Graph（Phase C）、Smac Lattice / ConstrainedSmoother / MINCO（Phase D，MINCO 为可选工具，不是必需）均挂在未来路线图上，**今日不修改长期规划器**（全局规划器继续使用 `nav2_smac_planner::SmacPlannerHybrid`）。C 启动门控：rmuc_2026 窄道/高低 smoke 连续 3 次 `navigate_to_pose` SUCCEEDED + 控制器频率稳定 + `slam:=False` 所需 `map/simulation/rmuc_2026.yaml` 与 `pcd/simulation/rmuc_2026.pcd` 均可加载（当前 Task 5 smoke 还被这两项资源缺失加 `Costmap timed out waiting for update` 阻塞）。D 启动门控：C 语义 Route Graph 稳定 + 有证据证明当前链路解决不了某类场景。完整表格与门控细则见 [`src/docs/ARCHITECTURE.md` §4.5](../docs/ARCHITECTURE.md#45-分阶段导航路线图)。
+
 ## 主要 Launch 文件
 
 ### 仿真模式（两终端启动，时序敏感）
