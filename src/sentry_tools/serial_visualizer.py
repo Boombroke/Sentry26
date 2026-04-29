@@ -21,7 +21,7 @@ from rclpy.node import Node
 
 from geometry_msgs.msg import Twist, TwistStamped
 from nav_msgs.msg import Odometry
-from rm_interfaces.msg import GameRobotHP, GameStatus, RobotStatus
+from rm_interfaces.msg import GameRobotHP, GameStatus, RfidStatus, RobotStatus
 from sensor_msgs.msg import JointState
 
 # OpenGL disabled by default — Intel iGPU can only serve one GL context, and
@@ -79,8 +79,9 @@ class SharedData:
         self.latest_odom_vx = 0.0; self.latest_odom_vy = 0.0; self.latest_odom_vw = 0.0; self.latest_odom_speed = 0.0
         self.latest_final_vx = 0.0; self.latest_final_vy = 0.0; self.latest_final_vw = 0.0
         self.game_progress = 0; self.stage_remain_time = 0; self.current_hp = 0; self.projectile_allowance = 0
+        self.rfid_base = False
         self.team_hp = {'1\u53f7': 0, '2\u53f7': 0, '3\u53f7': 0, '4\u53f7': 0, '7\u53f7': 0, '\u524d\u54e8': 0, '\u57fa\u5730': 0}
-        self.last_rx = {'gimbal': 0.0, 'cmd_vel': 0.0, 'final_cmd': 0.0, 'game': 0.0, 'robot': 0.0, 'hp': 0.0, 'odom': 0.0}
+        self.last_rx = {'gimbal': 0.0, 'cmd_vel': 0.0, 'final_cmd': 0.0, 'game': 0.0, 'robot': 0.0, 'hp': 0.0, 'odom': 0.0, 'rfid': 0.0}
 
 
 class SerialVisualizerNode(Node):
@@ -95,6 +96,9 @@ class SerialVisualizerNode(Node):
         self.create_subscription(GameStatus, 'referee/game_status', self._on_game_status, 10)
         self.create_subscription(RobotStatus, 'referee/robot_status', self._on_robot_status, 10)
         self.create_subscription(GameRobotHP, 'referee/all_robot_hp', self._on_all_robot_hp, 10)
+        # rm_serial_driver 发布 camelCase topic 名（见 rm_serial_driver.cpp）。
+        # 协议字段 rfid_base 被 driver 映射到 RfidStatus.friendly_supply_zone_non_exchange。
+        self.create_subscription(RfidStatus, 'referee/rfidStatus', self._on_rfid_status, 10)
         self.create_subscription(Odometry, 'odometry', self._on_odometry, 10)
         self._last_cmd_vx = 0.0; self._last_cmd_vy = 0.0; self._last_cmd_vw = 0.0
 
@@ -142,6 +146,12 @@ class SerialVisualizerNode(Node):
             self.shared.current_hp = int(msg.current_hp)
             self.shared.projectile_allowance = int(msg.projectile_allowance_17mm)
             self.shared.last_rx['robot'] = now
+
+    def _on_rfid_status(self, msg):
+        now = time.monotonic()
+        with self.shared.lock:
+            self.shared.rfid_base = bool(msg.friendly_supply_zone_non_exchange)
+            self.shared.last_rx['rfid'] = now
 
     def _on_all_robot_hp(self, msg):
         now = time.monotonic()
@@ -265,7 +275,9 @@ class MainWindow(QtWidgets.QMainWindow):
         hr.addWidget(ht); hr.addStretch(1); hr.addWidget(self.hp_value_label)
         self.hp_bar = QtWidgets.QProgressBar(); self.hp_bar.setRange(0, ROBOT_HP_MAX); self.hp_bar.setFormat('%v/%m')
         self.ammo_label = QtWidgets.QLabel('\u5f39\u91cf: 0 \u53d1'); self.ammo_label.setStyleSheet('font-size: 24px; font-weight: 800; color: #7dd3fc;')
-        rbl.addLayout(hr); rbl.addWidget(self.hp_bar); rbl.addWidget(self.ammo_label)
+        self.rfid_label = QtWidgets.QLabel('\u57fa\u5730 RFID: \u672a\u6fc0\u6d3b')
+        self.rfid_label.setStyleSheet('font-size: 16px; font-weight: 700; color: #64748b;')
+        rbl.addLayout(hr); rbl.addWidget(self.hp_bar); rbl.addWidget(self.ammo_label); rbl.addWidget(self.rfid_label)
 
         # Velocity panels helper
         def make_vel_panel(title, labels):
@@ -278,7 +290,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 lay.addWidget(n, i, 0); lay.addWidget(v, i, 1); lay.addWidget(u, i, 2); d[name] = v
             return box, lay, d
 
-        txb, txl, self.tx_value_labels = make_vel_panel('\u5bfc\u822a\u547d\u4ee4\u901f\u5ea6 (world \u7cfb)', [('nav_vx','m/s'),('nav_vy','m/s'),('nav_vw','rad/s')])
+        txb, txl, self.tx_value_labels = make_vel_panel('\u5bfc\u822a\u547d\u4ee4\u901f\u5ea6 (cmd_vel \u00b7 \u5e73\u6ed1\u540e)', [('nav_vx','m/s'),('nav_vy','m/s'),('nav_vw','rad/s')])
         self.tx_freq_label = QtWidgets.QLabel('\u9891\u7387: \u2014 Hz'); self.tx_freq_label.setStyleSheet('font-size: 13px; color: #7dd3fc;')
         self.tx_count_label = QtWidgets.QLabel('\u8ba1\u6570: 0'); self.tx_count_label.setStyleSheet('font-size: 13px; color: #94a3b8;')
         tf = QtWidgets.QHBoxLayout(); tf.addWidget(self.tx_freq_label); tf.addStretch(1); tf.addWidget(self.tx_count_label)
@@ -286,7 +298,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         ab, _, self.actual_value_labels = make_vel_panel('\u5b9e\u9645\u901f\u5ea6 (odometry)', [('act_vx','m/s'),('act_vy','m/s'),('act_vw','rad/s'),('speed','m/s')])
         tb, _, self.track_value_labels = make_vel_panel('\u8ddf\u8e2a\u8bef\u5dee (cmd - actual)', [('\u0394vx','m/s'),('\u0394vy','m/s'),('\u0394vw','rad/s')])
-        fb, _, self.final_value_labels = make_vel_panel('\u6700\u7ec8\u4e0b\u53d1\u901f\u5ea6 (body \u7cfb+\u81ea\u65cb)', [('cmd_vx','m/s'),('cmd_vy','m/s'),('cmd_vw','rad/s')])
+        fb, _, self.final_value_labels = make_vel_panel('\u63a7\u5236\u5668\u539f\u59cb\u8f93\u51fa (cmd_vel_controller \u00b7 \u5e73\u6ed1\u524d)', [('cmd_vx','m/s'),('cmd_vy','m/s'),('cmd_vw','rad/s')])
 
         # Team HP
         tmb = DashboardPanel('\u5168\u961f\u8840\u91cf'); tml = QtWidgets.QVBoxLayout(tmb); tml.setSpacing(6)
@@ -302,7 +314,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for w in [gb, rb, txb, ab, tb, fb, tmb]: rl.addWidget(w, stretch=(1 if w is tmb else 0))
         body.addWidget(left, stretch=3); body.addWidget(right, stretch=2)
 
-        self.status_label = QtWidgets.QLabel('Topics: gimbal \u2717 cmd_vel \u2717 odom \u2717 game \u2717 robot \u2717 hp \u2717   20Hz')
+        self.status_label = QtWidgets.QLabel('Topics: gimbal \u2717 cmd_vel \u2717 odom \u2717 game \u2717 robot \u2717 hp \u2717 rfid \u2717   20Hz')
         self.status_label.setStyleSheet('padding: 4px 8px; color: #cbd5e1; background: #171a28; border: 1px solid #32374e; border-radius: 6px;')
         root.addWidget(self.status_label)
         self._set_hp_bar_color('#ef4444')
@@ -325,6 +337,7 @@ class MainWindow(QtWidgets.QMainWindow):
             lovx=self.shared.latest_odom_vx; lovy=self.shared.latest_odom_vy; lovw=self.shared.latest_odom_vw; los=self.shared.latest_odom_speed
             lfvx=self.shared.latest_final_vx; lfvy=self.shared.latest_final_vy; lfvw=self.shared.latest_final_vw
             gpr=self.shared.game_progress; srt=self.shared.stage_remain_time; chp=self.shared.current_hp; pa=self.shared.projectile_allowance
+            rfid_base=self.shared.rfid_base
             thp=dict(self.shared.team_hp); lrx=dict(self.shared.last_rx)
 
         cutoff = now - WINDOW_SECONDS
@@ -346,6 +359,11 @@ class MainWindow(QtWidgets.QMainWindow):
         pct = hp / float(ROBOT_HP_MAX)
         self._set_hp_bar_color('#22c55e' if pct > 0.6 else ('#f59e0b' if pct > 0.3 else '#ef4444'))
         self.ammo_label.setText(f'\u5f39\u91cf: {max(0, int(pa))} \u53d1')
+        rfid_color = '#34d399' if rfid_base else '#64748b'
+        if self._label_colors.get('rfid_badge') != rfid_color:
+            self._label_colors['rfid_badge'] = rfid_color
+            self.rfid_label.setStyleSheet(f'font-size: 16px; font-weight: 700; color: {rfid_color};')
+        self.rfid_label.setText('\u57fa\u5730 RFID: \u25cf \u6fc0\u6d3b' if rfid_base else '\u57fa\u5730 RFID: \u672a\u6fc0\u6d3b')
 
         for k, (bar, vl) in self.team_bar_widgets.items():
             v = max(0, min(bar.maximum(), int(thp.get(k, 0)))); bar.setValue(v); vl.setText(str(v))
@@ -383,7 +401,7 @@ class MainWindow(QtWidgets.QMainWindow):
         mk = lambda k: '\u2713' if now - lrx.get(k, 0.0) < act else '\u2717'
         self.status_label.setText(
             f'Topics: gimbal {mk("gimbal")} nav_cmd {mk("cmd_vel")} final_cmd {mk("final_cmd")} '
-            f'odom {mk("odom")} game {mk("game")} robot {mk("robot")} hp {mk("hp")}   {self.ui_hz:>4.1f}Hz')
+            f'odom {mk("odom")} game {mk("game")} robot {mk("robot")} hp {mk("hp")} rfid {mk("rfid")}   {self.ui_hz:>4.1f}Hz')
 
 
 def apply_dark_palette(app):

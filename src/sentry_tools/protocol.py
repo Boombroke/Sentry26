@@ -73,13 +73,12 @@ class StatusPacket:
     stage_remain_time: int = 0
     current_hp: int = 0
     projectile_allowance_17mm: int = 0
-    team_colour: int = 0
     rfid_base: int = 0
 
 
 StatusPacket.HEADER = 0xA2
-StatusPacket.STRUCT_FORMAT = '<BBHHHBB'
-StatusPacket.TOTAL_SIZE = 12
+StatusPacket.STRUCT_FORMAT = '<BBHHHB'
+StatusPacket.TOTAL_SIZE = 11
 StatusPacket.FREQUENCY_HZ = 10
 StatusPacket.DIRECTION = 'stm32_to_ros'
 StatusPacket.FIELDS_META = [
@@ -87,8 +86,7 @@ StatusPacket.FIELDS_META = [
     {'name': 'stage_remain_time', 'type': 'uint16', 'unit': 's', 'desc': '当前阶段剩余时间'},
     {'name': 'current_hp', 'type': 'uint16', 'desc': '机器人当前血量'},
     {'name': 'projectile_allowance_17mm', 'type': 'uint16', 'desc': '17mm弹丸剩余发射次数'},
-    {'name': 'team_colour', 'type': 'uint8', 'desc': '1=red 0=blue'},
-    {'name': 'rfid_base', 'type': 'uint8', 'desc': '己方基地增益点'},
+    {'name': 'rfid_base', 'type': 'uint8', 'desc': '己方基地 RFID 激活（driver 侧映射到 RfidStatus.friendly_supply_zone_non_exchange，命名兼容原行为树）'},
 ]
 
 @dataclass

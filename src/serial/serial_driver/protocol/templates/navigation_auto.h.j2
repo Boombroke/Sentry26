@@ -24,7 +24,7 @@ typedef struct
 {
   uint8_t  header;
 {% for f in p.fields -%}
-  {{ "%-8s"|format(f.c_type) }} {{ f.name }};{% if f.desc %}{% if f.name == 'team_colour' %}  // {{ f.desc }}{% endif %}{% endif %}
+  {{ "%-8s"|format(f.c_type) }} {{ f.name }};
 {% endfor -%}
   uint16_t checksum;
 } __attribute__((packed)) {{ p.c_struct_name }};

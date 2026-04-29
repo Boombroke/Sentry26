@@ -46,7 +46,7 @@ serial/serial_driver/
 | 帧头 | 包名 | 方向 | 大小 | 频率 | 字段列表 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | 0xA1 | IMU | stm32→ros | 27B | ~1000Hz | pitch(float,rad), yaw(float,rad), chassis_yaw(float,rad), chassis_pitch(float,rad), gimbal_yaw(float,rad), gimbal_pitch(float,rad) |
-| 0xA2 | Status | stm32→ros | 12B | ~10Hz | game_progress(u8), stage_remain_time(u16,s), current_hp(u16), projectile_allowance_17mm(u16), team_colour(u8, 1=red 0=blue), rfid_base(u8) |
+| 0xA2 | Status | stm32→ros | 11B | ~10Hz | game_progress(u8), stage_remain_time(u16,s), current_hp(u16), projectile_allowance_17mm(u16), rfid_base(u8) |
 | 0xA3 | HP | stm32→ros | 17B | ~2Hz | ally_1..4_robot_hp, ally_7_robot_hp, ally_outpost_hp, ally_base_hp (均为 u16) |
 | 0xB5 | Nav | ros→stm32 | 11B | 随 cmd_vel | vel_x(float,m/s), vel_w(float,rad/s) —— 差速底盘无 vy |
 

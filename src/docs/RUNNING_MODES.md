@@ -691,7 +691,6 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `current_hp` | uint16 | 机器人当前血量 |
 | `projectile_allowance_17mm` | uint16 | 剩余弹药量 |
 | `red_*/blue_*_robot_hp` | uint16 | 全场 14 台机器人血量 |
-| `team_colour` | uint16 | 队伍颜色 (1=红方) |
 | `tracker_x`, `tracker_y` | float | 追踪目标位置 |
 | `tracking` | bool | 是否正在追踪 |
 
