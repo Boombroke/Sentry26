@@ -58,5 +58,13 @@ def generate_launch_description():
                 output="screen",
                 parameters=[configured_params, {"use_sim_time": use_sim_time}],
             ),
+            Node(
+                package="sentry_motion_manager",
+                executable="stuck_detector_node",
+                name="stuck_detector",
+                namespace=namespace,
+                output="screen",
+                parameters=[configured_params, {"use_sim_time": use_sim_time}],
+            ),
         ]
     )
