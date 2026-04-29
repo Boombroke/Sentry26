@@ -6,8 +6,16 @@
 本文档列出了需要在实车上根据实际情况微调的参数，以及对应的调优方法。
 
 配置文件位置：
-- 仿真：`sentry_nav_bringup/config/simulation/nav2_params.yaml`
-- 实车：`sentry_nav_bringup/config/reality/nav2_params.yaml`
+- 仿真：`sentry_nav_bringup/config/simulation/nav2_params.yaml`（Phase A 已迁移到 MPPI DiffDrive）
+- 实车：`sentry_nav_bringup/config/reality/nav2_params.yaml`（仍使用 RotationShim + RPP，未迁移）
+
+> 今日范围：Phase A 仿真 MPPI 已落地；Phase B 地形 / 代价地图语义审查本轮已完成，结论是保持现有 YAML 参数（`clearDyObs=False`、`robot_radius=0.46 / inflation_radius=0.90`、低矮障碍链路 `preprocess.blind=0.35 / min_obstacle_intensity=0.05 / minBlockPointNum=5`、Point-LIO `gravity/blind/range` 不动），无数值变更。C 阶段语义 Route Graph 和 D 阶段 Smac Lattice/ConstrainedSmoother/MINCO 均为未来门控目标，尚未实装；MINCO 属于可选轨迹优化 / smoother 工具，不是必需。
+>
+> **C 阶段启动门控**（必须同时满足）：① 仿真 rmuc_2026 窄道与高低（坡道/台阶/资源岛）smoke 连续 3 次 `navigate_to_pose` SUCCEEDED；② 控制器频率稳定在 `controller_frequency` 设定值附近（仿真 20Hz，实测不低于 70%）；③ `slam:=False` 先验资源齐备（`install/sentry_nav_bringup/share/sentry_nav_bringup/map/simulation/rmuc_2026.yaml` 可加载，`install/sentry_nav_bringup/share/sentry_nav_bringup/pcd/simulation/rmuc_2026.pcd` 可加载）。Task 5 smoke 的 `slam:=False` 仍被这两项资源缺失 + `Costmap timed out waiting for update` 阻塞，**C 阶段尚未具备启动条件**。
+>
+> **D 阶段启动门控**（必须同时满足）：① C 阶段语义 Route Graph 在仿真 rmuc_2026 完整巡逻 1 小时路径语义稳定；② 有具体数据证明"MPPI + 现有 costmap + 语义 Route Graph"仍无法解决某类场景（窄弯跟随误差、倒车贴障、最小转弯半径规划失败等），需 Smac Lattice / ConstrainedSmoother / MINCO 之一才能收敛；③ 每项候选分支单独可回滚，不允许三者同时上。
+>
+> 推进阶段看的是可观测性、可重复 QA、可安全回滚、路径语义稳定，**不是算法复杂度**。"企业级"体现在故障可追溯，不是堆模型。详见 [架构详解 §4.5 分阶段导航路线图](ARCHITECTURE.md#45-分阶段导航路线图)。
 
 ---
 
@@ -197,15 +205,16 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 
 ### 9. min_obstacle_intensity（障碍物最小高度阈值）
 
-**当前值**：0.2（即 20cm 以上的高度差才算障碍物）
+**当前值**：仿真 / 实车均为 0.05（即 5cm 以上的高度差即可进入 `IntensityVoxelLayer`）
 
-**调优范围**：0.1 ~ 0.3
+**调优范围**：0.05 ~ 0.3
 
 **配置位置**：`local_costmap` 和 `global_costmap` 下的 `intensity_voxel_layer`
 
 **影响**：
 - 过小 → 地面噪声被识别为障碍物
 - 过大 → 矮小的真实障碍物被忽略
+- rmuc_2026 的低矮底座依赖该阈值保持较低；没有实测噪声证据时，不要为了让 costmap “看起来更干净”而调高。
 
 **调优方法**：
 ```bash
@@ -220,7 +229,7 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 
 ### 10. vehicleHeight（障碍物最大检测高度）
 
-**当前值**：terrain_analysis 0.5m，terrain_analysis_ext 1.0m
+**当前值**：terrain_analysis 0.70m，terrain_analysis_ext 0.8m
 
 **调优范围**：0.3 ~ 1.5
 
@@ -229,6 +238,12 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 **判断标准**：
 - 设为机器人能通过的最大高度即可
 - 过大会把高处结构误判为障碍物
+
+### 10-B. terrain / costmap 安全边界（rmuc_2026）
+
+- `terrain_analysis.clearDyObs` 保持 `False`：动态障碍需要留在 costmap 中参与避障，不能被地形层主动清掉。
+- Point-LIO `preprocess.blind`、`mapping.gravity` / `gravity_init` 和仿真 LiDAR 最小量程不属于 costmap 调参入口；近场低矮障碍漏检时应先核对 TF 外参、传感器量程和点云，而不是把安装角写进 gravity。
+- 仿真 `robot_radius: 0.46`、`inflation_radius: 0.90`、`cost_scaling_factor: 8.0` 是当前保守碰撞裕量；没有窄通道实测失败证据时不要放松，否则会降低防擦角安全余量。
 
 ---
 
@@ -377,52 +392,101 @@ python3 src/sentry_tools/serial_visualizer.py
 
 ---
 
-## 六-B、差速控制器 (RotationShim + RPP)
+## 六-B、仿真差速控制器 (MPPI DiffDrive，Phase A 已落地)
 
-Nav2 官方差速默认组合。`controller_plugins: ["RotateShim", "FollowPath"]` 级联：RotationShim 处理大转角原地旋转，RPP 负责路径跟随。
+仿真 `config/simulation/nav2_params.yaml` 的 `controller_plugins` 现在只留 `FollowPath`，插件为 `nav2_mppi_controller::MPPIController`，`motion_model: "DiffDrive"`。实车 `config/reality/nav2_params.yaml` 仍使用 RotationShim + RPP，未进入本阶段迁移。
+
+### 18-B. MPPI Horizon 安全约束（硬规则）
+
+**不等式**：`time_steps × model_dt × vx_max < local_costmap_half_width`
+
+**当前值**：`32 × 0.05 × 1.5 = 2.4m`，local costmap `width/height=5.0m`，半径 2.5m，留 0.1m 裕量。
+
+**为什么重要**：MPPI 末端轨迹点如果落到 local costmap 之外，该段轨迹无代价可评估，critic 会返回默认值导致采样失真，等价于在盲区决策。任意一个参数变大都会吃掉裕量，必须手算一次再改。
+
+### 18-C. 差速语义硬锁
+
+| 参数 | 必须取值 | 原因 |
+|---|---|---|
+| `motion_model` | `DiffDrive` | 差速模型严格禁止横移采样 |
+| `vy_max` | 0.0 | 即使 critic 允许，下游 velocity_smoother / motion_manager 也会锁 0，提前锁可减少无效采样 |
+| `vy_std` | 0.0 | 采样噪声在 vy 方向的标准差也锁 0，避免噪声让 MPPI 学到偏侧向的策略 |
+| `vx_min` | 0.0 | 今日不允许倒车；倒车需用户单独开闸并重新验证贴障风险 |
+
+### 18-D. CPU / RTF 相关参数
+
+| 参数 | 当前值 | 说明 |
+|---|---|---|
+| `batch_size` | 2000 | 采样批量，保守值；拉高会线性增加 CPU |
+| `iteration_count` | 1 | 单次迭代；增大会多轮 refine，每帧耗时翻倍 |
+| `visualize` | false | 轨迹可视化走 ROS 话题，打开后会明显拖低仿真 RTF |
+| `regenerate_noises` | false | 复用上帧噪声，关掉随机重生以省 CPU |
+
+### 18-E. 频率一致性
+
+- `controller_frequency` 与 `velocity_smoother.smoothing_frequency` 必须相等（仿真 20Hz）。Smoother 频率低于 controller 会丢指令，高于又吃不到数据。
+- 不要拉高到 CPU 跑不动的值。实测若 20Hz 设定跑不到 15Hz，就应降频而不是堆参数。
+
+### 18-F. Critics 列表
+
+Nav2 Jazzy 官方差速推荐集，不要随意删 critic：
+
+```
+ConstraintCritic, CostCritic, GoalCritic, GoalAngleCritic,
+PathAlignCritic, PathFollowCritic, PathAngleCritic, PreferForwardCritic
+```
+
+调权重时优先只改 `cost_weight`，不要直接改 `cost_power`，也不要新增自研 critic（Phase A 明确排除）。
+
+---
+
+## 六-C、实车差速控制器 (RotationShim + RPP，未迁移)
+
+仿真已迁移到 MPPI（见 六-B）。以下参数只对 `config/reality/nav2_params.yaml` 生效；如果后续要把实车也迁到 MPPI，整段会被替换。
 
 ### 19. RotationShim 关键参数
 
-| 参数 | 仿真默认 | 实车默认 | 说明 |
-|---|---|---|---|
-| `angular_dist_threshold` | 0.785 | 0.785 | 路径方向与朝向夹角 ≥ 此值（45°）时先原地转；贴墙/出生位狭窄场景不要放大到 90° |
-| `forward_sampling_distance` | 0.5 | 0.5 | 路径前方采样距离，用于判定目标方向 |
-| `rotate_to_heading_angular_vel` | 1.2 | 1.2 | 原地旋转角速度上限 (rad/s) |
-| `max_angular_accel` | 2.5 | 2.5 | 原地旋转角加速度 (rad/s²) |
-| `simulate_ahead_time` | 1.0 | 1.0 | 碰撞检查的预测时间窗 |
+| 参数 | 实车默认 | 说明 |
+|---|---|---|
+| `angular_dist_threshold` | 3.14 | 接近 180°：几乎总让 RPP 先接管，只有近似掉头才会先原地转。调小（如 0.785）会让机器人起步更多场合"先原地对齐再走"，起步响应变慢但贴墙更稳；调大（接近 pi）几乎禁用 RotationShim，交由 RPP 自身曲率控制 |
+| `forward_sampling_distance` | 0.5 | 路径前方采样距离，用于判定目标方向 |
+| `rotate_to_heading_angular_vel` | 1.2 | 原地旋转角速度上限 (rad/s) |
+| `max_angular_accel` | 2.5 | 原地旋转角加速度 (rad/s²) |
+| `simulate_ahead_time` | 1.0 | 碰撞检查的预测时间窗 |
 
 **调优方法**：
-- 机器人进入路径时反复小幅振荡 → 增大 `angular_dist_threshold`（如 0.5 → 1.0）减少 RotationShim 接管频次
-- 出了 RotationShim 后 RPP 急转 → 减小 `angular_dist_threshold`（如 0.785 → 0.5）让 RotationShim 对齐得更精确
+- 机器人进入路径时反复小幅振荡 → 增大 `angular_dist_threshold`（如 0.785 → 1.571 或接近 pi）减少 RotationShim 接管频次
+- 出了 RotationShim 后 RPP 急转 → 减小 `angular_dist_threshold`（如 3.14 → 1.0 → 0.785）让 RotationShim 对齐得更精确
 
 ### 20. RPP 关键参数
 
-| 参数 | 仿真默认 | 实车默认 | 说明 |
-|---|---|---|---|
-| `desired_linear_vel` | 1.5 | 1.0 | 期望线速度 (m/s)，仿真先压住起步侧撞风险 |
-| `lookahead_dist` | 1.2 | 1.2 | 基础前瞻距离 (m) |
-| `min_lookahead_dist` | 0.6 | 0.6 | velocity-scaled lookahead 下限 |
-| `max_lookahead_dist` | 1.5 | 1.5 | velocity-scaled lookahead 上限 |
-| `lookahead_time` | 1.0 | 1.0 | `lookahead = max(min, vx * lookahead_time)` 被限幅 |
-| `use_velocity_scaled_lookahead_dist` | true | true | 开启速度相关的 lookahead 自适应 |
-| `use_regulated_linear_velocity_scaling` | true | true | 开启曲率与接近减速 |
-| `regulated_linear_scaling_min_radius` | 0.5 | 0.5 | 曲率半径小于此值开始降速 |
-| `regulated_linear_scaling_min_speed` | 0.3 | 0.3 | 曲率降速的速度下限 |
-| `approach_velocity_scaling_dist` | 0.8 | 0.8 | 接近目标开始减速的距离 |
-| `min_approach_linear_velocity` | 0.3 | 0.3 | 接近段最小线速度 |
-| `use_rotate_to_heading` | false | false | 哨兵底盘不要求终端对齐目标朝向 |
-| `rotate_to_heading_min_angle` | 0.785 | 0.785 | 触发终端旋转的最小角度差 (rad) |
-| `max_angular_accel` | 3.2 | 3.2 | 角加速度上限 |
-| `allow_reversing` | false | false | 差速不允许倒车 |
-| `use_collision_detection` | `slam:=True` 时 false，`slam:=False` 时 true | 同左 | 由 launch 按模式自动切换碰撞预测 |
-| `max_allowed_time_to_collision_up_to_carrot` | 1.5 | 1.5 | 碰撞预测时间窗 (s) |
+| 参数 | 实车默认 | 说明 |
+|---|---|---|
+| `desired_linear_vel` | 0.8 | 期望线速度 (m/s)，略降巡航以给后向感知更多反应裕度 |
+| `lookahead_dist` | 1.0 | 基础前瞻距离 (m) |
+| `min_lookahead_dist` | 0.5 | velocity-scaled lookahead 下限 |
+| `max_lookahead_dist` | 1.2 | velocity-scaled lookahead 上限 |
+| `lookahead_time` | 1.0 | `lookahead = max(min, vx * lookahead_time)` 被限幅 |
+| `use_velocity_scaled_lookahead_dist` | true | 开启速度相关的 lookahead 自适应 |
+| `use_regulated_linear_velocity_scaling` | true | 开启曲率与接近减速 |
+| `regulated_linear_scaling_min_radius` | 0.5 | 曲率半径小于此值开始降速 |
+| `regulated_linear_scaling_min_speed` | 0.3 | 曲率降速的速度下限 |
+| `approach_velocity_scaling_dist` | 0.8 | 接近目标开始减速的距离 |
+| `min_approach_linear_velocity` | 0.3 | 接近段最小线速度 |
+| `use_rotate_to_heading` | false | 哨兵由云台瞄准，底盘不要求终端对齐目标朝向 |
+| `rotate_to_heading_min_angle` | 0.785 | 触发终端旋转的最小角度差 (rad，仅在 `use_rotate_to_heading: true` 时生效) |
+| `max_angular_accel` | 2.5 | 角加速度上限 (rad/s²) |
+| `rotate_to_heading_angular_vel` | 1.2 | 原地/终端旋转角速度 (rad/s) |
+| `allow_reversing` | true | 允许倒车跟踪路径，后置雷达场景可优先使用后向感知 |
+| `use_collision_detection` | YAML `false`，`slam:=False` 时 launch 改 `true` | SLAM 建图保持 false 避免 unknown 误报；纯导航模式自动开启前向碰撞预测 |
+| `max_allowed_time_to_collision_up_to_carrot` | 1.5 | 碰撞预测时间窗 (s) |
 
-**调优流程**：
-1. **线速度**：先用 `desired_linear_vel` 把期望速度定在硬件能吃到的值（仿真建议先 1.5，实车首轮 1.0）。
+**调优流程**（实车场景）：
+1. **线速度**：先用 `desired_linear_vel` 把期望速度定在硬件能吃到的值（实车当前 0.8，留后向感知反应裕度；若窄道没问题再逐步上调到 1.0/1.2 验证）。
 2. **路径跟随**：若直线段频繁震荡，增大 `lookahead_dist`；若弯道切内拐角严重，减小 `lookahead_dist` 或增大 `regulated_linear_scaling_min_radius`。
-3. **高曲率降速**：观察仿真中 U 弯是否擦墙，若需更激进减速减小 `regulated_linear_scaling_min_radius`。
+3. **高曲率降速**：观察 U 弯是否擦墙，若需更激进减速减小 `regulated_linear_scaling_min_radius`。
 4. **终端朝向**：哨兵默认不做底盘终端对齐；如果某个任务确实要求车头朝向目标，再单独打开 `use_rotate_to_heading` 并重新验证贴障风险。
-5. **RotationShim 与 RPP 交接**：开启 `headless` 仿真观察日志行 `Rotating shim active` 频率；如果起步贴墙/侧扫障碍，优先减小 `angular_dist_threshold`，让机器人先原地对齐再给前进。
+5. **RotationShim 与 RPP 交接**：观察日志行 `Rotating shim active` 频率；如果起步贴墙/侧扫障碍，优先减小 `angular_dist_threshold`，让机器人先原地对齐再给前进。
 6. **碰撞预测**：导航模式应确认 launch 已把 `use_collision_detection` 打开；SLAM 模式若 unknown 太多导致误报，再保留关闭。
 
 ### 20-B. 差速恢复策略

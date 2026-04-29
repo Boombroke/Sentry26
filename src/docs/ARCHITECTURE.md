@@ -11,7 +11,7 @@
 
 系统核心目标包括：
 - **高精度定位**: 在剧烈运动和碰撞中保持厘米级的定位精度。
-- **差速轮足控制**: 基于差速轮足底盘（仅 vx/wz 自由度，无侧向 vy），结合 Nav2 RPP + RotationShim 控制器实现高动态路径跟随。
+- **差速轮足控制**: 基于差速轮足底盘（仅 vx/wz 自由度，无侧向 vy），仿真使用 Nav2 MPPI DiffDrive（Phase A 已落地），实车仍保留 Nav2 RPP + RotationShim 直到单独迁移。
 - **智能战术决策**: 根据裁判系统实时数据，自动切换进攻、防守、补给等状态。
 - **环境自适应**: 能够识别坡道、台阶等复杂地形，并生成准确的代价地图。
 
@@ -24,12 +24,12 @@
 +-----------+-----------+      +-----------+-----------+      +-----------+-----------+
             |                              |                              |
 [Livox Mid360] ----+------> [Point-LIO 里程计] ----+------> [Nav2 全局规划器]
-                   |        (lidar_odom -> lidar)  |        (SmacPlanner2D)
+                   |        (lidar_odom -> lidar)  |        (SmacPlannerHybrid)
                    |               |               |               |
 [IMU (6-Axis)] ----+               v               |               v
                                    |               |        [Nav2 局部控制器]
-[先验 PCD 地图] ----------> [Small GICP 重定位] ----+        (RotationShim → RPP)
-                           (map -> odom 修正)      |               |
+[先验 PCD 地图] ----------> [Small GICP 重定位] ----+        (仿真: MPPI DiffDrive
+                           (map -> odom 修正)      |         实车: RotationShim → RPP)
                                    |               |               v
 [视觉识别 (Armors)] ------> [BehaviorTree.CPP] <---+        [Velocity Smoother]
                             (高层战术决策)          |        (vy 锁 0, 输出 cmd_vel_nav)
@@ -142,12 +142,12 @@ map (全局地图坐标系)
 - **关键参数**:
     | 参数名 | 默认值 | 说明 |
     |--------|--------|------|
-    | vehicleHeight | 0.6 | 机器人自身高度，用于过滤上方遮挡 |
+    | vehicleHeight | 0.70 | 机器人自身高度，用于过滤上方遮挡 |
     | minRelZ | -0.1 | 相对地面的最小高度过滤 |
     | maxRelZ | 0.5 | 相对地面的最大高度过滤 |
     | terrainVoxelSize | 0.2 | 地形体素化分辨率 |
     | useSorting | true | 启用排序算法以支持斜坡识别 |
-    | clearDyObs | true | 尝试清除动态障碍物（如其他机器人） |
+    | clearDyObs | false | 不主动清除动态障碍物，保留在 costmap 中用于避障 |
 
 ### 3.2 Terrain Analysis Ext
 - **功能**: 扩展版地形分析，具有更大的感知半径（通常为 20m+），专门为全局路径规划提供远距离的障碍物信息。
@@ -181,30 +181,72 @@ map (全局地图坐标系)
 - **通用参数**:
     | 参数名 | 默认值 | 说明 |
     |--------|--------|------|
-    | inflation_radius | 0.7 | 膨胀半径（米） |
-    | cost_scaling_factor | 4.0 | 代价随距离衰减的指数因子 |
+    | inflation_radius | 仿真 0.90 / 实车 0.61 | 膨胀半径（米），按环境配置保留安全裕量 |
+    | cost_scaling_factor | 8.0 | 代价随距离衰减的指数因子 |
 
 ---
 
 ## 第4章: 路径规划与运动控制
 
-### 4.1 全局规划器 - SmacPlanner2D
-差速轮足方案保留 SmacPlanner2D（8 方向无运动学约束栅格搜索）。原因：差速底盘可原地旋转 + RotationShim 处理大转角，2D 规划器生成的折线路径足以驱动。
+### 4.1 全局规划器 - SmacPlannerHybrid
+仿真和实车 `planner_plugins: ["GridBased"]` 均使用 `nav2_smac_planner::SmacPlannerHybrid`，但两套配置的运动模型不同：仿真 `motion_model_for_search: "DUBIN"` 只规划前进弧线；实车 `motion_model_for_search: "REEDS_SHEPP"`，配合 RPP `allow_reversing: true` 允许倒车跟踪，用于后置雷达场景优先走后向感知。Hybrid A* 在朝向维度量化的栅格上搜索弧线路径，规划输出为带朝向的平滑路径，仿真下交给 MPPI 跟随，实车下交给 RotationShim + RPP 跟随。
 
-- **配置参数**:
-    | 参数名 | 默认值 | 说明 |
-    |--------|--------|------|
-    | tolerance | 0.5 | 目标附近搜索容差 (m) |
-    | allow_unknown | true | 未知区域是否可通行 |
-    | cost_travel_multiplier | 3.0 | 路径代价权重（鼓励走通道中央） |
-    | smoother.max_iterations | 1000 | 路径平滑迭代次数 |
+- **配置参数（仿真与实车大部分对齐，运动模型与 reverse_penalty 按 YAML 区分）**:
+    | 参数名 | 仿真 | 实车 | 说明 |
+    |--------|--------|--------|------|
+    | motion_model_for_search | DUBIN | REEDS_SHEPP | 仿真只前进；实车启用倒车原语，配合 RPP `allow_reversing: true` 使用 |
+    | reverse_penalty | 2.1 | 1.0 | 实车不额外惩罚倒车（1.0），仿真偏向前进（2.1） |
+    | angle_quantization_bins | 72 | 72 | 航向量化 5° 一档 |
+    | minimum_turning_radius | 0.25 | 0.25 | 最小转弯半径 (m)，差速可取较小值 |
+    | tolerance | 0.5 | 0.5 | 目标附近搜索容差 (m) |
+    | allow_unknown | true | true | 未知区域是否可通行（SLAM 早期很有用） |
+    | cost_penalty | 2.0 | 2.0 | 靠近高代价区域的惩罚，用于居中 |
+    | max_iterations | 1000000 | 1000000 | 最大搜索迭代次数 |
+    | max_planning_time | 1.5 | 1.5 | 单次规划最长耗时 (s) |
+    | smooth_path | true | true | 启用后置平滑 |
+    | smoother.max_iterations | 1000 | 1000 | 平滑迭代次数 |
 
-> 备选方案：若 SmacPlanner2D 在窄过道急转时不够理想，可切换到 SmacPlannerHybrid（Dubin/Reeds-Shepp 运动模型）；但差速 + RotationShim 已能应对绝大多数场景。
+> 备选方案：若 SmacPlannerHybrid 在窄过道规划失败率过高，可退到 SmacPlanner2D（无运动学约束、速度更快）作为临时措施，但需要同步验证下游控制器的跟随表现。C/D 阶段计划引入语义 Route Graph 与 Smac Lattice 作为全局规划层的能力升级，两者都未实装。
 
-### 4.2 局部控制器 - RotationShimController + RegulatedPurePursuitController
-Nav2 官方差速默认组合。两者通过 `controller_plugins: ["RotateShim", "FollowPath"]` 级联：
+### 4.2 局部控制器（分阶段迁移中）
 
-1. **RotationShim**（大转角原地旋转）：检测当前朝向与路径起始切线方向的夹角，大于 `angular_dist_threshold`（如 45°, 0.785 rad）时先原地旋转至大致对齐，再把控制权交给主控制器。
+2026 赛季 A 阶段开始把仿真的局部控制器从 Nav2 官方差速默认组合迁移到单一 MPPI 控制器。实车尚未进入本阶段迁移，继续使用 RotationShim + RPP。两套配置文件分别位于：
+
+- 仿真：`src/sentry_nav_bringup/config/simulation/nav2_params.yaml`（当前 MPPI-only）
+- 实车：`src/sentry_nav_bringup/config/reality/nav2_params.yaml`（继续 RotationShim + RPP）
+
+行为树中 `FollowPath` 这个 `controller_id` 没有改名，仿真下指向 MPPI 插件，实车下指向 RPP 插件。运行时没有 MPPI → RPP 的 fallback；回退只能通过 git 恢复旧配置，属于配置/部署层面的动作。
+
+#### 4.2.1 仿真局部控制器 - MPPI DiffDrive (Phase A 已落地)
+
+`controller_plugins: ["FollowPath"]`，`FollowPath.plugin: "nav2_mppi_controller::MPPIController"`，`motion_model: "DiffDrive"`。MPPI 基于模型预测采样，每次在当前速度附近采样一组候选轨迹，用 critic 集合打分后按指数权重加权得到最终指令。
+
+- **关键配置**:
+    | 参数 | 当前值 | 说明 |
+    |---|---|---|
+    | `motion_model` | `DiffDrive` | 固定差速模型 |
+    | `time_steps` | 32 | 预测步数 |
+    | `model_dt` | 0.05 | 单步时长 (s) |
+    | `vx_max` | 1.5 | 前向速度上限 (m/s)，与 velocity_smoother 对齐 |
+    | `vx_min` | 0.0 | 今日禁止倒车 |
+    | `vy_max` | 0.0 | 差速底盘锁侧向 |
+    | `vy_std` | 0.0 | 采样噪声的侧向标准差锁 0，防止 vy 漂出 |
+    | `wz_max` | 6.3 | 角速度上限 (rad/s) |
+    | `ax_max` | 1.5 | 线加速度上限 (m/s²) |
+    | `az_max` | 8.0 | 角加速度上限 (rad/s²) |
+    | `batch_size` | 2000 | 采样批量，CPU 保守值 |
+    | `iteration_count` | 1 | 单次迭代 |
+    | `visualize` | false | 关闭轨迹可视化，仿真 RTF 优先 |
+    | `regenerate_noises` | false | 复用噪声，减少算力 |
+- **Critic 列表**: `ConstraintCritic`, `CostCritic`, `GoalCritic`, `GoalAngleCritic`, `PathAlignCritic`, `PathFollowCritic`, `PathAngleCritic`, `PreferForwardCritic`（Nav2 Jazzy 官方差速推荐集）。
+- **Horizon 安全约束（硬规则）**: `time_steps × model_dt × vx_max < local_costmap_half_width`。当前 `32 × 0.05 × 1.5 = 2.4m`，local costmap 半径 2.5m，留 0.1m 裕量。调整任意一个参数都必须重新核对此不等式，否则 MPPI 轨迹末端会落到 costmap 之外无代价评估。
+- **频率约束**: `controller_frequency` 与 `velocity_smoother.smoothing_frequency` 必须相等（当前仿真均为 20Hz）。
+
+#### 4.2.2 实车局部控制器 - RotationShim + RegulatedPurePursuit（未迁移）
+
+实车仍保留 Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"]` 级联：
+
+1. **RotationShim**（大转角原地旋转）：检测当前朝向与路径起始切线方向的夹角，大于 `angular_dist_threshold`（实车当前 3.14 rad，约 180°，意在几乎总是让 RPP 先接管；只有近似掉头才会先原地转）时先原地旋转至大致对齐，再把控制权交给主控制器。
 2. **RegulatedPurePursuitController (RPP)**（路径跟随）：沿路径选取 lookahead 点，根据曲率与接近目标距离自动调整线速度，支持 `use_rotate_to_heading` 做终端对齐。
 
 - **核心逻辑（RPP）**:
@@ -212,37 +254,75 @@ Nav2 官方差速默认组合。两者通过 `controller_plugins: ["RotateShim",
     2. 根据前瞻点相对底盘的角度计算弧线曲率，折算为 `wz = vx * curvature`。
     3. `use_regulated_linear_velocity_scaling: true` 会在高曲率段自动降速（`regulated_linear_scaling_min_radius`、`regulated_linear_scaling_min_speed`）。
     4. 接近目标时按 `approach_velocity_scaling_dist` 平滑减速；`use_rotate_to_heading: true` 时在目标附近先对齐朝向再停车。
-- **关键参数（RPP）**:
-    | 参数名 | 仿真默认 | 实车默认 | 说明 |
-    |--------|--------|--------|------|
-    | desired_linear_vel | 2.0 | 1.0 | 期望线速度 (m/s) |
-    | lookahead_dist | 1.2 | 1.2 | 基础前瞻距离 (m) |
-    | min_lookahead_dist | 0.6 | 0.6 | 最小前瞻距离 (m) |
-    | max_lookahead_dist | 1.5 | 1.5 | 最大前瞻距离 (m) |
-    | lookahead_time | 1.0 | 1.0 | velocity-scaled lookahead 的时间常数 |
-    | regulated_linear_scaling_min_radius | 0.5 | 0.5 | 高曲率降速触发半径 |
-    | regulated_linear_scaling_min_speed | 0.3 | 0.3 | 高曲率降速的速度下限 |
-    | use_rotate_to_heading | true | true | 是否在终端对齐目标朝向 |
-    | rotate_to_heading_min_angle | 0.5 | 0.5 | 触发 rotate-to-heading 的最小角度 (rad) |
-    | allow_reversing | false | false | 差速不倒车 |
-- **关键参数（RotationShim）**:
-    | 参数名 | 默认值 | 说明 |
+- **关键参数（RPP，实车当前值）**:
+    | 参数名 | 实车默认 | 说明 |
     |--------|--------|------|
-    | angular_dist_threshold | 0.785 | 45° 以上先原地旋转 |
+    | desired_linear_vel | 0.8 | 期望线速度 (m/s)，略降巡航以给后向感知更多反应裕度 |
+    | lookahead_dist | 1.0 | 基础前瞻距离 (m) |
+    | min_lookahead_dist | 0.5 | 最小前瞻距离 (m) |
+    | max_lookahead_dist | 1.2 | 最大前瞻距离 (m) |
+    | lookahead_time | 1.0 | velocity-scaled lookahead 的时间常数 |
+    | regulated_linear_scaling_min_radius | 0.5 | 高曲率降速触发半径 |
+    | regulated_linear_scaling_min_speed | 0.3 | 高曲率降速的速度下限 |
+    | use_rotate_to_heading | false | 哨兵由云台瞄准，底盘无须终端对齐 yaw |
+    | rotate_to_heading_min_angle | 0.785 | 触发 rotate-to-heading 的最小角度 (rad，仅在 `use_rotate_to_heading: true` 时生效) |
+    | max_angular_accel | 2.5 | 角加速度上限 (rad/s²) |
+    | rotate_to_heading_angular_vel | 1.2 | 原地/终端旋转角速度 (rad/s) |
+    | allow_reversing | true | 允许倒车跟踪路径，后置雷达场景可优先使用后向感知 |
+    | use_collision_detection | YAML 为 false，launch 在 `slam:=False` 时改为 true | SLAM 建图仍保持 false 避免 unknown 误报，纯导航模式自动开启前向碰撞预测 |
+    | max_allowed_time_to_collision_up_to_carrot | 1.5 | 碰撞预测时间窗 (s) |
+- **关键参数（RotationShim，实车当前值）**:
+    | 参数名 | 实车默认 | 说明 |
+    |--------|--------|------|
+    | angular_dist_threshold | 3.14 | 接近 180°，几乎总让 RPP 先接管；只有近似掉头才会先原地旋转 |
     | forward_sampling_distance | 0.5 | 采样距离，用于判定路径方向 |
-    | rotate_to_heading_angular_vel | 1.5 | 原地旋转角速度 (rad/s) |
+    | rotate_to_heading_angular_vel | 1.2 | 原地旋转角速度 (rad/s) |
+    | max_angular_accel | 2.5 | 原地旋转角加速度 (rad/s²) |
+    | simulate_ahead_time | 1.0 | 碰撞检查的预测时间窗 (s) |
+- **频率约束**: 实车 `controller_frequency` 与 `velocity_smoother.smoothing_frequency` 均为 30Hz，必须同步调整。
 
 ### 4.3 Velocity Smoother
 - **功能**: 位于控制器和驱动器之间，负责对速度指令进行二次平滑，防止加速度过大导致底盘打滑或机械受损。
-- **差速约束**: `max_velocity: [2.5, 0.0, 3.0]`、`min_velocity: [-2.5, 0.0, -3.0]` —— **vy 锁 0**，保证即使上游输出异常 vy 也不会下发到差速执行器。
+- **差速约束**: 仿真 `max_velocity: [1.5, 0.0, 6.3]`、`min_velocity: [-1.5, 0.0, -6.3]`；实车 `max_velocity: [1.5, 0.0, 3.0]`、`min_velocity: [-1.5, 0.0, -3.0]`。两端 **vy 锁 0**，保证即使上游输出异常 vy 也不会下发到差速执行器。
 - **加速度限制**:
-    - `max_accel_x`: 4.5 m/s²
-    - `max_accel_yaw`: 5.0 rad/s²
+    - 仿真 `max_accel: [1.5, 0.0, 8.0]`、`max_decel: [-1.5, 0.0, -8.0]`
+    - 实车 `max_accel: [2.5, 0.0, 5.0]`、`max_decel: [-2.5, 0.0, -5.0]`（实车 28kg 双电机物理上限约 2.86 m/s²，取 2.5 留余量）
 - **频率**：必须与 `controller_frequency` 一致（仿真 20Hz，实车 30Hz）。
 - **输出**：`cmd_vel_smoothed` remap 到 `cmd_vel_nav`，作为 `sentry_motion_manager` 的 navigation 输入。
 
 ### 4.4 sentry_motion_manager 速度仲裁
 差速底盘 `chassis_yaw ≡ base_footprint_yaw`，velocity_smoother 输出的 TwistStamped 在 `base_footprint` 系即等同于 `chassis` 本体系，先进入 `cmd_vel_nav`，再由 `sentry_motion_manager` 发布最终 `/cmd_vel` 给 Gazebo DiffDrive 插件 / rm_serial_driver 消费。**无需坐标旋转节点，无自旋叠加；下游底盘消费者话题保持不变。**
+
+### 4.5 分阶段导航路线图
+
+2026 赛季把导航栈升级拆成四个阶段，避免规划器、控制器、地形语义同时变更导致失败不可追踪。以下为当前状态：
+
+| 阶段 | 主题 | 状态 | 今日配置 |
+|---|---|---|---|
+| A | MPPI-only 局部控制器 | **已在仿真落地**（实车未迁移） | 仿真 `FollowPath = MPPIController (DiffDrive)`；实车仍 `RotateShim + RPP` |
+| B | 现有地形 / 代价地图语义增强 | **本轮审查完成，无 YAML 数值变更** | 审查结论：保持现有 `terrain_analysis` / `terrain_analysis_ext` / `IntensityVoxelLayer` 参数（`clearDyObs=False`、`robot_radius=0.46 / inflation_radius=0.90`、低矮障碍链路 `preprocess.blind=0.35 / min_obstacle_intensity=0.05 / minBlockPointNum=5`），Point-LIO `gravity/blind/range` 不动；不引入新插件 |
+| C | 语义 Route Graph | **未实装** | 需 A+B 通过仿真 rmuc_2026 窄道/高低路线 smoke 和 MPPI 频率稳定后再启动 |
+| D | Smac Lattice / ConstrainedSmoother / MINCO（MINCO 为可选工具，非必需） | **未实装** | 必须先完成 C 阶段语义 Route Graph 评估，确认需要 Lattice / 新 smoother / MINCO 才能解决的具体场景后再引入 |
+
+- **长期规划器今日不动**：全局规划器继续使用 `nav2_smac_planner::SmacPlannerHybrid`（仿真 DUBIN，实车 REEDS_SHEPP，两端 `minimum_turning_radius: 0.25`）。C/D 的 Route Graph / Lattice / MINCO / ConstrainedSmoother 都只是未来门控目标，本次迁移不做任何长期规划器替换；任何把它们写成"已实装"或"默认链路"的文档都算违规。
+- **回退策略**：A 阶段没有 MPPI → RPP 的 runtime fallback；回滚通过 git/config 恢复旧 RPP 配置完成。这是刻意选择，避免双套控制器共存时参数和行为树耦合复杂化。
+- **诊断优先**：阶段推进的门控条件是"当前阶段能复现稳定 QA 证据"，不是"跑通一次 demo"。C/D 文档工作量较大且不可回退，一旦启动再回到 A/B 成本很高，必须先积累窄道/坡道/碰撞恢复等场景的量化数据。
+- **质量标准**：阶段推进看的是可观测性、可重复 QA、可安全回滚、路径语义是否稳定，不是算法复杂度。C/D 不是"换更大模型"，是"在 A/B 已经可复现稳定的基础上补语义"。
+
+#### 4.5.1 C 阶段启动门控（必须同时满足）
+
+- [ ] 仿真 rmuc_2026 窄道（两侧障碍）路线 smoke 连续 3 次 `navigate_to_pose` 返回 `SUCCEEDED`，无 `Costmap timed out waiting for update` 或 planner abort。
+- [ ] 仿真 rmuc_2026 高低路线（坡道 / 台阶 / 资源岛）路线 smoke 连续 3 次 `navigate_to_pose` 返回 `SUCCEEDED`，地形代价语义不将可通行坡面标为致死。
+- [ ] 控制器输出频率稳定在 `controller_frequency` 目标值（仿真 20Hz）附近，`ros2 topic hz /red_standard_robot1/cmd_vel_nav` 无秒级空档；Nav2 实测跑得到的频率不能低于设定 70%。
+- [ ] `slam:=False` 导航所需先验资源齐备：`install/sentry_nav_bringup/share/sentry_nav_bringup/map/simulation/rmuc_2026.yaml` 能被 `map_server` 成功 load，`install/sentry_nav_bringup/share/sentry_nav_bringup/pcd/simulation/rmuc_2026.pcd` 能被 `small_gicp_relocalization` 成功 load。**当前 Task 5 smoke 的 `slam:=False` 仍被这两项资源缺失 + `Costmap timed out waiting for update` 阻塞，因此 C 阶段尚未具备启动条件。**
+- [ ] `vy_max=vy_std=0`、`vx_min=0`、`enable_stamped_cmd_vel: true` 三处硬锁在上述所有 smoke 中全程保持。
+
+#### 4.5.2 D 阶段启动门控（必须同时满足）
+
+- [ ] C 阶段语义 Route Graph 在仿真 rmuc_2026 完整一圈巡逻里至少 1 小时运行，路径语义稳定，不出现跨区段跳边或死锁。
+- [ ] 在 C 阶段稳定后，能够用具体数据证明"MPPI + 现有 costmap + 语义 Route Graph"依然无法解决某一类场景（例如特定窄弯的跟随误差、低速倒车贴障、无法保证的最小转弯半径下规划失败率），且该场景必须通过 Smac Lattice、ConstrainedSmoother 或 MINCO 之一才能收敛。
+- [ ] D 阶段候选算法有明确落地路径：Smac Lattice 为 Nav2 官方全局规划器插件，ConstrainedSmoother 为 Nav2 官方 smoother 插件，MINCO 作为可选轨迹优化/smoother 工具（不是必需）。任何一项都必须先在独立分支做单独可回滚的替换，不允许三者同时上。
+- [ ] D 阶段不允许为了"显得企业级"而引入：必须有 C 阶段之后遗留问题作为启动依据。
 
 ---
 
