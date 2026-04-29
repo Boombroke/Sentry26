@@ -41,6 +41,11 @@ if(BUILD_TESTING)
     test/recovery_state_machine_test.cpp
   )
   target_link_libraries(recovery_state_machine_test ${PROJECT_NAME})
+
+  ament_add_gtest(stuck_detector_test
+    test/stuck_detector_test.cpp
+  )
+  target_link_libraries(stuck_detector_test ${PROJECT_NAME})
 endif()
 
 ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)
