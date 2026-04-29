@@ -303,7 +303,7 @@ controller_server:
     failure_tolerance: 0.3
     progress_checker_plugins: ["progress_checker"]
     goal_checker_plugins: ["general_goal_checker"]
-    controller_plugins: ["RotateShim", "FollowPath"]
+    controller_plugins: ["FollowPath"]                  # 实车 Phase R-A 首版：单一 MPPI DiffDrive 控制器，已移除 RotationShim + RPP
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.3                 # 5s 内走不到 0.3m 视为 stuck, 触发 BT recovery
@@ -313,36 +313,93 @@ controller_server:
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.3
       yaw_goal_tolerance: 6.28
-    RotateShim:
-      plugin: "nav2_rotation_shim_controller::RotationShimController"
-      primary_controller: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      angular_dist_threshold: 3.14                      # 提高到接近 180°，尽量减少"先转头再走"
-      forward_sampling_distance: 0.5
-      rotate_to_heading_angular_vel: 1.2
-      max_angular_accel: 2.5
-      simulate_ahead_time: 1.0
     FollowPath:
-      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.8                           # 略降巡航速度，给后向感知更多反应裕度
-      lookahead_dist: 1.0
-      min_lookahead_dist: 0.5
-      max_lookahead_dist: 1.2
-      lookahead_time: 1.0
-      use_velocity_scaled_lookahead_dist: true
+      plugin: "nav2_mppi_controller::MPPIController"
+      time_steps: 32                                    # 32 * 0.05s * 1.5m/s = 2.4m，保持在 local costmap 半径 2.5m 以内
+      model_dt: 0.05
+      batch_size: 2000                                  # 保守批量，适配实车 CPU 环境
+      vx_std: 0.2
+      vy_std: 0.0                                       # 差速底盘无侧向速度
+      wz_std: 0.4
+      vx_max: 1.5                                       # 不超过 velocity_smoother max_velocity[0]
+      vx_min: 0.0                                       # 实车 Phase R-A 首版前向优先，不允许倒车
+      vy_max: 0.0                                       # 差速底盘锁侧向
+      wz_max: 3.0                                       # 受实车 velocity_smoother max_velocity[2]=3.0 约束，不用仿真的 6.3
+      ax_max: 1.5                                       # 不超过 velocity_smoother max_accel[0]
+      ax_min: -1.5
+      az_max: 5.0                                       # 受实车 velocity_smoother max_accel[2]=5.0 约束，不用仿真的 8.0
+      az_min: -5.0
+      iteration_count: 1
+      prune_distance: 1.7
       transform_tolerance: 0.1
-      min_approach_linear_velocity: 0.3
-      approach_velocity_scaling_dist: 0.8
-      use_collision_detection: false                    # launch 会在 slam:=False 的导航模式下自动改成 true；SLAM 建图仍保持 false 避免 unknown 误报
-      max_allowed_time_to_collision_up_to_carrot: 1.5
-      use_regulated_linear_velocity_scaling: true
-      regulated_linear_scaling_min_radius: 0.5
-      regulated_linear_scaling_min_speed: 0.3
-      use_rotate_to_heading: false                      # 终端不强制对齐 yaw（哨兵由云台瞄准，底盘朝向无所谓）
-      rotate_to_heading_min_angle: 0.785
-      max_angular_accel: 2.5
-      rotate_to_heading_angular_vel: 1.2
-      allow_reversing: true                             # 允许倒车跟踪路径，后置雷达场景可优先使用后向感知
-      max_robot_pose_search_dist: 10.0
+      temperature: 0.3
+      gamma: 0.015
+      motion_model: "DiffDrive"
+      visualize: false
+      regenerate_noises: false
+      TrajectoryVisualizer:
+        trajectory_step: 5
+        time_step: 3
+      critics: [
+        "ConstraintCritic",
+        "CostCritic",
+        "GoalCritic",
+        "GoalAngleCritic",
+        "PathAlignCritic",
+        "PathFollowCritic",
+        "PathAngleCritic",
+        "PreferForwardCritic"
+      ]
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      CostCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.81
+        critical_cost: 300.0
+        consider_footprint: false  # costmap uses robot_radius (circular), no explicit footprint polygon
+        collision_cost: 1000000.0
+        near_goal_distance: 1.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.4
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.0
+        threshold_to_consider: 0.5
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 14.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 3
+        threshold_to_consider: 0.5
+        offset_from_furthest: 20
+        use_path_orientations: false
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        offset_from_furthest: 5
+        threshold_to_consider: 1.4
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 2.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.5
+        max_angle_to_furthest: 1.0
+        mode: 0
+      PreferForwardCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 0.5
 
 
 local_costmap:
@@ -389,7 +446,7 @@ local_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 8.0                            # 陡峭梯度, 把 RPP 推向走廊中心
+        cost_scaling_factor: 8.0                            # 陡峭梯度，鼓励路径/轨迹远离障碍并靠近走廊中心
         inflation_radius: 0.61                               # 必须 >= 外接半径(约0.474)，避免 Smac SE2 报错并提升规划性能
       always_send_full_costmap: False
 
@@ -435,7 +492,7 @@ global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 8.0                            # 陡峭梯度, 把 RPP 推向走廊中心
+        cost_scaling_factor: 8.0                            # 陡峭梯度，鼓励路径/轨迹远离障碍并靠近走廊中心
         inflation_radius: 0.61                               # 必须 >= 外接半径(约0.474)，避免 Smac SE2 报错并提升规划性能
       always_send_full_costmap: False
 
@@ -460,7 +517,7 @@ planner_server:
     expected_planner_frequency: 10.0
     planner_plugins: ["GridBased"]
     GridBased:
-      # SmacPlannerHybrid: 感知朝向 + 弧形路径, RPP 跟起来连续不震荡
+      # SmacPlannerHybrid: 生成带朝向的弧形路径，供 DiffDrive MPPI 连续跟随
       plugin: "nav2_smac_planner::SmacPlannerHybrid"
       tolerance: 0.5
       allow_unknown: true
@@ -469,10 +526,10 @@ planner_server:
       max_iterations: 1000000
       max_on_approach_iterations: 1000
       max_planning_time: 1.5
-      motion_model_for_search: "REEDS_SHEPP"        # 支持前进+后退的混合轨迹搜索
+      motion_model_for_search: "DUBIN"               # 实车 Phase R-A 首版前向优先迁移：MPPI vx_min=0 不倒车，DUBIN 禁用后退/cusp 路径与之对齐
       angle_quantization_bins: 72
       minimum_turning_radius: 0.25
-      reverse_penalty: 1.0                           # 进一步偏向倒车（1.0 = 不额外惩罚倒车）
+      reverse_penalty: 2.1                           # DUBIN 不生成后退原语，此值仅作保留字段，不影响实际规划
       change_penalty: 0.0
       non_straight_penalty: 1.2
       cost_penalty: 2.0
