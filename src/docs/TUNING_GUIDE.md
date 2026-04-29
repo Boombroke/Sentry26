@@ -6,8 +6,8 @@
 本文档列出了需要在实车上根据实际情况微调的参数，以及对应的调优方法。
 
 配置文件位置：
-- 仿真：`sentry_nav_bringup/config/simulation/nav2_params.yaml`（Phase A 已迁移到 MPPI DiffDrive）
-- 实车：`sentry_nav_bringup/config/reality/nav2_params.yaml`（仍使用 RotationShim + RPP，未迁移）
+- 仿真：`sentry_nav_bringup/config/simulation/nav2_params.yaml`（Phase A 已迁移到 MPPI DiffDrive，20Hz）
+- 实车：`sentry_nav_bringup/config/reality/nav2_params.yaml`（Phase R-A 首版已迁移到 MPPI DiffDrive，30Hz；前向优先、Planner DUBIN，全场/上场 smoke 回归依赖 Task 6 台架和实测）
 
 > 今日范围：Phase A 仿真 MPPI 已落地；Phase B 地形 / 代价地图语义审查本轮已完成，结论是保持现有 YAML 参数（`clearDyObs=False`、`robot_radius=0.46 / inflation_radius=0.90`、低矮障碍链路 `preprocess.blind=0.35 / min_obstacle_intensity=0.05 / minBlockPointNum=5`、Point-LIO `gravity/blind/range` 不动），无数值变更。C 阶段语义 Route Graph 和 D 阶段 Smac Lattice/ConstrainedSmoother/MINCO 均为未来门控目标，尚未实装；MINCO 属于可选轨迹优化 / smoother 工具，不是必需。
 >
@@ -321,7 +321,9 @@ velocity_smoother 是 Nav2 官方节点，位于 controller_server 与 `sentry_m
 **判断标准**：
 - `ros2 topic hz /cmd_vel_nav` 应接近 `smoothing_frequency`
 - `ros2 topic hz /cmd_vel` 应接近 motion manager 的 `output_frequency_hz`
-- 如果明显低于设定值 → CPU 不足，降低频率
+- 如果明显低于设定值：
+  - **实车**：`controller_frequency / smoothing_frequency` 绝对不能动（30Hz 是控制带宽设计值）。CPU 余量不足时 fallback 只能顺序降 MPPI `batch_size`（`2000 → 1500 → 1000`），再配合关闭 `visualize` / `regenerate_noises` 等已经默认关掉的开关。
+  - **仿真**：先诊断 RTF（应接近 1.0）、gpu_lidar / 阴影渲染负载、`batch_size` 是否过大；确认瓶颈后再在独立调参 commit 中同步调整 `controller_frequency` 与 `smoothing_frequency`（两者必须一起改），禁止只改一侧。
 
 ### 15. feedback 模式
 
@@ -348,13 +350,17 @@ python3 src/sentry_tools/serial_visualizer.py
 
 ### 16. max_accel / max_decel（加速度限制）
 
-**当前值**：`[4.5, 0.0, 5.0]` / `[-4.5, 0.0, -5.0]`
+**当前值**：
+- 仿真：`[1.5, 0.0, 8.0]` / `[-1.5, 0.0, -8.0]`
+- 实车：`[2.5, 0.0, 5.0]` / `[-2.5, 0.0, -5.0]`
 
 **调优范围**：1.0 ~ 6.0 m/s²（vy 始终锁 0）
 
 **影响**：
 - 过大 → 底盘实际跟不上（轮子打滑），smoother 形同虚设
 - 过小 → 机器人加速慢，响应迟钝
+
+**MPPI 耦合**：实车 MPPI `wz_max=3.0 / az_max=5.0` 必须与 smoother 的 `max_velocity[2]=3.0 / max_accel[2]=5.0` 对齐；上调 smoother 限值前必须同步评估 MPPI 采样是否仍在物理可执行范围内。
 
 **调优方法**：
 ```bash
@@ -369,14 +375,14 @@ python3 src/sentry_tools/serial_visualizer.py
 ```
 
 **判断标准**：
-- 仿真摩擦力限制 ≈ 0.2g ≈ 2.0 m/s²，当前 4.5 超过物理极限（仿真中 smoother 无实际意义）
-- 实车需实测：全速加速时观察轮子是否打滑
+- 仿真摩擦力限制 ≈ 0.2g ≈ 2.0 m/s²，仿真 1.5 已经在物理极限内（仿真中 smoother 主要起平滑作用）
+- 实车需实测：全速加速时观察轮子是否打滑；当前 2.5 m/s² 是实车 28kg 双电机物理上限 2.86 的留余量值
 
 ### 17. max_velocity（最大速度限制）
 
 **当前值**：仿真 `[1.5, 0.0, 6.3]` / 实车 `[1.5, 0.0, 3.0]` —— **vy 必须锁 0**（差速约束）
 
-应与 controller 的 `desired_linear_vel` / `max_angular_accel * simulate_ahead_time` 一致或略大。如果 smoother 限速比 controller 小，controller 的指令会被截断。
+实车 MPPI `wz_max=3.0` 与 smoother `max_velocity[2]=3.0` 一致：MPPI 不能输出超过 smoother 的速度，否则会被截断，反而让 critic 评分失真；smoother 也不能设得比 MPPI 大，否则失去平滑约束。如果 smoother 限速比 controller 小，controller 的指令会被截断。
 
 ### 18. deadband_velocity（死区）
 
@@ -392,109 +398,112 @@ python3 src/sentry_tools/serial_visualizer.py
 
 ---
 
-## 六-B、仿真差速控制器 (MPPI DiffDrive，Phase A 已落地)
+## 六-B、差速控制器 MPPI DiffDrive（仿真 Phase A + 实车 Phase R-A 首版）
 
-仿真 `config/simulation/nav2_params.yaml` 的 `controller_plugins` 现在只留 `FollowPath`，插件为 `nav2_mppi_controller::MPPIController`，`motion_model: "DiffDrive"`。实车 `config/reality/nav2_params.yaml` 仍使用 RotationShim + RPP，未进入本阶段迁移。
+仿真 `config/simulation/nav2_params.yaml` 和实车 `config/reality/nav2_params.yaml` 的 `controller_plugins` 现在都只留 `FollowPath`，插件为 `nav2_mppi_controller::MPPIController`，`motion_model: "DiffDrive"`。实车首版是前向优先（`vx_min=0.0`），Planner 配对 `DUBIN`，全场/上场 Nav Goal smoke 回归依赖 Task 6 台架和实测。
 
 ### 18-B. MPPI Horizon 安全约束（硬规则）
 
 **不等式**：`time_steps × model_dt × vx_max < local_costmap_half_width`
 
-**当前值**：`32 × 0.05 × 1.5 = 2.4m`，local costmap `width/height=5.0m`，半径 2.5m，留 0.1m 裕量。
+**当前值**（仿真 / 实车共用）：`32 × 0.05 × 1.5 = 2.4m`，local costmap `width/height=5.0m`，半径 2.5m，留 0.1m 裕量。
 
 **为什么重要**：MPPI 末端轨迹点如果落到 local costmap 之外，该段轨迹无代价可评估，critic 会返回默认值导致采样失真，等价于在盲区决策。任意一个参数变大都会吃掉裕量，必须手算一次再改。
 
-### 18-C. 差速语义硬锁
+### 18-C. 差速语义硬锁（仿真 + 实车都必须遵守）
 
 | 参数 | 必须取值 | 原因 |
 |---|---|---|
 | `motion_model` | `DiffDrive` | 差速模型严格禁止横移采样 |
 | `vy_max` | 0.0 | 即使 critic 允许，下游 velocity_smoother / motion_manager 也会锁 0，提前锁可减少无效采样 |
 | `vy_std` | 0.0 | 采样噪声在 vy 方向的标准差也锁 0，避免噪声让 MPPI 学到偏侧向的策略 |
-| `vx_min` | 0.0 | 今日不允许倒车；倒车需用户单独开闸并重新验证贴障风险 |
+| `vx_min` | 0.0 | 仿真 Phase A 与实车 Phase R-A 首版均禁止倒车采样；倒车需单独开闸并重新验证贴障风险 |
+| Planner `motion_model_for_search` | `DUBIN` | 与 MPPI `vx_min=0` 严格配对；REEDS_SHEPP 会生成 MPPI 无法跟随的 cusp/倒车路径 |
 
-### 18-D. CPU / RTF 相关参数
+### 18-D. 仿真 vs 实车参数对比
+
+| 参数 | 仿真 | 实车 | 差异原因 |
+|---|---|---|---|
+| `vx_max` | 1.5 | 1.5 | 与 smoother `max_velocity[0]=1.5` 对齐，两端一致 |
+| `wz_max` | 6.3 | **3.0** | 实车 `velocity_smoother.max_velocity[2]=3.0` 是物理可执行上限，MPPI 不能超过 smoother，否则会被截断 |
+| `ax_max` | 1.5 | 1.5 | 线加速度物理可执行范围一致 |
+| `az_max` | 8.0 | **5.0** | 实车 `velocity_smoother.max_accel[2]=5.0` 是实测上限，仿真值不能直接套用 |
+| `batch_size` | 2000 | 2000 | 默认起点；实车 CPU 顶不住时顺序降到 1500 → 1000 |
+| `controller_frequency` | 20Hz | **30Hz** | 实车带宽需求更高；频率必须与 smoother 保持一致 |
+
+> **硬规则**：实车 `wz_max` 不能超过 smoother 的 3.0，`az_max` 不能超过 smoother 的 5.0。把 MPPI 上限设高于 smoother 只会被平滑器截断，反而让 MPPI 输出与实际执行速度脱节，critic 评分失准。
+
+### 18-E. CPU / RTF 相关参数
 
 | 参数 | 当前值 | 说明 |
 |---|---|---|
-| `batch_size` | 2000 | 采样批量，保守值；拉高会线性增加 CPU |
+| `batch_size` | 2000 | 采样批量，实车 30Hz CPU 余量紧张时顺序降到 `1500 → 1000`；**禁止动频率** |
 | `iteration_count` | 1 | 单次迭代；增大会多轮 refine，每帧耗时翻倍 |
-| `visualize` | false | 轨迹可视化走 ROS 话题，打开后会明显拖低仿真 RTF |
+| `visualize` | false | 轨迹可视化走 ROS 话题，打开后会明显拖低 RTF / CPU |
 | `regenerate_noises` | false | 复用上帧噪声，关掉随机重生以省 CPU |
 
-### 18-E. 频率一致性
+### 18-F. 频率一致性（硬规则）
 
-- `controller_frequency` 与 `velocity_smoother.smoothing_frequency` 必须相等（仿真 20Hz）。Smoother 频率低于 controller 会丢指令，高于又吃不到数据。
-- 不要拉高到 CPU 跑不动的值。实测若 20Hz 设定跑不到 15Hz，就应降频而不是堆参数。
+- `controller_frequency` 与 `velocity_smoother.smoothing_frequency` 必须相等（仿真 20Hz，实车 30Hz）。Smoother 频率低于 controller 会丢指令，高于又吃不到数据。
+- **实车不允许动频率**：30Hz 是控制带宽设计值，提频会把 CPU 打爆造成控制链路抖动，降频会不够带宽。CPU 顶不住时的 fallback 策略**只能**是降 MPPI `batch_size`（`2000 → 1500 → 1000`）。
+- 仿真实测若 20Hz 设定跑不到 15Hz，优先检查 RTF 是否低于 1.0、gpu_lidar 渲染负载、`batch_size` 是否过大，再考虑调整 batch_size。
 
-### 18-F. Critics 列表
+### 18-G. 速度链路观测点（实车调试）
 
-Nav2 Jazzy 官方差速推荐集，不要随意删 critic：
+上场前后都需要对照三条话题，确认 MPPI → smoother → motion_manager 链路完整：
+
+| 话题 | 含义 | 期望 |
+|---|---|---|
+| `/cmd_vel_controller` | MPPI 原始输出（未平滑） | 频率 ≈ `controller_frequency`（实车 30Hz）；`vy=0`；值在 `[vx_min, vx_max]`、`[-wz_max, wz_max]` 之内 |
+| `/cmd_vel_nav` | `velocity_smoother` 输出（平滑后） | 频率 ≈ `smoothing_frequency`（实车 30Hz）；`vy=0`；被 smoother 加速度限幅平滑 |
+| `/cmd_vel` | `sentry_motion_manager` 仲裁后最终输出 | 类型 `TwistStamped`；`vy=0`；navigation 源优先时与 `/cmd_vel_nav` 一致；急停/recovery/手动时按仲裁优先级替换 |
+
+```bash
+# 观察控制链路三级速度
+ros2 topic hz /cmd_vel_controller   # 实车应见 ~30Hz
+ros2 topic hz /cmd_vel_nav          # 实车应见 ~30Hz
+ros2 topic hz /cmd_vel              # 由 motion_manager output_frequency_hz 决定
+
+# 确认 vy 全链路锁 0
+ros2 topic echo /cmd_vel_controller --field twist.linear.y --once
+ros2 topic echo /cmd_vel_nav        --field twist.linear.y --once
+ros2 topic echo /cmd_vel            --field twist.linear.y --once
+```
+
+### 18-H. Critics 列表
+
+Nav2 Jazzy 官方差速推荐集，仿真和实车共用，不要随意删 critic：
 
 ```
 ConstraintCritic, CostCritic, GoalCritic, GoalAngleCritic,
 PathAlignCritic, PathFollowCritic, PathAngleCritic, PreferForwardCritic
 ```
 
-调权重时优先只改 `cost_weight`，不要直接改 `cost_power`，也不要新增自研 critic（Phase A 明确排除）。
+调权重时优先只改 `cost_weight`，不要直接改 `cost_power`，也不要新增自研 critic（Phase A / R-A 明确排除）。
+
+### 18-I. 实车首版验收门控（Task 6 台架/上场 smoke 待落地）
+
+台架（lifted bench，轮子离地或隔离驱动，不产生地面位移）只验证命令生成与链路语义，**不在台架上声称 Nav Goal 成功**；成功/失败需到真实地面或全场导航门控。
+
+- [ ] 台架：MPPI 节点 `Configured / Activated` 成功，`controller_server` 无 critic/costmap 超时致命日志。
+- [ ] 台架：`/cmd_vel_controller` 稳定 30Hz、`/cmd_vel_nav` 稳定 30Hz、`/cmd_vel` 按 motion_manager `output_frequency_hz`；全链路 `linear.y ≡ 0`。
+- [ ] 台架：向 `navigate_to_pose` 发一个点后，MPPI 能生成非零但有界的前向/角速度命令（`vx ∈ [0, 1.5]`、`|wz| ≤ 3.0`、`|az| ≤ 5.0`），整个过程不出现 `vx < 0` 的倒车采样、不出现 vy 非零。
+- [ ] 台架：取消目标 / 发零目标 / 急停时，`/cmd_vel_nav` 与 `/cmd_vel` 能在 smoother 减速上限内归零；`motion_manager/state` 里的仲裁源从 `navigation` 切到急停/空闲并反映在输出。
+- [ ] 台架：过程中 CPU 单核占用 < 80%；超过则先顺序降 `batch_size`（`2000 → 1500 → 1000`），再复测本节三条。
+- [ ] 地面/全场：Nav Goal 实际执行成功不是台架门控内容，请参见 [`src/docs/ARCHITECTURE.md` §4.5](ARCHITECTURE.md#45-分阶段导航路线图) 的 Phase A/R-A 上场 smoke 条目。
+- [ ] 回滚通道：确认 git 能恢复旧 `["RotateShim", "FollowPath"]` + `REEDS_SHEPP` YAML（上场前台架演练一次，不需要真的回滚运行）。
 
 ---
 
-## 六-C、实车差速控制器 (RotationShim + RPP，未迁移)
+## 六-C、差速恢复策略与终端参数
 
-仿真已迁移到 MPPI（见 六-B）。以下参数只对 `config/reality/nav2_params.yaml` 生效；如果后续要把实车也迁到 MPPI，整段会被替换。
-
-### 19. RotationShim 关键参数
-
-| 参数 | 实车默认 | 说明 |
-|---|---|---|
-| `angular_dist_threshold` | 3.14 | 接近 180°：几乎总让 RPP 先接管，只有近似掉头才会先原地转。调小（如 0.785）会让机器人起步更多场合"先原地对齐再走"，起步响应变慢但贴墙更稳；调大（接近 pi）几乎禁用 RotationShim，交由 RPP 自身曲率控制 |
-| `forward_sampling_distance` | 0.5 | 路径前方采样距离，用于判定目标方向 |
-| `rotate_to_heading_angular_vel` | 1.2 | 原地旋转角速度上限 (rad/s) |
-| `max_angular_accel` | 2.5 | 原地旋转角加速度 (rad/s²) |
-| `simulate_ahead_time` | 1.0 | 碰撞检查的预测时间窗 |
-
-**调优方法**：
-- 机器人进入路径时反复小幅振荡 → 增大 `angular_dist_threshold`（如 0.785 → 1.571 或接近 pi）减少 RotationShim 接管频次
-- 出了 RotationShim 后 RPP 急转 → 减小 `angular_dist_threshold`（如 3.14 → 1.0 → 0.785）让 RotationShim 对齐得更精确
-
-### 20. RPP 关键参数
-
-| 参数 | 实车默认 | 说明 |
-|---|---|---|
-| `desired_linear_vel` | 0.8 | 期望线速度 (m/s)，略降巡航以给后向感知更多反应裕度 |
-| `lookahead_dist` | 1.0 | 基础前瞻距离 (m) |
-| `min_lookahead_dist` | 0.5 | velocity-scaled lookahead 下限 |
-| `max_lookahead_dist` | 1.2 | velocity-scaled lookahead 上限 |
-| `lookahead_time` | 1.0 | `lookahead = max(min, vx * lookahead_time)` 被限幅 |
-| `use_velocity_scaled_lookahead_dist` | true | 开启速度相关的 lookahead 自适应 |
-| `use_regulated_linear_velocity_scaling` | true | 开启曲率与接近减速 |
-| `regulated_linear_scaling_min_radius` | 0.5 | 曲率半径小于此值开始降速 |
-| `regulated_linear_scaling_min_speed` | 0.3 | 曲率降速的速度下限 |
-| `approach_velocity_scaling_dist` | 0.8 | 接近目标开始减速的距离 |
-| `min_approach_linear_velocity` | 0.3 | 接近段最小线速度 |
-| `use_rotate_to_heading` | false | 哨兵由云台瞄准，底盘不要求终端对齐目标朝向 |
-| `rotate_to_heading_min_angle` | 0.785 | 触发终端旋转的最小角度差 (rad，仅在 `use_rotate_to_heading: true` 时生效) |
-| `max_angular_accel` | 2.5 | 角加速度上限 (rad/s²) |
-| `rotate_to_heading_angular_vel` | 1.2 | 原地/终端旋转角速度 (rad/s) |
-| `allow_reversing` | true | 允许倒车跟踪路径，后置雷达场景可优先使用后向感知 |
-| `use_collision_detection` | YAML `false`，`slam:=False` 时 launch 改 `true` | SLAM 建图保持 false 避免 unknown 误报；纯导航模式自动开启前向碰撞预测 |
-| `max_allowed_time_to_collision_up_to_carrot` | 1.5 | 碰撞预测时间窗 (s) |
-
-**调优流程**（实车场景）：
-1. **线速度**：先用 `desired_linear_vel` 把期望速度定在硬件能吃到的值（实车当前 0.8，留后向感知反应裕度；若窄道没问题再逐步上调到 1.0/1.2 验证）。
-2. **路径跟随**：若直线段频繁震荡，增大 `lookahead_dist`；若弯道切内拐角严重，减小 `lookahead_dist` 或增大 `regulated_linear_scaling_min_radius`。
-3. **高曲率降速**：观察 U 弯是否擦墙，若需更激进减速减小 `regulated_linear_scaling_min_radius`。
-4. **终端朝向**：哨兵默认不做底盘终端对齐；如果某个任务确实要求车头朝向目标，再单独打开 `use_rotate_to_heading` 并重新验证贴障风险。
-5. **RotationShim 与 RPP 交接**：观察日志行 `Rotating shim active` 频率；如果起步贴墙/侧扫障碍，优先减小 `angular_dist_threshold`，让机器人先原地对齐再给前进。
-6. **碰撞预测**：导航模式应确认 launch 已把 `use_collision_detection` 打开；SLAM 模式若 unknown 太多导致误报，再保留关闭。
-
-### 20-B. 差速恢复策略
+### 20-B. 差速恢复策略（仿真 + 实车共用）
 
 - 差速底盘的 recovery 不能依赖 `vy` 逃逸，所有兜底动作都必须落在 `vx + wz` 语义内。
 - 默认 BT 已移除旧 `<Spin/>` + `<BackUp/>` 主恢复路径，避免贴墙场景继续依赖会从 LIO 抖动中误判成功的反向动作。
 - `BackUpFreeSpace` 已于 2026 赛季重构时从 `nav2_plugins` 中删除；贴墙脱困由 `sentry_motion_manager` recovery 状态机通过 `cmd_vel_recovery` 接管，使用投影位移/进展判断避免抖动误判。`nav2_plugins` 包仍保留用于提供 `IntensityVoxelLayer`，不要删除整个包。
 - 当前 BT 只保留清图+等待占位；真正贴墙脱困应由 `sentry_motion_manager` recovery 状态机接管。
+- MPPI 本身对 `vx_min=0` 不允许采样倒车，因此 recovery 的后退动作走 `sentry_motion_manager` 的 `cmd_vel_recovery` 通道，不经过 MPPI。
 
 ### 21. 终端参数（general_goal_checker）
 
