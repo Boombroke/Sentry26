@@ -51,3 +51,18 @@ motion_manager:
     recovery_arc_escape_speed_mps: -0.20
     recovery_arc_escape_angular_z_radps: 0.80
     recovery_arc_escape_timeout_s: 3.5
+
+stuck_detector:
+  ros__parameters:
+    odometry_topic: odometry
+    command_topic: cmd_vel
+    motion_state_topic: motion_manager/state
+    recovery_trigger_topic: motion_manager/recovery_trigger
+
+    tick_frequency_hz: 20.0
+
+    window_s: 3.0
+    cmd_threshold_mps: 0.05
+    position_threshold_m: 0.10
+    hold_s: 1.0
+    cooldown_s: 3.0

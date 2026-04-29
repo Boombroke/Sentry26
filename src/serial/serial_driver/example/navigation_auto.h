@@ -33,7 +33,7 @@ float    chassis_yaw;
 uint16_t checksum;
 } __attribute__((packed)) SendImuPacket;
 
-// 0xA2 — 12 bytes, ~10Hz
+// 0xA2 — 11 bytes, ~10Hz
 typedef struct
 {
   uint8_t  header;
@@ -41,7 +41,6 @@ uint8_t  game_progress;
 uint16_t stage_remain_time;
 uint16_t current_hp;
 uint16_t projectile_allowance_17mm;
-uint8_t  team_colour;  // 1=red 0=blue
 uint8_t  rfid_base;
 uint16_t checksum;
 } __attribute__((packed)) SendStatusPacket;

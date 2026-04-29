@@ -99,7 +99,7 @@ python3 src/sentry_tools/serial_visualizer.py  # 实时速度可视化
 | 标签页 | 帧头 | 默认周期 | 可调字段 |
 |---|---|---|---|
 | IMU | 0xA1 | 1ms | pitch, yaw（历史兼容）+ gimbal_pitch/yaw + chassis_pitch/yaw（2026 差速轮足新增） |
-| Status | 0xA2 | 100ms | 比赛阶段(下拉)、剩余时间、血量、弹量、红蓝队(单选)、RFID(勾选) |
+| Status | 0xA2 | 100ms | 比赛阶段(下拉)、剩余时间、血量、弹量、RFID(勾选) |
 | HP | 0xA3 | 500ms | 7 个己方血量（1/2/3/4/7号 + 前哨 + 基地） |
 
 > IMU 包二进制布局从 2026-04-18 起从 11B 扩展到 27B，下位机固件需用新版 `navigation_auto.h` 重编以匹配 ROS 端解析。
@@ -328,7 +328,7 @@ python3 src/sentry_tools/serial_visualizer.py
 | 左3 | Vy 对比：命令（实线）vs 实际（虚线）—— 差速下应恒为 0 |
 | 左4 | Vw 对比：命令（实线）vs 实际（虚线） |
 | 右上 | 比赛阶段 + 倒计时进度条 |
-| 右中 | 自身 HP + 弹量 / 导航命令速度 / 实际速度 / 跟踪误差 / 最终下发速度 |
+| 右中 | 自身 HP + 弹量 + 基地 RFID 指示 / 导航命令速度 (cmd_vel 平滑后) / 控制器原始输出 (cmd_vel_controller 平滑前) / 实际速度 / 跟踪误差 |
 | 右下 | 全队 7 条 HP 柱状条 |
 | 底部 | 各 topic 收包状态 ✓/✗ + UI 刷新率 |
 
@@ -336,12 +336,14 @@ python3 src/sentry_tools/serial_visualizer.py
 
 | Topic | 用途 |
 |---|---|
-| `cmd_vel` | motion_manager 发布的最终底盘速度（TwistStamped, base_footprint 系） |
+| `cmd_vel` | motion_manager 发布的最终底盘速度（TwistStamped, base_footprint 系，velocity_smoother 平滑后） |
+| `cmd_vel_controller` | controller_server 原始输出（velocity_smoother 平滑前，用于诊断对比） |
 | `odometry` | 实际速度（base_footprint 系，odom_bridge 位置差分） |
 | `serial/gimbal_joint_state` | 云台关节状态 |
 | `referee/game_status` | 比赛阶段 + 倒计时 |
 | `referee/robot_status` | 血量 + 弹量 |
 | `referee/all_robot_hp` | 全队血量 |
+| `referee/rfidStatus` | RFID 状态（rm_serial_driver 把协议 `rfid_base` 字段映射到 `friendly_supply_zone_non_exchange`，visualizer 显示为"基地 RFID"） |
 
 > 差速轮足方案：`cmd_vel` 与 `odometry` 的 twist 均在 base_footprint 系，`chassis_yaw ≡ base_footprint_yaw`，**可直接对比**。
 

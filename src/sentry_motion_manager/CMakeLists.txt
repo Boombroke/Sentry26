@@ -19,6 +19,11 @@ rclcpp_components_register_node(${PROJECT_NAME}
   EXECUTABLE ${PROJECT_NAME}_node
 )
 
+rclcpp_components_register_node(${PROJECT_NAME}
+  PLUGIN sentry_motion_manager::StuckDetectorNode
+  EXECUTABLE stuck_detector_node
+)
+
 install(DIRECTORY config launch
   DESTINATION share/${PROJECT_NAME}
 )
@@ -41,6 +46,11 @@ if(BUILD_TESTING)
     test/recovery_state_machine_test.cpp
   )
   target_link_libraries(recovery_state_machine_test ${PROJECT_NAME})
+
+  ament_add_gtest(stuck_detector_test
+    test/stuck_detector_test.cpp
+  )
+  target_link_libraries(stuck_detector_test ${PROJECT_NAME})
 endif()
 
 ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)

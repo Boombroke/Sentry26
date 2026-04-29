@@ -416,7 +416,6 @@ class SerialMockTab(QtWidgets.QWidget):
 
     SPECIAL_FIELDS = {
         'game_progress': 'combo',
-        'team_colour': 'radio',
         'rfid_base': 'checkbox',
     }
 
@@ -425,7 +424,6 @@ class SerialMockTab(QtWidgets.QWidget):
         'stage_remain_time': '剩余时间',
         'current_hp': '当前血量',
         'projectile_allowance_17mm': '17mm 弹丸额度',
-        'team_colour': '队伍颜色',
         'rfid_base': '基地 RFID 激活',
     }
 
@@ -543,20 +541,6 @@ class SerialMockTab(QtWidgets.QWidget):
                 combo.setCurrentIndex(4)
                 layout.addWidget(combo, i, 1)
                 controls[field_name] = combo
-                continue
-
-            if special_type == 'radio' and field_name == 'team_colour':
-                red_radio = QtWidgets.QRadioButton('Red (1)')
-                blue_radio = QtWidgets.QRadioButton('Blue (0)')
-                red_radio.setChecked(True)
-                team_layout = QtWidgets.QHBoxLayout()
-                team_layout.addWidget(red_radio)
-                team_layout.addWidget(blue_radio)
-                team_layout.addStretch(1)
-                team_widget = QtWidgets.QWidget()
-                team_widget.setLayout(team_layout)
-                layout.addWidget(team_widget, i, 1)
-                controls[field_name] = (red_radio, blue_radio)
                 continue
 
             if special_type == 'checkbox' and field_name == 'rfid_base':
@@ -730,8 +714,6 @@ class SerialMockTab(QtWidgets.QWidget):
             control = tab_info['controls'][field_name]
             if isinstance(control, QtWidgets.QComboBox):
                 kwargs[field_name] = int(control.currentData())
-            elif isinstance(control, tuple):
-                kwargs[field_name] = 1 if control[0].isChecked() else 0
             elif isinstance(control, QtWidgets.QCheckBox):
                 kwargs[field_name] = 1 if control.isChecked() else 0
             elif field_type == 'float':

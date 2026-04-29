@@ -28,7 +28,7 @@ float    chassis_yaw;               //底盘 yaw
 uint16_t checksum = 0;
 } __attribute__((packed));
 
-// 0xA2 — 12 bytes, ~10Hz
+// 0xA2 — 11 bytes, ~10Hz
 struct ReceiveStatusPacket
 {
   uint8_t  header = HEADER_STATUS;
@@ -36,8 +36,7 @@ uint8_t  game_progress;             //游戏阶段 0-未开始 1-准备 2-自检
 uint16_t stage_remain_time;         //当前阶段剩余时间
 uint16_t current_hp;                //机器人当前血量
 uint16_t projectile_allowance_17mm; //17mm弹丸剩余发射次数
-uint8_t  team_colour;               //1=red 0=blue
-uint8_t  rfid_base;                 //己方基地增益点
+uint8_t  rfid_base;                 //己方基地 RFID 激活（driver 侧映射到 RfidStatus.friendly_supply_zone_non_exchange，命名兼容原行为树）
 uint16_t checksum = 0;
 } __attribute__((packed));
 
