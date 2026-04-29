@@ -19,6 +19,11 @@ rclcpp_components_register_node(${PROJECT_NAME}
   EXECUTABLE ${PROJECT_NAME}_node
 )
 
+rclcpp_components_register_node(${PROJECT_NAME}
+  PLUGIN sentry_motion_manager::StuckDetectorNode
+  EXECUTABLE stuck_detector_node
+)
+
 install(DIRECTORY config launch
   DESTINATION share/${PROJECT_NAME}
 )
