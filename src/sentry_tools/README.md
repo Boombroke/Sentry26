@@ -214,7 +214,7 @@ ros2 launch serial_driver serial_driver.launch.py device_name:=/dev/pts/4
 | 机器人不动 | `/cmd_vel_nav` 是否有 Nav2 输出 + motion_manager 是否发布最终 `/cmd_vel` | 启动导航 launch；检查 `ros2 topic info /cmd_vel` 类型非混合，并查看 `motion_manager/state` |
 | 导航无路径 | planner_server + obstacle_scan + terrain_map | `fix_nav2_deps.sh` + 启动 launch |
 | 定位漂移 | `odom→base_footprint` TF + odometry topic | 检查 point_lio 节点 |
-| RPP 原地旋转不前进 | SLAM unknown costmap 导致 RPP 误报碰撞 | `nav2_params.yaml` 确认 `use_collision_detection: false` |
+| MPPI 无输出 / 原地不动 | local_costmap 未刷新、`CostCritic`/`ConstraintCritic` 代价异常、controller_server 未 activate | `ros2 topic hz /cmd_vel_controller` 看 MPPI 原始输出；查 `controller_server` rosout 是否有 critic 超时或 costmap timeout；确认 local costmap `static_layer` + `IntensityVoxelLayer` 都已加载 |
 | 裁判系统异常 | 串口设备 + `referee/*` topic | `fix_serial_permission.sh` |
 | 行为树不执行 | sentry_behavior_server + referee topic | `fix_build.sh` |
 | 所有都红 | 全部 | `setup_env.sh`（一键修复按钮）|
