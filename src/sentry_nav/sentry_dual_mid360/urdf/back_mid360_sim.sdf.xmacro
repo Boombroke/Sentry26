@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!--
+    back_mid360_sim.sdf.xmacro
+    Simulation-only fragment for the rear-facing Livox Mid360 gpu_lidar sensor.
+
+    Macro: back_mid360_sim_macro
+    Params:
+      parent          - parent link name (must be gimbal_pitch for sim robot)
+      back_lidar_pose - "x y z roll pitch yaw" of back_mid360 relative to parent
+                        Default: 0.05 0 0.05 0.0 0.5235987755982988 3.141592653589793
+                        (30 deg down-tilt, yaw=pi rear-facing mount)
+      update_rate     - sensor update rate in Hz (mirror front Mid360: 50)
+      samples         - horizontal scan samples (mirror front Mid360: 1875)
+
+    This fragment delegates to the shared `livox` macro (defined in
+    model://mid360/model.sdf.xmacro) with prefix="back_", producing:
+      - back_livox_joint  (fixed joint to parent)
+      - back_mid360       (link with inertia, visual, imu sensor, gpu_lidar sensor)
+
+    Keep this file Gazebo-sensor-only; real-robot TF is in back_mid360.sdf.xmacro.
+-->
+<sdf version="1.8">
+    <xmacro_define_block name="back_mid360_sim_macro" params="parent back_lidar_pose update_rate samples">
+        <xmacro_block name="livox" prefix="back_" parent="${parent}" pose="${back_lidar_pose}" update_rate="${update_rate}" samples="${samples}" />
+    </xmacro_define_block>
+</sdf>
