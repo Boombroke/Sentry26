@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!--
+    mid360_imu_tf.sdf.xmacro
+    Pure TF fragment: adds a named IMU anchor link at the factory extrinsic
+    offset relative to a given Mid360 lidar link.
+
+    Macro: mid360_imu_tf_macro
+    Params:
+      lidar_link - name of the parent Mid360 link
+                   (e.g. "front_mid360" or "back_mid360")
+
+    The IMU anchor link is named "${lidar_link}_imu".
+    Factory extrinsic (Mid360 datasheet, body frame → IMU frame):
+      x=-0.011  y=-0.02329  z=0.04412  roll=0  pitch=0  yaw=0
+
+    This fragment is intentionally Gazebo-sensor-free.
+    The real IMU data comes from the Livox driver; this link is only for TF.
+-->
+<sdf version="1.8">
+    <xmacro_define_block name="mid360_imu_tf_macro" params="lidar_link">
+        <joint name="${lidar_link}_imu_joint" type="fixed">
+            <pose relative_to="${lidar_link}">-0.011 -0.02329 0.04412 0 0 0</pose>
+            <parent>${lidar_link}</parent>
+            <child>${lidar_link}_imu</child>
+        </joint>
+        <link name="${lidar_link}_imu">
+            <pose relative_to="${lidar_link}_imu_joint">0 0 0 0 0 0</pose>
+            <inertial>
+                <mass>0.001</mass>
+                <inertia>
+                    <ixx>1e-9</ixx>
+                    <iyy>1e-9</iyy>
+                    <izz>1e-9</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
+                </inertia>
+            </inertial>
+        </link>
+    </xmacro_define_block>
+</sdf>

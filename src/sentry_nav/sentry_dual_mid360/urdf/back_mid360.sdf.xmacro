@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<!--
+    back_mid360.sdf.xmacro
+    Pure TF fragment for the rear-facing Livox Mid360 (real robot only).
+
+    Macro: back_mid360_macro
+    Params:
+      parent         - parent link name (must be gimbal_pitch for real robot)
+      back_lidar_pose - "x y z roll pitch yaw" of back_mid360 relative to parent
+                        Default: 0.05 0 0.05 0.0 0.5235987755982988 3.141592653589793
+                        (30 deg down-tilt, yaw=pi rear-facing mount)
+
+    This fragment is intentionally Gazebo-sensor-free.
+    Simulation gpu_lidar for the back Mid360 belongs in a separate sim fragment.
+-->
+<sdf version="1.8">
+    <xmacro_define_block name="back_mid360_macro" params="parent back_lidar_pose">
+        <joint name="back_livox_joint" type="fixed">
+            <pose relative_to="${parent}">${back_lidar_pose}</pose>
+            <parent>${parent}</parent>
+            <child>back_mid360</child>
+        </joint>
+        <link name="back_mid360">
+            <pose relative_to="back_livox_joint">0.0 0.0 0.0 0 0 0</pose>
+            <inertial>
+                <pose>0 0 0.02 0 0 0</pose>
+                <xmacro_block name="inertia_cylinder" m="0.005" r="0.04" l="0.04" />
+            </inertial>
+            <visual name="visual">
+                <pose>0.0 0.0 0.0 0 0 3.141592653589793</pose>
+                <geometry>
+                    <mesh>
+                        <uri>model://mid360/meshes/mid360.dae</uri>
+                    </mesh>
+                </geometry>
+            </visual>
+        </link>
+    </xmacro_define_block>
+</sdf>
