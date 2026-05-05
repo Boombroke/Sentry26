@@ -268,7 +268,7 @@
         use_fixed_gimbal=True keeps chassis -> gimbal_yaw -> gimbal_pitch as static TF.
         The real robot currently uses this mode; Gazebo keeps revolute joints.
     -->
-    <xmacro_define_block name="wheeled_biped_model" params="model_name chassis_length chassis_width chassis_z front_lidar_pose use_sim_sensors use_real_sensors use_casters use_gazebo_plugins use_fixed_gimbal">
+    <xmacro_define_block name="wheeled_biped_model" params="model_name chassis_length chassis_width chassis_z front_lidar_pose back_lidar_pose use_sim_sensors use_real_sensors use_casters use_gazebo_plugins use_fixed_gimbal">
         <model name="${model_name}" canonical_link="chassis" placement_frame="base_footprint">
             <pose>0 0 0 0 0 0</pose>
 
@@ -547,6 +547,11 @@
             <xmacro_block condition="${use_real_sensors}" name="wheeled_biped_industrial_camera_real" prefix="front_" parent="gimbal_pitch" pose="0.08 0 0.02 0 0 0" />
 
             <xmacro_block condition="${use_gazebo_plugins}" name="wheeled_biped_gazebo_plugins" />
+
+            <!-- Dual Mid360: back lidar TF + IMU anchors for both lidars (real robot only) -->
+            <xmacro_block condition="${use_real_sensors}" name="back_mid360_macro" parent="gimbal_pitch" back_lidar_pose="${back_lidar_pose}" />
+            <xmacro_block condition="${use_real_sensors}" name="mid360_imu_tf_macro" lidar_link="front_mid360" />
+            <xmacro_block condition="${use_real_sensors}" name="mid360_imu_tf_macro" lidar_link="back_mid360" />
         </model>
     </xmacro_define_block>
 </sdf>

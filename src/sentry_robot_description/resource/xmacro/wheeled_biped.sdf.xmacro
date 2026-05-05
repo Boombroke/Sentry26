@@ -1,6 +1,8 @@
 <?xml version="1.0"?>
 <sdf version="1.8">
     <xmacro_include uri="file://wheeled_biped_core.sdf.xmacro" />
+    <xmacro_include uri="model://urdf/back_mid360.sdf.xmacro" />
+    <xmacro_include uri="model://urdf/mid360_imu_tf.sdf.xmacro" />
 
     <!-- Backward-compatible alias. New launch files use wheeled_biped_real or wheeled_biped_sim explicitly. -->
     <xmacro_block
@@ -10,6 +12,7 @@
         chassis_width="0.650"
         chassis_z="0.120"
         front_lidar_pose="-0.05 0 0.05 0.0 0.2617993877991494 3.141592653589793"
+        back_lidar_pose="0 0 0 0 0 0"
         use_sim_sensors="False"
         use_real_sensors="True"
         use_casters="False"

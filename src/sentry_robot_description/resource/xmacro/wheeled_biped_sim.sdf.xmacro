@@ -1,6 +1,11 @@
 <?xml version="1.0"?>
 <sdf version="1.8">
     <xmacro_include uri="file://wheeled_biped_core.sdf.xmacro" />
+    <!-- Include dual-Mid360 fragment definitions so back_mid360_macro and
+         mid360_imu_tf_macro are resolvable by xmacro even though they are
+         skipped at render time (use_real_sensors="False"). -->
+    <xmacro_include uri="model://urdf/back_mid360.sdf.xmacro" />
+    <xmacro_include uri="model://urdf/mid360_imu_tf.sdf.xmacro" />
 
     <!--
         Gazebo profile for the 2026 differential wheel-leg robot.
@@ -18,6 +23,7 @@
         chassis_width="0.4225"
         chassis_z="0.078"
         front_lidar_pose="-0.05 0 0.05 0.0 0.523598775598299 3.141592653589793"
+        back_lidar_pose="0 0 0 0 0 0"
         use_sim_sensors="True"
         use_real_sensors="False"
         use_casters="True"
