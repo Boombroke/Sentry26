@@ -3,6 +3,8 @@
     <xmacro_include uri="file://wheeled_biped_core.sdf.xmacro" />
     <xmacro_include uri="model://urdf/back_mid360.sdf.xmacro" />
     <xmacro_include uri="model://urdf/mid360_imu_tf.sdf.xmacro" />
+    <!-- Include sim fragment so back_mid360_sim_macro is defined (name-check-before-condition rule). -->
+    <xmacro_include uri="model://urdf/back_mid360_sim.sdf.xmacro" />
 
     <!-- Backward-compatible alias. New launch files use wheeled_biped_real or wheeled_biped_sim explicitly. -->
     <xmacro_block

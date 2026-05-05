@@ -541,6 +541,11 @@
             </link>
 
             <xmacro_block condition="${use_sim_sensors}" name="livox" prefix="front_" parent="gimbal_pitch" pose="${front_lidar_pose}" update_rate="50" samples="1875" />
+            <!-- Dual Mid360: back lidar gpu_lidar sensor (sim only); mirrors front update_rate/samples -->
+            <xmacro_block condition="${use_sim_sensors}" name="back_mid360_sim_macro" parent="gimbal_pitch" back_lidar_pose="${back_lidar_pose}" update_rate="50" samples="1875" />
+            <!-- Dual Mid360: IMU TF anchors for both lidars (sim and real) -->
+            <xmacro_block condition="${use_sim_sensors}" name="mid360_imu_tf_macro" lidar_link="front_mid360" />
+            <xmacro_block condition="${use_sim_sensors}" name="mid360_imu_tf_macro" lidar_link="back_mid360" />
             <xmacro_block condition="${use_real_sensors}" name="wheeled_biped_livox_real" prefix="front_" parent="gimbal_pitch" pose="${front_lidar_pose}" />
 
             <xmacro_block condition="${use_sim_sensors}" name="industrial_camera" prefix="front_" parent="gimbal_pitch" pose="0.08 0 0.02 0 0 0" update_rate="30" horizontal_fov="1" width="1920" height="1080" />
