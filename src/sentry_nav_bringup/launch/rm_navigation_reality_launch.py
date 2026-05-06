@@ -13,6 +13,7 @@
 # limitations under the License.
 
 
+import json
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -24,6 +25,24 @@ from launch.substitutions import LaunchConfiguration, TextSubstitution
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
+
+
+def _livox_ip_suffix(ip: str) -> str:
+    return ip.replace(".", "_")
+
+
+def _load_dual_mid360_ip_suffixes():
+    dual_mid360_share = get_package_share_directory("sentry_dual_mid360")
+    json_path = os.path.join(dual_mid360_share, "config", "mid360_user_config_dual.json")
+    with open(json_path) as f:
+        cfg = json.load(f)
+    configs = cfg.get("lidar_configs", [])
+    if len(configs) < 2:
+        raise RuntimeError(
+            f"mid360_user_config_dual.json must have at least 2 lidar_configs entries "
+            f"(found {len(configs)}): {json_path}"
+        )
+    return _livox_ip_suffix(configs[0]["ip"]), _livox_ip_suffix(configs[1]["ip"])
 
 
 def generate_launch_description():
@@ -164,6 +183,13 @@ def generate_launch_description():
         }.items(),
     )
 
+    # Per-device topic remappings for dual Mid360 (multi_topic=1).
+    # livox_ros_driver2 names topics by device IP (dots replaced with underscores):
+    #   /livox/lidar_<ip>  /livox/imu_<ip>
+    # IPs are read from mid360_user_config_dual.json at launch-generation time.
+    # lidar_configs[0] = front Mid360, lidar_configs[1] = back Mid360 (T2 order).
+    front_ip_sfx, back_ip_sfx = _load_dual_mid360_ip_suffixes()
+
     start_livox_ros_driver2_node = Node(
         package="livox_ros_driver2",
         executable="livox_ros_driver2_node",
@@ -171,6 +197,12 @@ def generate_launch_description():
         output="screen",
         namespace=namespace,
         parameters=[configured_params],
+        remappings=[
+            (f"/livox/lidar_{front_ip_sfx}", "/livox/lidar_front"),
+            (f"/livox/imu_{front_ip_sfx}",   "/livox/imu"),
+            (f"/livox/lidar_{back_ip_sfx}",  "/livox/lidar_back"),
+            (f"/livox/imu_{back_ip_sfx}",    "/livox/imu_back"),
+        ],
     )
 
     foxglove_bridge_cmd = Node(
