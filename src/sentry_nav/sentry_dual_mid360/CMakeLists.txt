@@ -8,7 +8,40 @@ add_definitions(-Wall -Werror)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(ament_cmake_auto REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 ament_auto_find_build_dependencies()
+
+set(POINTLIO_OVERRIDE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/config")
+set(POINTLIO_OVERRIDE_OUTPUT "${POINTLIO_OVERRIDE_OUTPUT_DIR}/pointlio_dual_overrides.yaml")
+set(POINTLIO_OVERRIDE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_pointlio_overrides.py")
+set(POINTLIO_OVERRIDE_IMU_XMACRO "${CMAKE_CURRENT_SOURCE_DIR}/urdf/mid360_imu_tf.sdf.xmacro")
+
+# Keep sentry_dual_mid360 independently buildable: locate the real robot xmacro
+# through the repository src/ layout instead of requiring sentry_robot_description
+# to be installed before this package is built.
+get_filename_component(SENTRY26_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+set(POINTLIO_OVERRIDE_REAL_XMACRO
+  "${SENTRY26_SRC_DIR}/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro"
+)
+
+add_custom_command(
+  OUTPUT ${POINTLIO_OVERRIDE_OUTPUT}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${POINTLIO_OVERRIDE_OUTPUT_DIR}
+  COMMAND ${Python3_EXECUTABLE} ${POINTLIO_OVERRIDE_GENERATOR}
+          --real-xmacro ${POINTLIO_OVERRIDE_REAL_XMACRO}
+          --imu-macro ${POINTLIO_OVERRIDE_IMU_XMACRO}
+          --output ${POINTLIO_OVERRIDE_OUTPUT}
+  DEPENDS
+    ${POINTLIO_OVERRIDE_GENERATOR}
+    ${POINTLIO_OVERRIDE_REAL_XMACRO}
+    ${POINTLIO_OVERRIDE_IMU_XMACRO}
+  COMMENT "Generating Point-LIO dual Mid360 overrides from xmacro inputs"
+  VERBATIM
+)
+
+add_custom_target(generate_pointlio_dual_overrides ALL
+  DEPENDS ${POINTLIO_OVERRIDE_OUTPUT}
+)
 
 # Add executable
 add_executable(merger_node src/merger_node.cpp)
@@ -35,6 +68,10 @@ install(TARGETS merger_node
 # Install directories
 install(DIRECTORY urdf config launch scripts docs
   DESTINATION share/${PROJECT_NAME}
+)
+
+install(FILES ${POINTLIO_OVERRIDE_OUTPUT}
+  DESTINATION share/${PROJECT_NAME}/config
 )
 
 # Install scripts defensively as programs (exclude .gitkeep)
