@@ -142,7 +142,58 @@ install_small_gicp() {
     ok "small_gicp v1.0.0 安装完成"
 }
 
-# ---------- 5. 初始化 rosdep ----------
+# ---------- 5. Multi_LiCa 标定工具依赖（可选，双雷达外参标定用） ----------
+# Multi_LiCa: https://github.com/TUMFTM/Multi_LiCa
+# 用途: 双 Mid360 LiDAR-to-LiDAR 外参标定（T11 阶段使用）
+# 源码位置: src/third_party/Multi_LiCa/（已克隆，含 TEASER-plusplus 子模块）
+#
+# 依赖说明:
+#   - libomp-dev          : OpenMP 并行支持（TEASER++ 编译必需）
+#   - libgtest-dev        : Google Test（TEASER++ 单元测试，可选）
+#   - cmake / build-essential : 已在步骤 3 安装
+#   - Python: open3d, scipy, ros2_numpy, pandas（见 requirements.txt）
+#   - TEASER++: 需从子模块源码编译 Python 绑定（见下方说明）
+#
+# 注意: Multi_LiCa 不加入默认 colcon 全量编译，避免 TEASER++ 重型依赖
+#       影响主导航栈构建。标定时单独在 Multi_LiCa 目录内构建。
+#       本函数默认跳过；设置 INSTALL_MULTI_LICA_DEPS=1 后才执行。
+#
+# TEASER++ 手动编译步骤（仅标定时需要，非日常开发必需）:
+#   cd src/third_party/Multi_LiCa/TEASER-plusplus
+#   mkdir build && cd build
+#   cmake -DTEASERPP_PYTHON_VERSION=3.$(python3 -c "import sys; print(sys.version_info.minor)") ..
+#   make teaserpp_python -j$(nproc)
+#   cd python && pip install . --break-system-packages
+#
+# 已知问题（见 TUMFTM/Multi_LiCa#17）:
+#   - TEASER++ 子模块 v2.0 在某些环境下 Python 绑定编译失败
+#   - 修复: pip install --upgrade pip 后在 TEASER-plusplus/ 根目录执行 pip install .
+#   - scipy >= 1.6 的 cKDTree.query() n_jobs 参数已改为 workers，需注意版本兼容
+install_multi_lica_deps() {
+    if [ "${INSTALL_MULTI_LICA_DEPS:-0}" != "1" ]; then
+        info "跳过 Multi_LiCa 依赖安装（如需安装，设置 INSTALL_MULTI_LICA_DEPS=1 后重新运行）"
+        return 0
+    fi
+
+    info "安装 Multi_LiCa 标定工具依赖..."
+
+    sudo apt install -y \
+        libomp-dev \
+        libgtest-dev
+
+    pip3 install --quiet \
+        open3d \
+        scipy \
+        ros2_numpy \
+        pandas \
+        "setuptools==58.2" \
+        --break-system-packages 2>/dev/null || \
+        warn "部分 Multi_LiCa Python 依赖安装失败，标定时请手动安装"
+
+    ok "Multi_LiCa 依赖安装完成（TEASER++ Python 绑定需手动编译，见注释）"
+}
+
+# ---------- 6. 初始化 rosdep ----------
 init_rosdep() {
     info "初始化 rosdep..."
 
@@ -154,7 +205,7 @@ init_rosdep() {
     ok "rosdep 初始化完成"
 }
 
-# ---------- 6. 创建工作空间并编译 ----------
+# ---------- 7. 创建工作空间并编译 ----------
 build_workspace() {
     info "配置 ROS2 工作空间..."
 
@@ -208,7 +259,7 @@ build_workspace() {
     echo ""
 }
 
-# ---------- 7. 配置环境变量 (可选) ----------
+# ---------- 8. 配置环境变量 (可选) ----------
 setup_bashrc() {
     local SETUP_LINE="source $WS_DIR/install/setup.bash"
 
@@ -241,6 +292,7 @@ install_ros2_jazzy
 install_gazebo
 install_system_deps
 install_small_gicp
+install_multi_lica_deps
 init_rosdep
 build_workspace
 setup_bashrc
