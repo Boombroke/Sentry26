@@ -45,6 +45,8 @@ private:
   double min_dist_front_m_;
   double min_dist_back_m_;
   int queue_size_;
+  int tf_cache_retry_count_;
+  int tf_cache_retry_interval_ms_;
 
   rclcpp::Publisher<CustomMsg>::SharedPtr merged_pub_;
   message_filters::Subscriber<CustomMsg> front_sub_;

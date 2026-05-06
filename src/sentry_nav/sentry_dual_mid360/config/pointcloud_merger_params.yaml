@@ -1,0 +1,13 @@
+pointcloud_merger:
+  ros__parameters:
+    front_topic: /livox/lidar_front
+    back_topic: /livox/lidar_back
+    output_topic: /livox/lidar
+    common_frame: front_mid360
+    back_frame: back_mid360
+    sync_tolerance_ms: 10.0
+    min_dist_front_m: 0.4
+    min_dist_back_m: 0.4
+    queue_size: 10
+    tf_cache_retry_count: 10
+    tf_cache_retry_interval_ms: 500

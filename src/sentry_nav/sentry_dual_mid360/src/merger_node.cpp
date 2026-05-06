@@ -40,6 +40,8 @@ MergerNode::MergerNode(const rclcpp::NodeOptions & options)
   , min_dist_front_m_(0.4)
   , min_dist_back_m_(0.4)
   , queue_size_(10)
+  , tf_cache_retry_count_(10)
+  , tf_cache_retry_interval_ms_(500)
   , has_back_to_common_transform_(false)
   , back_to_common_transform_(Eigen::Isometry3d::Identity())
   , has_last_published_stamp_(false)
@@ -61,6 +63,11 @@ MergerNode::MergerNode(const rclcpp::NodeOptions & options)
   min_dist_front_m_ = this->declare_parameter<double>("min_dist_front_m", min_dist_front_m_);
   min_dist_back_m_ = this->declare_parameter<double>("min_dist_back_m", min_dist_back_m_);
   queue_size_ = this->declare_parameter<int>("queue_size", queue_size_);
+  // Declared for YAML visibility; T8 retries TF every sync callback (no cadence use yet).
+  tf_cache_retry_count_ =
+    this->declare_parameter<int>("tf_cache_retry_count", tf_cache_retry_count_);
+  tf_cache_retry_interval_ms_ =
+    this->declare_parameter<int>("tf_cache_retry_interval_ms", tf_cache_retry_interval_ms_);
   if (sync_tolerance_ms_ < 0.0) {
     RCLCPP_WARN(
       this->get_logger(), "sync_tolerance_ms=%.3f is invalid, clamping to 0.0",
@@ -71,6 +78,18 @@ MergerNode::MergerNode(const rclcpp::NodeOptions & options)
     RCLCPP_WARN(
       this->get_logger(), "queue_size=%d is invalid, clamping to 1", queue_size_);
     queue_size_ = 1;
+  }
+  if (tf_cache_retry_count_ < 0) {
+    RCLCPP_WARN(
+      this->get_logger(), "tf_cache_retry_count=%d is invalid, clamping to 0",
+      tf_cache_retry_count_);
+    tf_cache_retry_count_ = 0;
+  }
+  if (tf_cache_retry_interval_ms_ < 0) {
+    RCLCPP_WARN(
+      this->get_logger(), "tf_cache_retry_interval_ms=%d is invalid, clamping to 0",
+      tf_cache_retry_interval_ms_);
+    tf_cache_retry_interval_ms_ = 0;
   }
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
