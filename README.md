@@ -12,9 +12,11 @@ RoboMaster 2026 赛季哨兵机器人自主导航系统。基于 ROS2 Jazzy + Na
 ```mermaid
 graph LR
     subgraph 感知层
-        LiDAR[Livox Mid360<br/>挂 gimbal_pitch] --> PL[Point-LIO<br/>激光惯性里程计]
-        IMU[BMI088 IMU] --> PL
-        LiDAR --> TA[terrain_analysis<br/>地形分析]
+        FL[Livox Mid360 前<br/>挂 gimbal_pitch] --> MG[pointcloud_merger<br/>外部前融合 CustomMsg]
+        BL[Livox Mid360 后<br/>挂 gimbal_pitch, yaw=π] --> MG
+        MG --> PL[Point-LIO<br/>激光惯性里程计]
+        IMU[BMI088 IMU<br/>前 Mid360 IMU 喂 LIO] --> PL
+        MG --> TA[terrain_analysis<br/>地形分析]
     end
 
     subgraph 定位层
@@ -56,15 +58,16 @@ controller_server (base_footprint 系, TwistStamped)
 
 差速底盘 `chassis_yaw ≡ base_footprint_yaw`，无需坐标旋转。仿真 `config/simulation/nav2_params.yaml`（Phase A）和实车 `config/reality/nav2_params.yaml`（Phase R-A 首版）都已切换到 MPPI DiffDrive 单控制器。实车首版为**前向优先**（`vx_min=0.0`、Planner `DUBIN`），角速度 / 角加速度被 velocity_smoother 上限收紧到 `wz_max=3.0 rad/s`、`az_max=5.0 rad/s²`。全场导航回归验证尚待 Task 6 台架/上场 smoke 完成，当前只完成 YAML 与文档迁移。
 
-### TF 树（6 层）
+### TF 树（双 Mid360）
 
 ```
-map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch → front_mid360
+map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch ┬─ front_mid360 → front_mid360_imu
+                                                                  └─ back_mid360  → back_mid360_imu
 ```
 
 - `base_footprint` 为 Nav2 的 `robot_base_frame`（业界惯例，水平 2D 投影点）。
 - 当前实车 profile 中，`gimbal_yaw → gimbal_pitch` 与底盘是静态 TF；仿真 profile 仍保留动态云台关节。
-- LiDAR 挂在 `gimbal_pitch` 上；实车当前为固定 15° 下俯安装，odom_bridge 继续统一通过 TF 查询消化该外参。
+- 前/后 Mid360 均挂在 `gimbal_pitch` 上，实车默认 30° 下俯安装（`pitch = 0.5235987755982988`），back 以 `yaw = π` 反向安装。前 Mid360 的 IMU 进入 Point-LIO，后 Mid360 的 IMU 仅作诊断不进 LIO。odom_bridge 通过 TF 查询统一消化 LiDAR 外参。
 
 ## 功能特性
 
@@ -86,7 +89,8 @@ src/
 ├── sentry_nav/                       # 自研导航栈
 │   ├── odom_bridge/                  #   里程计桥接 + 云台雷达 TF 查询
 │   ├── nav2_plugins/                 #   IntensityVoxelLayer（BackUpFreeSpace 已删除，脱困由 sentry_motion_manager 接管）
-│   └── small_gicp_relocalization/    #   全局重定位节点
+│   ├── small_gicp_relocalization/    #   全局重定位节点
+│   └── sentry_dual_mid360/           #   双 Mid360 点云融合 + 相关 xmacro/config/launch/脚本/文档
 ├── sentry_nav_bringup/               # Launch 文件、Nav2 参数、地图、行为树 XML
 ├── sentry_motion_manager/            # 底盘速度仲裁，Nav2 输出 cmd_vel_nav → 最终 /cmd_vel
 ├── sentry_behavior/                  # BehaviorTree.CPP 行为树插件
@@ -100,7 +104,8 @@ src/
 │   ├── livox_ros_driver2/            #   Livox 官方雷达驱动
 │   ├── pointcloud_to_laserscan/      #   ROS2 点云→2D scan
 │   ├── ign_sim_pointcloud_tool/      #   仿真点云格式转换
-│   └── BehaviorTree.ROS2/            #   BT-ROS2 集成框架
+│   ├── BehaviorTree.ROS2/            #   BT-ROS2 集成框架
+│   └── Multi_LiCa/                   #   TUMFTM 双/多雷达离线外参标定（COLCON_IGNORE 默认不进 colcon 发现）
 ├── simulator/                        # Gazebo Harmonic 仿真环境（rmoss_* 体系）
 │   ├── rmoss_core/                   #   仿真基础库
 │   ├── rmoss_gazebo/                 #   仿真插件
@@ -194,7 +199,9 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
   - imu 包二进制布局从 11B → 27B
   - 电控端需用新版 `src/serial/serial_driver/example/navigation_auto.h` 重编固件
 
-- 实车 TF 与传感器安装外参在 `src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro` 调整；当前实车默认是固定云台 + Mid360 下俯 15°。仿真专用底盘缩小、caster、DiffDrive 和 Mid360 下俯角只在 `wheeled_biped_sim.sdf.xmacro` 调整；共享轮距/轮径/云台拓扑位于 `wheeled_biped_core.sdf.xmacro`。
+- 实车 TF 与传感器安装外参在 `src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro` 调整；当前实车默认是固定云台 + 前后双 Mid360 30° 下俯（`front_lidar_pose = -0.17 0 0.10 0.0 0.5235987755982988 3.141592653589793`、`back_lidar_pose = 0.05 0 0.05 0.0 0.5235987755982988 3.141592653589793`，back 雷达 `yaw = π` 反向安装）。仿真专用底盘缩小、caster、DiffDrive 和仿真下俯角只在 `wheeled_biped_sim.sdf.xmacro` 调整；共享轮距/轮径/云台拓扑位于 `wheeled_biped_core.sdf.xmacro`。双 Mid360 相关 xmacro fragment、merger 节点与 Point-LIO override codegen 集中在 `src/sentry_nav/sentry_dual_mid360/`。
+
+- `use_dual_mid360` launch argument 默认 `True`，整条链路（merger + Point-LIO override YAML + Livox multi-topic 驱动）自动启用；回退单 Mid360 链路执行 `ros2 launch sentry_nav_bringup rm_sentry_launch.py use_dual_mid360:=False`。实车硬件同步验证 / 双 Mid360 PCD 重建 / 实车台架 smoke 依赖目标硬件，本地开发机缺双雷达硬件时走 BLOCKED，不得伪装 PASS（详见 `src/sentry_nav/sentry_dual_mid360/docs/ARCHITECTURE.md`）。
 
 ## 主要参数
 

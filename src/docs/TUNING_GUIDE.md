@@ -21,6 +21,8 @@
 
 ## 一、Point-LIO 里程计参数
 
+> **双 Mid360 模式下 `extrinsic_T / extrinsic_R / mapping.gravity / gravity_init` 不是手调参数**。这些字段由 `src/sentry_nav/sentry_dual_mid360/scripts/generate_pointlio_overrides.py` 在 `colcon build --packages-select sentry_dual_mid360` 时从 xmacro 单源派生到 `install/sentry_dual_mid360/share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml`；生成 YAML 是 build 产物，**不在源码 `config/` 提交、禁止手编辑**。机械师改 Mid360 安装位置后只改 xmacro（`wheeled_biped_real.sdf.xmacro` 的 `front_lidar_pose` / `back_lidar_pose` 与 `sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro` 的 IMU factory pose），重跑一次 build 即同步更新。想知道当前安装外参与 override 是否一致，跑 `python3 src/sentry_nav/sentry_dual_mid360/scripts/verify_pointlio_overrides_fresh.py`；不一致就重新 build，不要手改 YAML。`nav2_params.yaml` 中的 Point-LIO `mapping` section 仅在 `use_dual_mid360:=False` 的单雷达回退路径下生效，不要把双雷达 codegen 结果抄回去。
+
 ### 1. point_filter_num（点云抽稀比例）
 
 **当前值**：4（每 4 个点取 1 个，25% 参与配准）
@@ -264,6 +266,108 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 - 3m/s：20Hz → 每帧 15cm ✓，10Hz → 每帧 30cm ✗
 
 **注意**：修改 `publish_freq` 后必须同步修改 `lidar_time_inte = 1 / publish_freq`。
+
+---
+
+## 四-B、双 Mid360 前融合（pointcloud_merger）
+
+双 Mid360 升级后，Point-LIO 的上游多了一层外部 `sentry_dual_mid360::MergerNode`。它在 Point-LIO 之前把两路 `livox_ros_driver2/msg/CustomMsg` 融合成单路 `/livox/lidar`（`frame_id=front_mid360`），Point-LIO 当单雷达消费，源码零改动。**顶层开关 `use_dual_mid360` 默认 `True`**；传 `False` 时 merger 不启动、生成的 Point-LIO override YAML 不加载、dual Livox override 与 per-device remap 均不应用，Livox driver 走基础 `configured_params`，Point-LIO 保持基础 YAML 的 `common.lid_topic: livox/lidar`，退回升级前单 Mid360 链路。
+
+参数文件位置：`src/sentry_nav/sentry_dual_mid360/config/pointcloud_merger_params.yaml`（根键 `pointcloud_merger`）。所有参数建议只在实车或标定台架上根据观测调整，不要拍脑袋改。
+
+**硬件同步优先级最高**：本节所有参数调优的前提是**两颗 Mid360 已经硬件同步**（PTP / gPTP / GPS PPS+GPRMC 三选一，见 `src/sentry_nav/sentry_dual_mid360/docs/SYNC_VERIFICATION.md` 四步法）。硬件没同步就绝不能用软件 slop 去补偿，否则 GICP / costmap 会继承错误几何。
+
+### 14-B. sync_tolerance_ms（ApproximateTime slop 上限）
+
+**当前值**：`10.0` ms
+
+**调优范围**：1.0 ~ 50.0（更大的值只用于应急诊断，上线禁止）
+
+**影响**：`message_filters::sync_policies::ApproximateTime` 的最大配对时间差。Merger 使用双重门控：先对 `ApproximateTime` 调 `setMaxIntervalDuration(sync_tolerance_ms)`，再在 callback 里重算 `abs_stamp_diff_ns` 二次比对，超出就丢对并累加 `drop_sync_`。
+
+**调优方法**：
+```bash
+# 1. 先跑硬件同步验证（四步法）
+python3 src/sentry_nav/sentry_dual_mid360/scripts/verify_dual_mid360_sync.py --duration 60
+
+# 2. 观察 merger 吞吐率
+ros2 topic hz /livox/lidar_front
+ros2 topic hz /livox/lidar_back
+ros2 topic hz /livox/lidar
+```
+
+**判断标准**：
+- 三路频率都接近 `publish_freq`（默认 10Hz）且 `drop_sync_` 计数稳定不增长 → 当前值合理。
+- `drop_sync_` 持续增长但硬件同步报 `HARDWARE_SYNC` → 回 §四检查 `publish_freq` 是否被误改到高于两颗雷达的实际能力。
+- 硬件同步报 `DRIFTING / NOT_SYNCED` → 禁止调大 slop，回 `SYNC_VERIFICATION.md` 修硬件。
+
+### 14-C. min_dist_front_m / min_dist_back_m（原生系近场裁剪）
+
+**当前值**：两项均为 `0.4` m
+
+**调优范围**：0.2 ~ 0.6
+
+**影响**：Merger 在**原生坐标系**（front / back 各自）做 min-distance 裁剪，再把 back 点云刚体变换到 `front_mid360` 系。必须在原生系做几何裁剪，不能等合并后再按欧氏距离过滤，否则会裁掉邻侧雷达的有效低矮点。
+
+**调优方法**：
+```bash
+# 观察 merger 的 drop_front_min_dist_ / drop_back_min_dist_ 日志
+ros2 node info /pointcloud_merger
+# 以及 RViz 里 /livox/lidar 是否在机身正下方还有残余自身点
+```
+
+**判断标准**：
+- 机身处仍能看到自身点（RViz 里合并后点云落在机器人包络内）→ 各自方向小幅加大 0.05 m。
+- 低矮障碍（小于 0.3 m 的底座、台阶第一层）明显被吃掉 → 减小到 0.3 m 先验证，再配合 Point-LIO `preprocess.blind`（见 §8）一起调。
+- 不要把 `min_dist_*` 当作"盖掉地面"的手段，Point-LIO 有自己的 `preprocess.blind`，两层裁剪职责不同。
+
+### 14-D. queue_size（同步器队列长度）
+
+**当前值**：`10`
+
+**调优范围**：5 ~ 50
+
+**影响**：`ApproximateTime` 保留多少对历史消息做配对。小了丢对多、大了延迟与内存上升。
+
+**判断标准**：
+- 默认 10 在 `publish_freq=10Hz` 下对应 1 秒历史窗，足够应对 10 ms slop。只有在 CPU 严重抖动导致大量配对失败时才考虑拉到 20~30，并同步检查 merger 输出 `/livox/lidar` 的 `header.stamp` 单调性。
+- 不建议大于 50，否则延迟会把 Point-LIO 的 EKF 推入历史区，反而触发 `lidar loop back`。
+
+### 14-E. publish_freq（Livox driver 频率，dual override）
+
+**当前值（dual 模式）**：`10.0` Hz，位于 `livox_driver_dual_override.yaml`
+
+**调优范围**：10 ~ 15（**禁止超过 15Hz**）
+
+**影响**：Dual 模式下两颗雷达同时输出 CustomMsg，merger 每帧要做同步+刚体变换+stable_sort。频率越高，merger 的处理预算越紧，Point-LIO 的 IMU buffer 也更容易堆积。
+
+**判断标准**：
+- Merger 处理延迟预算：**中位数 ≤ 2 ms，p99 ≤ 5 ms**（实车 Jetson Orin 台架）。跑 `qa_merger_latency.py` 得到。
+- Merger latency 持续高于预算 → 降 `publish_freq` 到 10Hz（已是默认），再检查 `batch_size`。
+- **禁止动** `sentry_nav_bringup/config/reality/mid360_user_config.json` 的单雷达默认；dual override YAML 只影响 `use_dual_mid360:=True` 路径。
+
+### 14-F. Merger 处理延迟与性能剖析
+
+```bash
+# 合成数据 mock 剖析（无硬件依赖，默认种子 20260506）
+python3 src/sentry_nav/sentry_dual_mid360/scripts/qa_merger_latency.py \
+    --max-median-ms 2.0 --max-p99-ms 5.0
+
+# 在线剖析 merger_node 的 CPU / RSS（需要 merger 已运行）
+python3 src/sentry_nav/sentry_dual_mid360/scripts/qa_merger_latency.py \
+    --live-pid "$(pgrep -f merger_node | head -1)"
+```
+
+**规则**：mock 模式的结果**不能**冒充实车延迟；没硬件就走 BLOCKED，不得编造 PASS。
+
+### 14-G. 绝对禁止事项（merger 层硬规则）
+
+- **禁止**用 `timebase` 字段做时间基础：Point-LIO 只信 `header.stamp`；merger 必须输出 `timebase=0`。
+- **禁止**让 `header.stamp` 非单调：遇到重复时间戳 nudge 1 ns，绝不原样透传，否则 Point-LIO 触发 `lidar loop back` 丢整包。
+- **禁止**丢弃 `tag / reflectivity / line` 字段：Point-LIO 的 `preprocess.cpp` 按 `(tag & 0x30) == 0x10` 过滤；字段缺失会让合法点被误杀。
+- **禁止**把 back `line` 从 0~3 偏移到 4~7 去绕过 `scan_line=6` 过滤：Point-LIO 会把 `line >= scan_line` 的点直接丢，尝试绕过只会丢一半点。
+- **禁止**跳过 `std::stable_sort(offset_time)`：Point-LIO EKF 对点级时间单调敏感。
+- **禁止**只用 `ExactTime` 同步：硬件同步后 `header.stamp` 的纳秒精度不保证完全相等，必须 `ApproximateTime + setMaxIntervalDuration + callback 门控`。
 
 ---
 

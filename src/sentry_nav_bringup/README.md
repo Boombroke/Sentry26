@@ -150,7 +150,7 @@ ros2 pkg prefix sentry_motion_manager
 排查导航失败或速度尖峰时，建议至少录制：
 
 - `/tf`, `/tf_static`, `/joint_states`
-- `/livox/lidar`, `/livox/imu`
+- `/livox/lidar`, `/livox/imu`（`use_dual_mid360:=True` 时 `/livox/lidar` 是 merger 输出的 CustomMsg；实车还可加录 `/livox/lidar_front`, `/livox/lidar_back`, `/livox/imu_back` 做前融合回溯）
 - `/aft_mapped_to_init`, `/cloud_registered`
 - `/odometry`, `/cmd_vel`, `/cmd_vel_nav`, `/cmd_vel_controller`
 - `/local_costmap/costmap_raw`, `/global_costmap/costmap_raw`

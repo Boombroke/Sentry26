@@ -185,19 +185,21 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
 - 仿真 Gazebo 入口：`src/sentry_robot_description/resource/xmacro/wheeled_biped_sim.sdf.xmacro`
 - 共享拓扑核心：`src/sentry_robot_description/resource/xmacro/wheeled_biped_core.sdf.xmacro`
 
-LiDAR 斜装、倒装或实测平移只改 `wheeled_biped_real.sdf.xmacro` 里的 `front_lidar_pose`，不要用 Point-LIO `gravity` 表达安装角。仿真为了扫到近场低矮底座保留 30° 下俯角，这个角只存在于 `wheeled_biped_sim.sdf.xmacro`。
+LiDAR 斜装、倒装或实测平移只改 `wheeled_biped_real.sdf.xmacro` 里的 `front_lidar_pose` / `back_lidar_pose`（Layer A，雷达在机器人上的安装位姿）；Mid360 出厂 IMU 相对 LiDAR 的位姿（Layer B）写在 `src/sentry_nav/sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro`。不要用 Point-LIO `gravity` 表达安装角。仿真为了扫到近场低矮底座保留 30° 下俯角，这个角只存在于 `wheeled_biped_sim.sdf.xmacro`。
 
-当前实车默认值：
+当前实车默认值（前后双 Mid360 均 30° 下俯，back 以 `yaw = π` 反向安装）：
 
-- `front_lidar_pose = -0.05 0 0.05 0.0 0.2617993877991494 3.141592653589793`
-- `pitch > 0` 表示下俯，因此这里表示 Mid360 相对 `gimbal_pitch` 下俯 15°
+- `front_lidar_pose = -0.17 0 0.10 0.0 0.5235987755982988 3.141592653589793`
+- `back_lidar_pose  = 0.05 0 0.05 0.0 0.5235987755982988 3.141592653589793`
+- `pitch > 0` 表示雷达下俯，这里对应下俯 30°（= `pi / 6`）
 - 实车 `chassis -> gimbal_yaw -> gimbal_pitch` 现在是静态 TF，不再默认消费 `serial/gimbal_joint_state` 驱动 robot_state_publisher
+- 双 Mid360 派生资产（merger、driver override、Point-LIO override codegen、后雷达 TF fragment、IMU TF fragment 等）集中在 `src/sentry_nav/sentry_dual_mid360/`；`use_dual_mid360` launch argument 默认 `True`，`ros2 launch sentry_nav_bringup rm_sentry_launch.py use_dual_mid360:=False` 可回退单雷达链路
 
-外参修改前建议先看 `src/sentry_robot_description/README.md` 里的“外参与 DOF 怎么理解 / 角度为什么是 0.261799 / 常见安装场景怎么写”三节，里面已经明确了：
+外参修改前建议先看 `src/sentry_robot_description/README.md` 里的"外参与 DOF 怎么理解 / 角度换算 / 常见安装场景怎么写"三节，里面已经明确了：
 
-- `front_lidar_pose` 用的是 `x y z roll pitch yaw`
+- `front_lidar_pose` / `back_lidar_pose` 用的是 `x y z roll pitch yaw`
 - 角度必须先转弧度
-- 当前实车固定云台时只改 `gimbal_pitch -> front_mid360` 外参
+- 当前实车固定云台时只改 `gimbal_pitch -> front_mid360` / `gimbal_pitch -> back_mid360` 外参
 - 倒装/反装也仍然只走 TF 外参，不走 Point-LIO `gravity`
 
 ## 5. 行为树决策

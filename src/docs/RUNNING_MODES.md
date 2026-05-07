@@ -46,7 +46,8 @@
           + 手动 unpause: gz service -s /world/default/control ...
           + 等待 ~10s 让 /clock 稳定、传感器流启动
   终端 2: rm_navigation_simulation_launch.py
-          ├── ign_sim_pointcloud_tool (仿真专用点云格式转换)
+          ├── [use_dual_mid360=True]  → sentry_dual_mid360 sim_custommsg_bridge (PC2 → CustomMsg)
+          ├── [use_dual_mid360=False] → ign_sim_pointcloud_tool (PC2 → velodyne_points 回退)
           ├── bringup_launch.py
           │   ├── [slam=True]  → slam_launch.py
           │   ├── [slam=False] → localization_launch.py
@@ -147,7 +148,8 @@ ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmuc_20
 | `rviz_config_file` | string | `rviz/nav2_default_view.rviz` | RViz 配置文件路径 |
 
 ### 仿真专有节点
-- **ign_sim_pointcloud_tool**: 将 Gazebo 的 `PointCloudPacked` 格式转换为标准 `PointCloud2`（`velodyne_points` 话题），供 Point-LIO 处理。仅仿真模式启动。
+- **sentry_dual_mid360 sim bridge (`use_dual_mid360:=True`，默认)**: `sim_custommsg_bridge_launch.py` 启动两份 `sentry_dual_mid360::SimPointCloudToCustomMsgNode`，分别把 Gazebo 桥出的 `livox/lidar_front_points` / `livox/lidar_back_points`（`sensor_msgs/PointCloud2`）转换成 `livox/lidar_front` / `livox/lidar_back` Livox `CustomMsg`，由 `MergerNode` 合并给 Point-LIO，与实车共用同一条 CustomMsg 链路。
+- **ign_sim_pointcloud_tool (`use_dual_mid360:=False` 回退)**: 订阅前 Mid360 的 `PointCloudPacked`（base YAML `pcd_topic: livox/lidar_front_points`），发布 `velodyne_points`（`sensor_msgs/PointCloud2`）给 Point-LIO 单雷达 Velodyne 回退链路使用。仅仿真模式启动。
 
 ---
 
@@ -250,6 +252,8 @@ ros2 run nav2_map_server map_saver_cli -f ~/my_map
 - `my_map.yaml`: 地图元数据（分辨率、原点等）
 
 > **提示**：Point-LIO 在 SLAM 模式下会自动保存 PCD 文件。当前流程期望保存结果已经是与 `registered_scan` 一致的 odom/map 系点云，可作为后续导航模式的先验点云使用。旧 `lidar_odom` 系 PCD 不再兼容，必须重新建图生成。PCD 文件保存路径取决于 Point-LIO 的配置。
+
+> **双 Mid360 升级 PCD 迁移**：从单 Mid360 升级到双 Mid360（`use_dual_mid360:=True`）后，单雷达时代生成的先验 PCD **不兼容**且不能通过任何方式自动转换/复用——单雷达 PCD 只覆盖前向半球，双雷达实时 `registered_scan` 含后半球点会产生大规模 outlier，GICP `inlier_ratio` / `fitness_error` 必然劣化。升级后必须走实车慢速建图重建 PCD：`ros2 launch sentry_nav_bringup rm_sentry_launch.py slam:=True use_dual_mid360:=True` → `ros2 run nav2_map_server map_saver_cli -f ~/Documents/Sentry26_maps/<name>_dual` → 停栈让 Point-LIO 落盘 → 替换 `prior_pcd_file` 后用 `ros2 launch sentry_nav_bringup rm_sentry_launch.py slam:=False world:=<name>_dual use_dual_mid360:=True` 验收 GICP。完整 SOP、旧资产备份/检查/验证/FAQ 详见包内 [`PCD_MIGRATION.md`](../sentry_nav/sentry_dual_mid360/docs/PCD_MIGRATION.md)。
 
 ### SLAM Toolbox 关键参数
 
