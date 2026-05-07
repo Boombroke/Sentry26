@@ -51,6 +51,7 @@ def generate_launch_description():
     use_composition = LaunchConfiguration("use_composition")
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
+    use_dual_mid360 = LaunchConfiguration("use_dual_mid360")
 
     # Create our own temporary YAML files that include substitutions
     param_substitutions = {
@@ -143,6 +144,18 @@ def generate_launch_description():
         "log_level", default_value="info", description="log level"
     )
 
+    declare_use_dual_mid360_cmd = DeclareLaunchArgument(
+        "use_dual_mid360",
+        default_value="True",
+        description=(
+            "Forwarded to both slam_launch.py and localization_launch.py. When True "
+            "(default), enables dual-Mid360 pointcloud_merger + Point-LIO override "
+            "YAML on whichever branch is active (slam or localization). When False, "
+            "merger is disabled and Point-LIO keeps the base params_file topic "
+            "livox/lidar."
+        ),
+    )
+
     # Specify the actions
     bringup_cmd_group = GroupAction(
         [
@@ -169,6 +182,7 @@ def generate_launch_description():
                     "autostart": autostart,
                     "use_respawn": use_respawn,
                     "params_file": params_file,
+                    "use_dual_mid360": use_dual_mid360,
                 }.items(),
             ),
             IncludeLaunchDescription(
@@ -186,6 +200,7 @@ def generate_launch_description():
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
                     "container_name": "nav2_container",
+                    "use_dual_mid360": use_dual_mid360,
                 }.items(),
             ),
             IncludeLaunchDescription(
@@ -234,6 +249,7 @@ def generate_launch_description():
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
+    ld.add_action(declare_use_dual_mid360_cmd)
 
     # Add the actions to launch all of the navigation nodes
     ld.add_action(bringup_cmd_group)

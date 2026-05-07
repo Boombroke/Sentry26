@@ -18,7 +18,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, TextSubstitution
 from launch_ros.actions import Node
@@ -45,6 +45,7 @@ def generate_launch_description():
     rviz_config_file = LaunchConfiguration("rviz_config_file")
     use_rviz = LaunchConfiguration("use_rviz")
     use_foxglove = LaunchConfiguration("use_foxglove")
+    use_dual_mid360 = LaunchConfiguration("use_dual_mid360")
 
     configured_params = ParameterFile(
         RewrittenYaml(
@@ -143,6 +144,21 @@ def generate_launch_description():
         description="Whether to start foxglove_bridge for remote web visualization",
     )
 
+    declare_use_dual_mid360_cmd = DeclareLaunchArgument(
+        "use_dual_mid360",
+        default_value="True",
+        description=(
+            "When True (default), bridges front/back Gazebo gpu_lidar PointCloud2 "
+            "into Livox CustomMsg via sentry_dual_mid360 sim converter nodes, "
+            "runs pointcloud_merger (inside slam/localization launch), and "
+            "applies pointlio_dual_overrides plus CustomMsg preprocess settings "
+            "on top of base Point-LIO params. When False, the sim converter is "
+            "disabled; ign_sim_pointcloud_tool falls back to the front Mid360 "
+            "PointCloud2 and publishes velodyne_points for single-lidar "
+            "Point-LIO operation."
+        ),
+    )
+
     start_velodyne_convert_tool = Node(
         package="ign_sim_pointcloud_tool",
         executable="ign_sim_pointcloud_tool_node",
@@ -150,6 +166,22 @@ def generate_launch_description():
         output="screen",
         namespace=namespace,
         parameters=[configured_params],
+        condition=UnlessCondition(use_dual_mid360),
+    )
+
+    start_sim_custommsg_bridge_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("sentry_dual_mid360"),
+                "launch",
+                "sim_custommsg_bridge_launch.py",
+            )
+        ),
+        condition=IfCondition(use_dual_mid360),
+        launch_arguments={
+            "namespace": namespace,
+            "use_sim_time": use_sim_time,
+        }.items(),
     )
 
     foxglove_bridge_cmd = Node(
@@ -190,6 +222,7 @@ def generate_launch_description():
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
+            "use_dual_mid360": use_dual_mid360,
         }.items(),
     )
 
@@ -210,9 +243,11 @@ def generate_launch_description():
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_foxglove_cmd)
     ld.add_action(declare_use_respawn_cmd)
+    ld.add_action(declare_use_dual_mid360_cmd)
 
     # Add the actions to launch all of the navigation nodes
     ld.add_action(start_velodyne_convert_tool)
+    ld.add_action(start_sim_custommsg_bridge_cmd)
     ld.add_action(bringup_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(foxglove_bridge_cmd)
