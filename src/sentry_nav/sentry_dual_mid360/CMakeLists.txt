@@ -60,8 +60,21 @@ ament_target_dependencies(merger_node
   std_msgs
 )
 
+add_executable(sim_pointcloud_to_custommsg_node src/sim_pointcloud_to_custommsg_node.cpp)
+target_include_directories(sim_pointcloud_to_custommsg_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(sim_pointcloud_to_custommsg_node
+  rclcpp
+  rclcpp_components
+  sensor_msgs
+  livox_ros_driver2
+  std_msgs
+)
+
 # Install executable
-install(TARGETS merger_node
+install(TARGETS merger_node sim_pointcloud_to_custommsg_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
