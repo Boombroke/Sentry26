@@ -1,6 +1,6 @@
 ign_sim_pointcloud_tool:
   ros__parameters:
-    pcd_topic: livox/lidar
+    pcd_topic: livox/lidar_front_points
     n_scan: 32
     horizon_scan: 1875
     ang_bottom: 7.0

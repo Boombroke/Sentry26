@@ -1,8 +1,8 @@
 pointcloud_merger:
   ros__parameters:
-    front_topic: /livox/lidar_front
-    back_topic: /livox/lidar_back
-    output_topic: /livox/lidar
+    front_topic: livox/lidar_front
+    back_topic: livox/lidar_back
+    output_topic: livox/lidar
     common_frame: front_mid360
     back_frame: back_mid360
     sync_tolerance_ms: 10.0

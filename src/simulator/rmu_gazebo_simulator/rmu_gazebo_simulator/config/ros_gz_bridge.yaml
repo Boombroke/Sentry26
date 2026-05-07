@@ -1,11 +1,9 @@
-# Differential drive cmd_vel (ROS → Gazebo, 用 TwistStamped 匹配 Jazzy Nav2 输出)
 - ros_topic_name: "/<robot_name>/cmd_vel"
   gz_topic_name: "/model/<robot_name>/cmd_vel"
   ros_type_name: "geometry_msgs/msg/TwistStamped"
   gz_type_name: "ignition.msgs.Twist"
   direction: "ROS_TO_GZ"
 
-# JointStatePublisher publish
 - ros_topic_name: "/<robot_name>/joint_states"
   gz_topic_name: "/world/default/model/<robot_name>/joint_state"
   ros_type_name: "sensor_msgs/msg/JointState"
@@ -18,14 +16,26 @@
   gz_type_name: "ignition.msgs.Image"
   direction: "GZ_TO_ROS"
 
-- ros_topic_name: "/<robot_name>/livox/lidar"
+- ros_topic_name: "/<robot_name>/livox/lidar_front_points"
   gz_topic_name: "/world/default/model/<robot_name>/link/front_mid360/sensor/front_mid360_lidar/scan/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "ignition.msgs.PointCloudPacked"
+  direction: "GZ_TO_ROS"
+
+- ros_topic_name: "/<robot_name>/livox/lidar_back_points"
+  gz_topic_name: "/world/default/model/<robot_name>/link/back_mid360/sensor/back_mid360_lidar/scan/points"
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "ignition.msgs.PointCloudPacked"
   direction: "GZ_TO_ROS"
 
 - ros_topic_name: "/<robot_name>/livox/imu"
   gz_topic_name: "/world/default/model/<robot_name>/link/front_mid360/sensor/front_mid360_imu/imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "ignition.msgs.IMU"
+  direction: "GZ_TO_ROS"
+
+- ros_topic_name: "/<robot_name>/livox/imu_back"
+  gz_topic_name: "/world/default/model/<robot_name>/link/back_mid360/sensor/back_mid360_imu/imu"
   ros_type_name: "sensor_msgs/msg/Imu"
   gz_type_name: "ignition.msgs.IMU"
   direction: "GZ_TO_ROS"
