@@ -8,10 +8,18 @@
 #       before feeding them to the calibration tool.
 #
 # Recorded topics:
-#   /livox/lidar_front   — front Mid360 raw CustomMsg (IP: 192.168.1.144)
-#   /livox/lidar_back    — back  Mid360 raw CustomMsg (IP: 192.168.1.145)
-#   /tf                  — dynamic transforms
-#   /tf_static           — static transforms
+#   REQUIRED (preflight aborts if missing):
+#     /livox/lidar_front   — front Mid360 raw CustomMsg (IP: 192.168.1.144)
+#     /livox/lidar_back    — back  Mid360 raw CustomMsg (IP: 192.168.1.145)
+#   OPTIONAL (recorded when present, skipped with a warning when not):
+#     /tf                  — dynamic transforms
+#     /tf_static           — static transforms
+#
+# Multi_LiCa (T11) does not need /tf[_static] — external calibration reads
+# the initial guess from xmacro via read_tf_from_table. tf topics are kept
+# as optional because a standalone driver launch (dual_mid360_driver_launch.py)
+# does not start robot_state_publisher and therefore does not publish them,
+# but the rest of the stack — including full bringup — does.
 #
 # Usage:
 #   bash record_calib_bag.sh [OPTIONS]
@@ -38,12 +46,21 @@ set -euo pipefail
 # Constants
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RECORD_TOPICS=(
+# REQUIRED_TOPICS must all be published; missing any aborts preflight.
+REQUIRED_TOPICS=(
     "/livox/lidar_front"
     "/livox/lidar_back"
+)
+# OPTIONAL_TOPICS are recorded when present; missing ones emit a WARN but
+# do not abort. Multi_LiCa reads the initial guess from xmacro directly,
+# so tf is genuinely optional for T11.
+OPTIONAL_TOPICS=(
     "/tf"
     "/tf_static"
 )
+# TOPICS_TO_RECORD is populated by check_topics() with only the required +
+# available-optional subset. Used for both `ros2 bag record` and metadata.
+TOPICS_TO_RECORD=()
 FRONT_IP="192.168.1.144"
 BACK_IP="192.168.1.145"
 
@@ -78,10 +95,16 @@ OPTIONS:
   --dry-run               Print planned command and metadata; create no bag
 
 RECORDED TOPICS:
-  /livox/lidar_front      Front Mid360 raw CustomMsg  (real IP: $FRONT_IP)
-  /livox/lidar_back       Back  Mid360 raw CustomMsg  (real IP: $BACK_IP)
-  /tf                     Dynamic transforms
-  /tf_static              Static transforms
+  REQUIRED (preflight aborts if missing):
+    /livox/lidar_front    Front Mid360 raw CustomMsg  (real IP: $FRONT_IP)
+    /livox/lidar_back     Back  Mid360 raw CustomMsg  (real IP: $BACK_IP)
+  OPTIONAL (recorded when present, skipped with WARN otherwise):
+    /tf                   Dynamic transforms
+    /tf_static            Static transforms
+
+  Why optional: T11 calibration reads the initial guess from xmacro via
+  read_tf_from_table and does NOT consume bag tf. A standalone driver
+  launch does not publish /tf[_static]; full bringup does.
 
 OUTPUT LAYOUT:
   <output-dir>/<env>-<timestamp>/
@@ -145,28 +168,43 @@ check_ros2() {
 
 check_topics() {
     local ros2_bin="$1"
-    local missing=()
+    local missing_required=()
+    local missing_optional=()
     local topic_list
 
-    log_info "Checking topic availability (timeout 5s per topic)..."
-    # Get topic list once
+    # Reset the global pick list so repeated calls / re-runs start clean.
+    TOPICS_TO_RECORD=()
+
+    log_info "Checking topic availability..."
     if ! topic_list="$("$ros2_bin" topic list 2>/dev/null)"; then
         log_error "Failed to query ROS2 topic list. Is a ROS2 graph running?"
         return 1
     fi
 
-    for topic in "${RECORD_TOPICS[@]}"; do
+    for topic in "${REQUIRED_TOPICS[@]}"; do
         if echo "$topic_list" | grep -qF "$topic"; then
-            log_info "  FOUND: $topic"
+            log_info "  FOUND (required): $topic"
+            TOPICS_TO_RECORD+=("$topic")
         else
-            log_warn "  MISSING: $topic"
-            missing+=("$topic")
+            log_warn "  MISSING (required): $topic"
+            missing_required+=("$topic")
+        fi
+    done
+    for topic in "${OPTIONAL_TOPICS[@]}"; do
+        if echo "$topic_list" | grep -qF "$topic"; then
+            log_info "  FOUND (optional): $topic"
+            TOPICS_TO_RECORD+=("$topic")
+        else
+            # Optional-missing is expected for the standalone driver launch
+            # (no robot_state_publisher → no tf). Record without it.
+            log_warn "  SKIP  (optional, not published): $topic"
+            missing_optional+=("$topic")
         fi
     done
 
-    if [ ${#missing[@]} -gt 0 ]; then
-        log_error "The following required topics are not published:"
-        for t in "${missing[@]}"; do
+    if [ ${#missing_required[@]} -gt 0 ]; then
+        log_error "The following REQUIRED topics are not published:"
+        for t in "${missing_required[@]}"; do
             log_error "  $t"
         done
         log_error ""
@@ -174,7 +212,7 @@ check_topics() {
             log_error "Real mode: ensure both Mid360 units are powered and livox_ros_driver2 is running."
             log_error "  Front Mid360 IP: $FRONT_IP"
             log_error "  Back  Mid360 IP: $BACK_IP"
-            log_error "  Check: ros2 topic hz /livox/lidar_front /livox/lidar_back"
+            log_error "  Quickest bring-up: ros2 launch sentry_dual_mid360 dual_mid360_driver_launch.py"
         else
             log_error "Sim mode: ensure Gazebo is running, unpaused, and the navigation stack is up."
             log_error "  ros2 launch rmu_gazebo_simulator bringup_sim.launch.py"
@@ -183,6 +221,12 @@ check_topics() {
         return 1
     fi
 
+    if [ ${#missing_optional[@]} -gt 0 ]; then
+        log_info "Proceeding without optional topics (not required by T11 calibration):"
+        for t in "${missing_optional[@]}"; do
+            log_info "  - $t"
+        done
+    fi
     log_info "All required topics are available."
     return 0
 }
@@ -203,8 +247,18 @@ status: $status
 timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 bag_directory: $bag_dir
 
-topics:
-$(for t in "${RECORD_TOPICS[@]}"; do echo "  - $t"; done)
+topics_required:
+$(for t in "${REQUIRED_TOPICS[@]}"; do echo "  - $t"; done)
+
+topics_optional:
+$(for t in "${OPTIONAL_TOPICS[@]}"; do echo "  - $t"; done)
+
+topics_recorded:
+$(if [ "${#TOPICS_TO_RECORD[@]}" -gt 0 ]; then
+    for t in "${TOPICS_TO_RECORD[@]}"; do echo "  - $t"; done
+else
+    echo "  []  # preflight aborted before topic selection"
+fi)
 
 hardware_assumptions:
   front_mid360_ip: $FRONT_IP
@@ -316,10 +370,6 @@ main() {
     local ros2_bin
     local record_cmd_display
 
-    # Build topic list for display
-    local topics_str
-    topics_str="${RECORD_TOPICS[*]}"
-
     # Jazzy's `ros2 bag record` dropped the `--duration N` flag that Humble had
     # (only `-d/--max-bag-duration` for file splitting remains). Run recording
     # in the background and send SIGINT after $DURATION from a watcher, so
@@ -327,7 +377,8 @@ main() {
     # signals sent to the ros2cli entry-point do not always reach the rosbag2
     # writer thread in time.
     # Positional topic arguments are deprecated on Jazzy; use `--topics` form.
-    record_cmd_display="ros2 bag record -o ${bag_dir} --topics ${topics_str}  # stopped via SIGINT after ${DURATION}s"
+    # The final topic list is only known after check_topics runs; build the
+    # display string lazily to keep it in sync with what actually gets recorded.
 
     # ---------------------------------------------------------------------------
     # Dry-run path
@@ -340,13 +391,20 @@ main() {
         log_info "Bag dir      : $bag_dir"
         log_info "Metadata     : $meta_file"
         log_info ""
-        log_info "Planned command:"
-        log_info "  $record_cmd_display"
-        log_info ""
-        log_info "Topics to record:"
-        for t in "${RECORD_TOPICS[@]}"; do
-            log_info "  $t"
+        log_info "Would preflight these topics:"
+        for t in "${REQUIRED_TOPICS[@]}"; do
+            log_info "  required: $t"
         done
+        for t in "${OPTIONAL_TOPICS[@]}"; do
+            log_info "  optional: $t"
+        done
+        # Represent the eventual record command with the union of required
+        # and optional — actual selection happens in a live preflight.
+        local preview_topics="${REQUIRED_TOPICS[*]} ${OPTIONAL_TOPICS[*]}"
+        record_cmd_display="ros2 bag record -o ${bag_dir} --topics ${preview_topics}  # stopped via SIGINT after ${DURATION}s"
+        log_info ""
+        log_info "Planned command (best-case, assumes all optional topics are live):"
+        log_info "  $record_cmd_display"
         log_info ""
         log_info "[DRY-RUN] No bag will be created. Exiting."
 
@@ -371,16 +429,23 @@ main() {
     fi
     log_info "ros2 binary  : $ros2_bin"
 
-    # Preflight: check topics
+    # Preflight: check topics (populates TOPICS_TO_RECORD).
     if ! check_topics "$ros2_bin"; then
-        # Write metadata with failed status before exiting
+        # Write metadata with failed status before exiting. No topics will
+        # have been picked yet, so record_cmd_display is just an intent.
         mkdir -p "$run_dir"
+        record_cmd_display="ros2 bag record -o ${bag_dir} --topics <preflight aborted>"
         write_metadata "$meta_file" "$bag_dir" "$record_cmd_display" "preflight-failed-missing-topics"
         log_error ""
         log_error "Preflight failed. Metadata written to: $meta_file"
         log_error "Fix the missing topics and re-run."
         exit 1
     fi
+
+    # Now TOPICS_TO_RECORD is authoritative; freeze the display command.
+    local topics_str
+    topics_str="${TOPICS_TO_RECORD[*]}"
+    record_cmd_display="ros2 bag record -o ${bag_dir} --topics ${topics_str}  # stopped via SIGINT after ${DURATION}s"
 
     # Create output directory
     mkdir -p "$run_dir"
@@ -416,7 +481,7 @@ main() {
 
     setsid "$ros2_bin" bag record \
         -o "$bag_dir" \
-        --topics "${RECORD_TOPICS[@]}" &
+        --topics "${TOPICS_TO_RECORD[@]}" &
     record_pid=$!
     record_pgid="$record_pid"  # setsid makes pgid == pid of the new leader
 

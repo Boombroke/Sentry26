@@ -82,21 +82,23 @@ python3 src/sentry_nav/sentry_dual_mid360/scripts/verify_dual_mid360_sync.py \
 **让雷达保持 60 秒不动**，执行：
 
 ```bash
-BAG=logs/evidence/calib-bags/real-$(date +%Y%m%d_%H%M%S)
-mkdir -p "$BAG"
-timeout --preserve-status 65 \
-    ros2 bag record -o "$BAG/$(basename $BAG).bag" -s mcap \
-        /livox/lidar_front /livox/lidar_back
+bash src/sentry_nav/sentry_dual_mid360/scripts/record_calib_bag.sh \
+    --env real --duration 60
 ```
 
-> 为什么不用 `record_calib_bag.sh`？它会额外要求 `/tf` 和 `/tf_static`，
-> 而仅启驱动的 launch 不发这些。Multi_LiCa 标定本身用不到它们（从
-> xmacro 里读），所以这里直接手工 record。
+脚本会：
+- 自检 `/livox/lidar_front` 和 `/livox/lidar_back` 是否在发（缺一个就直接
+  abort，不会录空包）
+- 自动跳过当前没人发的 `/tf`、`/tf_static`（仅启驱动模式下这俩不会有，
+  Multi_LiCa 也用不上）
+- 把 bag 写到 `logs/evidence/calib-bags/real-<时间戳>/` 下，同目录还有
+  一份 `metadata.yaml` 记录录包参数和实际录到的 topic 列表
 
 结束后确认：
 
 ```bash
-ros2 bag info "$BAG/$(basename $BAG).bag" | grep -E 'Duration|Messages|Count'
+LATEST=$(ls -td logs/evidence/calib-bags/real-* | head -1)
+ros2 bag info "$LATEST"/*.bag | grep -E 'Duration|Messages|Count'
 ```
 
 Duration 应该 ~60s，两个 lidar topic 的 Count 都应该 ≈ 600。**如果有
@@ -104,11 +106,18 @@ Duration 应该 ~60s，两个 lidar topic 的 Count 都应该 ≈ 600。**如果
 
 ### 5. 跑标定
 
+先拿到刚才录的 bag 路径（`--bag` 必须指到 `*.bag` 这一级，不是外层运行目录）：
+
+```bash
+LATEST=$(ls -td logs/evidence/calib-bags/real-* | head -1)
+BAG="$LATEST"/$(basename "$LATEST").bag
+```
+
 **首次标定 / xmacro 里 CAD 值还不准**（绝大多数第一次做的场景）：
 
 ```bash
 bash src/sentry_nav/sentry_dual_mid360/scripts/calibrate_dual_mid360.sh \
-    --bag "$BAG/$(basename $BAG).bag" \
+    --bag "$BAG" \
     --output-report logs/evidence/calib-report.md \
     --bootstrap --write-xmacro
 ```
@@ -124,7 +133,7 @@ Multi_LiCa 自己的点云配准质量够（`fitness ≥ 0.99`、`RMSE ≤ 10cm`
 
 ```bash
 bash src/sentry_nav/sentry_dual_mid360/scripts/calibrate_dual_mid360.sh \
-    --bag "$BAG/$(basename $BAG).bag" \
+    --bag "$BAG" \
     --output-report logs/evidence/calib-report.md \
     --write-xmacro
 ```
