@@ -768,7 +768,17 @@ def pose_to_table(pose):
     return vals[:3] + [math.degrees(v) for v in vals[3:]]
 
 def fmt(values):
-    return "[" + ", ".join(f"{v:.12g}" for v in values) + "]"
+    # rcl's YAML param parser rejects mixed-type sequences ("integer do not
+    # belong" at parse time). {v:.12g} drops the decimal point for whole
+    # numbers, turning pose values like 0, 30, 180 into ints alongside
+    # -0.17 floats. Force every element to render with a decimal point so
+    # the sequence is uniformly double.
+    def _as_double(v):
+        s = f"{v:.12g}"
+        if "." not in s and "e" not in s and "E" not in s:
+            s += ".0"
+        return s
+    return "[" + ", ".join(_as_double(v) for v in values) + "]"
 
 front = pose_to_table(front_pose)
 back = pose_to_table(back_pose)
