@@ -209,8 +209,11 @@ Point-LIO 消费 CustomMsg，产出 `/cloud_registered`（`sensor_msgs/PointClou
 + Point-LIO + `rviz2`。Ctrl-C 一次把所有子进程一起收尾。
 
 rviz 里：
-- **Fixed Frame**: `lidar_odom`（Point-LIO 输出，稳定）
-- `Add → PointCloud2 → /cloud_registered`（**融合后的点云，世界系**）
+- **Fixed Frame**: 手打 `map`（直接编辑 Global Options 第一行，下拉框可能
+  没有；我们内部补了 `map→camera_init` 的 static TF 让 rviz 能显示）
+- `Add → PointCloud2 → /cloud_registered`（**融合后的点云**，frame_id
+  是 `camera_init`，Point-LIO 原生输出）
+- Size 调 3、Color Transformer 选 `Intensity` 或 `AxisColor`
 - 看墙是薄一层、立柱是一根、地面单平面 → 标定 OK
 - 双层墙 / 错位柱 / 倾斜 → 回标定查 xmacro
 

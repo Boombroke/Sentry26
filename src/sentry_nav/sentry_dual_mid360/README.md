@@ -81,7 +81,8 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
   TF） + 两条 identity static TF（`map→odom`、`odom→base_footprint`） +
   merger + Point-LIO + rviz2。Ctrl-C 一次收尾全部子进程。
 
-  rviz 里设 `Fixed Frame=lidar_odom`，加 `PointCloud2 → /cloud_registered`
-  就能看到融合点云。`--with-pointlio` 隐含 `--with-merger`。因为 livox
-  CustomMsg 本身 rviz 无法 render，必须通过 Point-LIO 得到 PointCloud2。
-  `--no-rviz` / `--no-driver` / `--no-rsp` 可按需关掉对应组件。
+  rviz 里 Fixed Frame 手打 `map`（脚本已补 `map→camera_init` identity TF），
+  加 `PointCloud2 → /cloud_registered` 就能看到融合点云。`--with-pointlio`
+  隐含 `--with-merger`。因为 livox CustomMsg 本身 rviz 无法 render，必须
+  通过 Point-LIO 得到 PointCloud2。`--no-rviz` / `--no-driver` / `--no-rsp`
+  可按需关掉对应组件。
