@@ -210,6 +210,9 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh
 rviz 里：
 - **Fixed Frame**: 手打 `front_mid360`（直接编辑 Global Options 第一行）
 - `Add → PointCloud2 → /livox/lidar_pc2`（**merger 输出的 PC2 镜像**）
+- **必须改**：该 PointCloud2 面板展开 `Topic → Reliability Policy → Best Effort`
+  （默认 Reliable 和 merger 的 Best Effort publisher QoS 不兼容，会 silently
+  drop 所有消息，看不到点云）
 - Size 调 3、Color Transformer 选 `Intensity` 或 `AxisColor`、Decay Time `0`
 - 看墙是薄一层、立柱是一根、地面单平面 → 标定 OK
 - 双层墙 / 错位柱 / V 字形 → 回标定查 xmacro

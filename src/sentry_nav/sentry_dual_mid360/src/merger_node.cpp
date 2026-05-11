@@ -104,22 +104,24 @@ MergerNode::MergerNode(const rclcpp::NodeOptions & options)
 
   merged_pub_ = this->create_publisher<CustomMsg>(output_topic_, rclcpp::SensorDataQoS());
   if (publish_pc2_preview_) {
-    // rviz2 's PointCloud2 default subscription uses the "System Default"
-    // reliability which resolves to RELIABLE; matching it against a
-    // SensorDataQoS (BEST_EFFORT) publisher produces "incompatible QoS"
-    // warnings and silently drops messages. Since this preview topic is
-    // only for human visualization (not the production Point-LIO path),
-    // we publish on RELIABLE with a small depth so rviz's default works
-    // out of the box. Queue depth stays small to avoid backlog on slow
-    // rviz clients.
-    rclcpp::QoS pc2_qos(5);
-    pc2_qos.reliable();
+    // Publish PC2 mirror on SensorDataQoS (BEST_EFFORT, depth=5) — same
+    // profile as the main CustomMsg output. Earlier attempt switched to
+    // RELIABLE to match rviz2's default subscription QoS, but that blocks
+    // the sync callback thread when rviz is slow to ACK (depth saturates,
+    // publish() waits), starving the merger: metrics stopped after
+    // published=1 until rviz disconnected.
+    //
+    // Consequence: the user must flip rviz's PointCloud2 display
+    // "Reliability Policy" from "Reliable" to "Best Effort" to subscribe.
+    // The alternative — blocking the real-time merger to satisfy rviz —
+    // is far worse. This trade-off is documented in lidar_only_debug.sh
+    // startup text and CALIBRATION_QUICKSTART.md.
     merged_pc2_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-      pc2_preview_topic_, pc2_qos);
+      pc2_preview_topic_, rclcpp::SensorDataQoS());
     RCLCPP_INFO(
       this->get_logger(),
-      "publish_pc2_preview=true: mirroring merged output to %s (RELIABLE, depth=5) "
-      "for rviz visualization",
+      "publish_pc2_preview=true: mirroring merged output to %s (SensorDataQoS / "
+      "BEST_EFFORT). In rviz set the PointCloud2 display Reliability to Best Effort.",
       pc2_preview_topic_.c_str());
   }
 

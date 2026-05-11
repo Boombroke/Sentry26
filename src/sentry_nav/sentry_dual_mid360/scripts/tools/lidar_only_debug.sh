@@ -126,9 +126,14 @@ In rviz:
   Fixed Frame: front_mid360      (手打到 Global Options > Fixed Frame)
   Add -> PointCloud2  -> Topic: /livox/lidar_pc2
       merger 输出的 sensor_msgs/PointCloud2 镜像，intensity=reflectivity
+      Topic > Reliability Policy: Best Effort   (!!重要!!)
       Size (Pixels): 3
       Color Transformer: Intensity (推荐) 或 AxisColor
       Decay Time: 0
+
+  注意 Reliability 不改成 Best Effort 则看不到点云：merger 用
+  SensorDataQoS (BEST_EFFORT) 发布以免阻塞实时 sync callback，rviz
+  默认订阅 Reliable 会 QoS 不兼容 silently drop 所有消息。
 
 判断标定好坏:
   - 墙体是薄的一层、立柱单根、地面单平面 = 外参对
