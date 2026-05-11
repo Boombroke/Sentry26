@@ -26,7 +26,7 @@
 #     dual, single (use_dual_mid360:=False), or both (dual then single).
 #   * --headless defaults to true so the script is safe to run on CI /
 #     headless dev hosts.
-#   * Evidence is written to .sisyphus/evidence/task-15-*.
+#   * Evidence is written to logs/evidence/task-15-*.
 #
 # EXIT CODES:
 #   0  smoke PASSED (or dry-run / preflight-only path completed cleanly)
@@ -39,7 +39,7 @@
 #   3  usage / argument error.
 #
 # IMPORTANT: This script does NOT modify any source file, launch, yaml, or
-# package outside .sisyphus/evidence/. T15 is strictly a smoke orchestrator.
+# package outside logs/evidence/. T15 is strictly a smoke orchestrator.
 #
 # Reference: .sisyphus/plans/dual-mid360-fusion.md Task 15 acceptance criteria.
 
@@ -171,7 +171,7 @@ OPTIONS:
     --goal-y Y              Goal y (map frame)          [default: ${GOAL_Y}]
     --goal-wait SECS        NavigateToPose wait         [default: ${GOAL_WAIT}]
     --output-dir DIR        Evidence output directory
-                            [default: <ws>/.sisyphus/evidence]
+                            [default: <ws>/logs/evidence]
     --verbose               More verbose logging.
 
 EXIT CODES:
@@ -345,7 +345,7 @@ validate_args() {
         fi
     done
     if [ -z "$OUTPUT_DIR" ]; then
-        OUTPUT_DIR="${WS_ROOT}/.sisyphus/evidence"
+        OUTPUT_DIR="${WS_ROOT}/logs/evidence"
     fi
 }
 

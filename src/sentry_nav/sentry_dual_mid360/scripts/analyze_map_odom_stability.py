@@ -227,7 +227,7 @@ def _format_report(report: StabilityReport) -> str:
         "  source install/setup.bash",
         "  python3 src/sentry_nav/sentry_dual_mid360/scripts/analyze_map_odom_stability.py \\",
         "    --duration 300 --max-jitter-cm 5.0 \\",
-        "    --output .sisyphus/evidence/task-19-stability.md",
+        "    --output logs/evidence/task-19-stability.md",
         "  ```",
         "",
         "GICP diagnostics (node logs, not a topic):",

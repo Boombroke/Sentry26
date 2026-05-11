@@ -20,7 +20,7 @@
 #   --help                  Show this help message and exit
 #   --env sim|real          Environment: sim (Gazebo) or real (hardware) [required]
 #   --duration SECONDS      Recording duration in seconds [default: 60]
-#   --output-dir DIR        Parent directory for bag output [default: .sisyphus/evidence/calib-bags]
+#   --output-dir DIR        Parent directory for bag output [default: logs/evidence/calib-bags]
 #   --dry-run               Print planned command; create no bag
 #
 # Hardware assumptions (real mode):
@@ -74,7 +74,7 @@ OPTIONS:
   --env sim|real          Environment: sim (Gazebo already running) or real (hardware)
   --duration SECONDS      Recording duration in seconds (default: 60)
   --output-dir DIR        Parent directory for bag output
-                          (default: <workspace>/.sisyphus/evidence/calib-bags)
+                          (default: <workspace>/logs/evidence/calib-bags)
   --dry-run               Print planned command and metadata; create no bag
 
 RECORDED TOPICS:
@@ -294,7 +294,7 @@ validate_args() {
     if [ -z "$OUTPUT_DIR" ]; then
         local ws_root
         ws_root="$(resolve_workspace_root)"
-        OUTPUT_DIR="$ws_root/.sisyphus/evidence/calib-bags"
+        OUTPUT_DIR="$ws_root/logs/evidence/calib-bags"
     fi
 }
 

@@ -113,7 +113,7 @@ REQUIRED INPUTS (calibrate mode)
 
 OPTIONAL
   --evidence-dir <dir>
-      Evidence sink (default: <workspace>/.sisyphus/evidence). Always
+      Evidence sink (default: <workspace>/logs/evidence). Always
       produces task-11-run.log, task-11-report.md, task-11-blocker.md,
       task-11-precision-check.txt, task-11-xmacro-update.txt.
   --write-xmacro
@@ -191,9 +191,9 @@ EVIDENCE CONTRACT
 EXAMPLES
   bash ${SCRIPT_NAME} --help
   bash ${SCRIPT_NAME} --check-deps
-  bash ${SCRIPT_NAME} --bag .sisyphus/evidence/calib-bags/sim-20260601 \\
-                      --output-report .sisyphus/evidence/task-11-report.md --dry-run
-  bash ${SCRIPT_NAME} --bag .sisyphus/evidence/calib-bags/real-20260601 \\
+  bash ${SCRIPT_NAME} --bag logs/evidence/calib-bags/sim-20260601 \\
+                      --output-report logs/evidence/task-11-report.md --dry-run
+  bash ${SCRIPT_NAME} --bag logs/evidence/calib-bags/real-20260601 \\
                       --output-report logs/calib-report.md --write-xmacro
 
 EXIT CODES
@@ -283,7 +283,7 @@ parse_args() {
 
 resolve_evidence_paths() {
     if [ -z "${EVIDENCE_DIR}" ]; then
-        EVIDENCE_DIR="${WORKSPACE_ROOT}/.sisyphus/evidence"
+        EVIDENCE_DIR="${WORKSPACE_ROOT}/logs/evidence"
     fi
     mkdir -p "${EVIDENCE_DIR}"
     RUN_LOG_PATH="${EVIDENCE_DIR}/task-11-run.log"

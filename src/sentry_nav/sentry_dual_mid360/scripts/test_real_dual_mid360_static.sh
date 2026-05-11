@@ -36,7 +36,7 @@
 #   2  BLOCKED  prerequisites missing (no hardware, no bag, etc.)
 #   3  usage / argument error
 #
-# Evidence files (under <output-dir>/, default .sisyphus/evidence/):
+# Evidence files (under <output-dir>/, default logs/evidence/):
 #   task-16-help.txt             captured by the user when running --help
 #   task-16-preflight.md         preflight matrix (ros2, pings, scripts, deps)
 #   task-16-blocker.md           only emitted when the overall verdict = BLOCKED
@@ -170,7 +170,7 @@ OPTIONS:
     --nav-warmup SECS               Seconds to wait after launch before bag
                                     recording starts. Default: ${NAV_WARMUP}.
     --output-dir DIR                Evidence output directory.
-                                    Default: <ws>/.sisyphus/evidence.
+                                    Default: <ws>/logs/evidence.
     --dry-run                       Print the planned sequence; do not launch.
     --verbose                       Extra logging.
 
@@ -368,7 +368,7 @@ validate_args() {
         exit 3
     fi
     if [ -z "$OUTPUT_DIR" ]; then
-        OUTPUT_DIR="${WS_ROOT}/.sisyphus/evidence"
+        OUTPUT_DIR="${WS_ROOT}/logs/evidence"
     fi
 }
 

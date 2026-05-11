@@ -151,7 +151,7 @@ git -C . log -1 --oneline > "${BACKUP_ROOT}/commit.txt"
 
 ## 5. 实车双 Mid360 慢速建图与新 PCD 生成
 
-以下整套流程必须**在实车现场执行**，本地 CI / 开发机不具备双 Mid360 硬件与 live 导航栈运行态（见 `.sisyphus/evidence/task-21-blocker.md`）。本指南不伪造可以在开发机完成的建图过程。
+以下整套流程必须**在实车现场执行**，本地 CI / 开发机不具备双 Mid360 硬件与 live 导航栈运行态（见 `logs/evidence/task-21-blocker.md`）。本指南不伪造可以在开发机完成的建图过程。
 
 ### 5.1 启动 SLAM 栈
 
@@ -324,7 +324,7 @@ ros2 action send_goal -f /navigate_to_pose \
 
 ### 6.5 本地 CI/开发机运行时限制（诚实声明）
 
-本指南中 §5 / §6.1 / §6.3 / §6.4 的所有实机步骤**在当前 worktree 开发机上未执行**，与 T21 记录一致（见 `.sisyphus/evidence/task-21-blocker.md`）：本机无双 Mid360 硬件、无 `~/Documents/Sentry26_PCD/`、无 Nav2 运行态、`open3d` 未安装。本文**不是**运行结果报告，而是**操作员在实车现场按步骤复跑的 SOP**。任何把本地开发机"通过"当成 PCD 重建 PASS 的证据都是错误的。
+本指南中 §5 / §6.1 / §6.3 / §6.4 的所有实机步骤**在当前 worktree 开发机上未执行**，与 T21 记录一致（见 `logs/evidence/task-21-blocker.md`）：本机无双 Mid360 硬件、无 `~/Documents/Sentry26_PCD/`、无 Nav2 运行态、`open3d` 未安装。本文**不是**运行结果报告，而是**操作员在实车现场按步骤复跑的 SOP**。任何把本地开发机"通过"当成 PCD 重建 PASS 的证据都是错误的。
 
 ---
 
@@ -362,7 +362,7 @@ ros2 action send_goal -f /navigate_to_pose \
 - 同目录 [`SYNC_VERIFICATION.md`](SYNC_VERIFICATION.md) — 硬件时钟同步四步法，建图前先确认同步质量。
 - 仓库根 `src/docs/RUNNING_MODES.md` §4 — SLAM 建图模式总览（非双雷达专属）。
 - 仓库根 `src/docs/TUNING_GUIDE.md` — Point-LIO / GICP 参数调优；PCD 不兼容引发的"假性调参"问题需先用本指南排除。
-- `.sisyphus/evidence/task-21-blocker.md` — T21 实车建图 BLOCKED 证据，内含实车操作员可直接复制的命令序列。
+- `logs/evidence/task-21-blocker.md` — T21 实车建图 BLOCKED 证据，内含实车操作员可直接复制的命令序列。
 
 ## 9. 变更记录
 

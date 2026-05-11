@@ -375,7 +375,7 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py slam:=True use_dual_mid360:=F
 
 - **T11（外参标定 live 分支）**：`teaserpp_python / open3d / pandas` 未安装，Multi_LiCa live 执行不通；`--check-deps` 正确报 BLOCKED，xmacro 未被触碰。
 - **T15（仿真双雷达）**：`rmu_gazebo_simulator` 的 gz→ROS 桥已切换成 dual 布局（前后 `gpu_lidar` 到 `livox/lidar_front_points` / `livox/lidar_back_points` PointCloud2，前 IMU 到 `livox/imu`，后 IMU 到 `livox/imu_back`）。仿真 dual mode 通过本包 `SimPointCloudToCustomMsgNode` 两实例把 PC2 转成 Livox `CustomMsg` 喂 `MergerNode`，Point-LIO 消费合并后的 `livox/lidar` CustomMsg。实际 Gazebo smoke 仍需在能启动仿真的机器上跑。
-- **T16 / T19 / T20 / T21**：无实车双 Mid360、无新版 dual Mid360 PCD、无运行中 nav 栈 → 实机评测、`map→odom` 抖动、merger live 剖析、实车 mapping + PCD 全部 BLOCKED。对应证据是**精确复跑手册**（见 `.sisyphus/evidence/task-21-blocker.md` 等），**不是伪造的 PASS**。
+- **T16 / T19 / T20 / T21**：无实车双 Mid360、无新版 dual Mid360 PCD、无运行中 nav 栈 → 实机评测、`map→odom` 抖动、merger live 剖析、实车 mapping + PCD 全部 BLOCKED。对应证据是**精确复跑手册**（见 `logs/evidence/task-21-blocker.md` 等），**不是伪造的 PASS**。
 
 规则（MH11）：**本地没有硬件 ≠ 任务失败**；操作员必须在真机按 blocker 文档复跑，再把 PASS 证据追加回来。不得拿单雷达 PCD / 上游 Point-LIO 样例 PCD 冒充 dual 证据。
 
