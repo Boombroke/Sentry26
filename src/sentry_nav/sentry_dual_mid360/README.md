@@ -75,10 +75,13 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
   ```bash
   source /opt/ros/jazzy/setup.bash
   source install/setup.bash
-  bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh --with-merger
+  bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh --with-pointlio
   ```
   一个终端内起：livox driver + robot_state_publisher（发 xmacro 静态
-  TF） + 两条 identity static TF（`map→odom`、`odom→base_footprint` 替代
-  small_gicp / Point-LIO） + merger + rviz2。Ctrl-C 一次收尾全部子进程。
-  `--with-merger` 可选；rviz **默认会起**，无屏 / ssh 环境加 `--no-rviz`
-  关掉；某些组件你已单独起好可加 `--no-driver` / `--no-rsp` 跳过。
+  TF） + 两条 identity static TF（`map→odom`、`odom→base_footprint`） +
+  merger + Point-LIO + rviz2。Ctrl-C 一次收尾全部子进程。
+
+  rviz 里设 `Fixed Frame=lidar_odom`，加 `PointCloud2 → /cloud_registered`
+  就能看到融合点云。`--with-pointlio` 隐含 `--with-merger`。因为 livox
+  CustomMsg 本身 rviz 无法 render，必须通过 Point-LIO 得到 PointCloud2。
+  `--no-rviz` / `--no-driver` / `--no-rsp` 可按需关掉对应组件。

@@ -19,6 +19,10 @@
 #
 # Flags (defaults are the "一键调试" common case):
 #   --with-merger     额外起 pointcloud_merger，看合并后的 /livox/lidar
+#   --with-pointlio   额外起 Point-LIO，发 /cloud_registered (PointCloud2)
+#                     rviz 能直接看的 PC2 点云。livox CustomMsg 本身 rviz
+#                     无法 render，加这个才能看到实际融合点云。隐含
+#                     --with-merger（Point-LIO 消费 /livox/lidar）
 #   --no-rviz         不起 rviz2（默认会起；ssh/无屏环境/已开 rviz 时关掉）
 #   --no-driver       不起 livox driver（你在别处已经起好了）
 #   --no-rsp          不起 robot_state_publisher（同上）
@@ -27,19 +31,21 @@
 set -euo pipefail
 
 WITH_MERGER="no"
+WITH_POINTLIO="no"
 WITH_RVIZ="yes"   # 默认起 rviz；--no-rviz 可关
 NO_DRIVER="no"
 NO_RSP="no"
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --with-merger) WITH_MERGER="yes"; shift ;;
-        --with-rviz)   WITH_RVIZ="yes"; shift ;;   # 兼容旧调用，等价于默认
-        --no-rviz)     WITH_RVIZ="no";  shift ;;
-        --no-driver)   NO_DRIVER="yes"; shift ;;
-        --no-rsp)      NO_RSP="yes"; shift ;;
+        --with-merger)   WITH_MERGER="yes"; shift ;;
+        --with-pointlio) WITH_POINTLIO="yes"; WITH_MERGER="yes"; shift ;;
+        --with-rviz)     WITH_RVIZ="yes"; shift ;;   # 兼容旧调用，等价于默认
+        --no-rviz)       WITH_RVIZ="no";  shift ;;
+        --no-driver)     NO_DRIVER="yes"; shift ;;
+        --no-rsp)        NO_RSP="yes"; shift ;;
         --help|-h)
-            sed -n '2,25p' "$0"
+            sed -n '2,29p' "$0"
             exit 0
             ;;
         *)
@@ -99,6 +105,13 @@ if [ "$WITH_MERGER" = "yes" ]; then
     PIDS+=($!)
 fi
 
+if [ "$WITH_POINTLIO" = "yes" ]; then
+    echo "[INFO] starting Point-LIO (consumes /livox/lidar + /livox/imu,"
+    echo "       publishes /cloud_registered as PointCloud2 for rviz)..."
+    ros2 launch point_lio point_lio.launch.py rviz:=False &
+    PIDS+=($!)
+fi
+
 if [ "$WITH_RVIZ" = "yes" ]; then
     echo "[INFO] starting rviz2..."
     rviz2 &
@@ -110,12 +123,32 @@ cat <<EOF
 ================================================================
 [INFO] lidar-only debug stack up. Processes started: ${#PIDS[@]}
 
+注意: /livox/lidar_front、/livox/lidar_back、/livox/lidar 都是
+livox_ros_driver2/CustomMsg，rviz 无法 render (Add 列表里灰色无法添加)。
+
+要在 rviz 里看到实际点云，加 --with-pointlio，Point-LIO 会发
+/cloud_registered (PointCloud2)：
+
+$(if [ "$WITH_POINTLIO" = "yes" ]; then
+cat <<'HINT'
 In rviz:
-  Fixed Frame: base_footprint  (或 front_mid360 直接看原始点云)
-  Add -> PointCloud2  -> Topic: /livox/lidar_front
-  Add -> PointCloud2  -> Topic: /livox/lidar_back
-$(if [ "$WITH_MERGER" = "yes" ]; then echo "  Add -> PointCloud2  -> Topic: /livox/lidar        (merger 输出，换个颜色看)"; fi)
-  Add -> TF           (确认 map -> odom -> base_footprint -> ... -> front_mid360 全连通)
+  Fixed Frame: lidar_odom  (Point-LIO 输出，稳定)
+               或 front_mid360 看雷达本身系的实时点
+  Add -> PointCloud2  -> Topic: /cloud_registered   (Point-LIO 在世界系下的点云)
+  Add -> PointCloud2  -> Topic: /cloud_registered_body  (雷达系下的点)
+  Add -> Odometry     -> Topic: /aft_mapped_to_init (Point-LIO 里程计)
+  Add -> TF           (看 lidar_odom -> front_mid360 -> back_mid360)
+
+判断标定好坏:
+  看 /cloud_registered 里墙是薄一层、立柱是一根、地面单平面 = 标定OK
+  双层墙 / 错位柱 = xmacro 里 front/back_lidar_pose 还有偏差
+HINT
+else
+cat <<'HINT'
+当前没起 Point-LIO，只能用 ros2 topic echo / ros2 topic hz 看 raw 数据。
+想在 rviz 里看到双雷达叠加效果，Ctrl-C 后重跑并加 --with-pointlio。
+HINT
+fi)
 
 Ctrl-C 停止所有进程。
 ================================================================
