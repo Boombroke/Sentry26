@@ -108,7 +108,36 @@ fi
 if [ "$WITH_POINTLIO" = "yes" ]; then
     echo "[INFO] starting Point-LIO (consumes /livox/lidar + /livox/imu,"
     echo "       publishes /cloud_registered as PointCloud2 for rviz)..."
-    ros2 launch point_lio point_lio.launch.py rviz:=False &
+    # Point-LIO 的默认 mid360.yaml 里 gravity=[0,0,-9.81] 假设 LiDAR 水平。
+    # 实车 xmacro 的 front_lidar_pose 若带非零 roll/pitch，front IMU 系看到
+    # 的重力方向就变了，ESKF 用错误 gravity 初始化会不收敛，/cloud_registered
+    # 在 rviz 里表现为点云漂浮 / 穿插。我们必须把 sentry_dual_mid360 codegen
+    # 出的 pointlio_dual_overrides.yaml (正确 gravity + IMU extrinsic) 作为
+    # 最后一个 --params-file 叠加上去，让 ros2 参数 last-wins 覆盖默认值。
+    #
+    # 生产栈 (slam_launch.py) 用 ParameterFile + RewrittenYaml 走 nav2_params
+    # 套 override 的叠加规则；这里只需要 Point-LIO 自己的两份 yaml，直接
+    # 手工 ros2 run 更简单稳定。
+    PL_BASE="$(ros2 pkg prefix point_lio 2>/dev/null)/share/point_lio/config/mid360.yaml"
+    PL_OVERRIDE="$(ros2 pkg prefix sentry_dual_mid360 2>/dev/null)/share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml"
+    if [ ! -f "$PL_BASE" ]; then
+        echo "[ERROR] Point-LIO base config not found: $PL_BASE" >&2
+        exit 1
+    fi
+    if [ ! -f "$PL_OVERRIDE" ]; then
+        echo "[WARN] $PL_OVERRIDE not found."
+        echo "[WARN] Point-LIO will use default gravity [0,0,-9.81]. If xmacro"
+        echo "[WARN] front_lidar_pose has non-zero roll/pitch, ESKF won't"
+        echo "[WARN] converge. Run colcon build --packages-select sentry_dual_mid360"
+        echo "[WARN] to generate the override YAML first."
+        ros2 run point_lio pointlio_mapping --ros-args --params-file "$PL_BASE" &
+    else
+        echo "[INFO]   base:     $PL_BASE"
+        echo "[INFO]   override: $PL_OVERRIDE  (gravity aligned to xmacro)"
+        ros2 run point_lio pointlio_mapping --ros-args \
+            --params-file "$PL_BASE" \
+            --params-file "$PL_OVERRIDE" &
+    fi
     PIDS+=($!)
     # Point-LIO 默认把点云发到 camera_init 系、内部发 camera_init → aft_mapped
     # 的 TF。生产栈靠 odom_bridge 再把它桥到 lidar_odom/map；我们不起
