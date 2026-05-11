@@ -321,9 +321,13 @@ main() {
     topics_str="${RECORD_TOPICS[*]}"
 
     # Jazzy's `ros2 bag record` dropped the `--duration N` flag that Humble had
-    # (only `-d/--max-bag-duration` for file splitting remains). Use `timeout`
-    # with SIGINT so rosbag2 flushes metadata cleanly before exiting.
-    record_cmd_display="timeout --signal=SIGINT ${DURATION} ros2 bag record -o ${bag_dir} ${topics_str}"
+    # (only `-d/--max-bag-duration` for file splitting remains). Run recording
+    # in the background and send SIGINT after $DURATION from a watcher, so
+    # rosbag2 flushes metadata cleanly. `timeout` is unreliable here because
+    # signals sent to the ros2cli entry-point do not always reach the rosbag2
+    # writer thread in time.
+    # Positional topic arguments are deprecated on Jazzy; use `--topics` form.
+    record_cmd_display="ros2 bag record -o ${bag_dir} --topics ${topics_str}  # stopped via SIGINT after ${DURATION}s"
 
     # ---------------------------------------------------------------------------
     # Dry-run path
@@ -401,16 +405,56 @@ main() {
     log_info "Command: $record_cmd_display"
     log_info "Recording for ${DURATION}s. Do NOT move the robot."
 
-    # Execute recording. `timeout` sends SIGINT at $DURATION so rosbag2 can
-    # flush its metadata; that exit path returns 124, which we treat as a
-    # successful timed stop. Any other non-zero code is a real failure.
+    # Run `ros2 bag record` in the background so we can deliver SIGINT to the
+    # exact process group after $DURATION seconds. `setsid` puts it in its own
+    # session, letting a single `kill -INT -<pgid>` reach both ros2cli and the
+    # rosbag2 writer. Ctrl-C in the user terminal is trapped and forwarded so
+    # partial recordings still flush metadata on manual abort.
     local record_exit=0
-    timeout --signal=SIGINT "$DURATION" \
-        "$ros2_bin" bag record \
-        -o "$bag_dir" \
-        "${RECORD_TOPICS[@]}" || record_exit=$?
+    local record_pid
+    local record_pgid
 
-    if [ $record_exit -eq 124 ]; then
+    setsid "$ros2_bin" bag record \
+        -o "$bag_dir" \
+        --topics "${RECORD_TOPICS[@]}" &
+    record_pid=$!
+    record_pgid="$record_pid"  # setsid makes pgid == pid of the new leader
+
+    trap 'log_warn "Received interrupt, forwarding SIGINT to rosbag2..."; kill -INT "-${record_pgid}" 2>/dev/null || true' INT TERM
+
+    # Wait up to $DURATION seconds, then send SIGINT for clean shutdown.
+    local elapsed=0
+    while [ $elapsed -lt "$DURATION" ]; do
+        if ! kill -0 "$record_pid" 2>/dev/null; then
+            log_warn "ros2 bag record exited early (after ${elapsed}s)."
+            break
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    if kill -0 "$record_pid" 2>/dev/null; then
+        log_info "Duration reached (${DURATION}s), stopping rosbag2..."
+        kill -INT "-${record_pgid}" 2>/dev/null || true
+    fi
+
+    # Give rosbag2 up to 10s to flush metadata and exit; then SIGTERM as fallback.
+    local wait_for_exit=0
+    while [ $wait_for_exit -lt 10 ] && kill -0 "$record_pid" 2>/dev/null; do
+        sleep 1
+        wait_for_exit=$((wait_for_exit + 1))
+    done
+    if kill -0 "$record_pid" 2>/dev/null; then
+        log_warn "rosbag2 did not exit within 10s of SIGINT, sending SIGTERM."
+        kill -TERM "-${record_pgid}" 2>/dev/null || true
+        sleep 2
+    fi
+
+    wait "$record_pid" 2>/dev/null || record_exit=$?
+    trap - INT TERM
+
+    # SIGINT gives 130 when bash-reported; treat as a clean stop.
+    if [ $record_exit -eq 130 ]; then
         record_exit=0
     fi
 
