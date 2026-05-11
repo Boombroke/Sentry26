@@ -168,6 +168,7 @@ map (全局地图坐标系)
 - **前后两颗 Mid360 均挂在 `gimbal_pitch` 上**，随云台同步旋转；`back_mid360` 通过 `yaw=π` 反向安装补盲区。`odom_bridge` 通过每帧 `lookupTransform(lidar_frame → base_frame)` 消化云台旋转对底盘位姿估计的影响，使 Nav2 侧 `base_footprint` 位姿与云台解耦。
 - `*_mid360_imu` 是 Layer B IMU factory anchor（Mid360 出厂 IMU 相对 LiDAR 的 `-0.011 -0.02329 0.04412 0 0 0`）；`front_mid360_imu` 的位姿是 Point-LIO `extrinsic_T/R` 的 codegen 派生源，`back_mid360_imu` 仅作诊断，不进 LIO 状态估计。
 - 双 Mid360 外参只能改 xmacro（唯一真相源）：`wheeled_biped_real.sdf.xmacro` 的 `front_lidar_pose / back_lidar_pose` 和 `sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro` 的 IMU factory pose；改完重跑 `colcon build --packages-select sentry_dual_mid360`，codegen 会同步刷新 `pointlio_dual_overrides.yaml`。
+- `back_lidar_pose` 可以通过点云配准自动标定：`bash src/sentry_nav/sentry_dual_mid360/scripts/calibrate_dual_mid360.sh --bag <dir> --bootstrap --write-xmacro` 会把 Multi_LiCa 测出的 back→front 相对外参与 `front_lidar_pose` 合成后回写 xmacro。新手看 `src/sentry_nav/sentry_dual_mid360/docs/CALIBRATION_QUICKSTART.md`。`front_lidar_pose` 仍属机械测量，不在标定管线内。
 
 ---
 
