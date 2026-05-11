@@ -231,7 +231,7 @@ class Calibration:
     
     def find_knn_cpu(self, feat0, feat1, knn=1, return_distance=False):
         feat1tree = cKDTree(feat1)
-        dists, nn_inds = feat1tree.query(feat0, k=knn, n_jobs=-1)
+        dists, nn_inds = feat1tree.query(feat0, k=knn, workers=-1)
         if return_distance:
             return nn_inds, dists
         else:
