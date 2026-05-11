@@ -187,6 +187,26 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/tools/preview_real_xmacro.sh
 加 `--headless` 只校验 SDF 能否加载，加 `--keep-sdf` 保留展开结果便于和上一次
 做 diff。
 
+## 下位机没接 / 只想在 rviz 里验证融合点云
+
+标定 PASS 之后想肉眼看"墙是薄一层、立柱是一根"，但实车下位机 / 串口没接、
+不想起整套 `rm_sentry_launch.py`（会卡在等 serial）：
+
+```bash
+bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh \
+    --with-merger --with-rviz
+```
+
+一个终端内包办：livox driver + robot_state_publisher（xmacro 静态 TF） +
+`map→odom` / `odom→base_footprint` 两条 identity fake TF（替代 small_gicp /
+Point-LIO） + `pointcloud_merger`（发 `/livox/lidar`） + `rviz2`。Ctrl-C 一次
+把所有子进程一起收尾。
+
+rviz 里：`Fixed Frame=base_footprint`（或 `front_mid360` 看原始点云），
+`Add → PointCloud2` 分别订阅 `/livox/lidar_front` / `/livox/lidar_back` /
+`/livox/lidar` 对照。融合好的输出：墙单层、柱单根、地面单平面；叠成双层
+或错位，就回到标定步骤查 xmacro。
+
 ## 常见坑
 
 - **bag 录完只有几 KB，Count=0**：驱动没跑，或 QoS 被下游吃了。确认第 1 步的

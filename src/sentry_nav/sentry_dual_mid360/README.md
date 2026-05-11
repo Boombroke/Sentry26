@@ -18,7 +18,7 @@
 - `scripts`: 辅助脚本，按用途分子目录：
   - `codegen/`: 构建期 codegen 与 freshness 校验（`generate_pointlio_overrides.py` / `verify_pointlio_overrides_fresh.py`）
   - `calib/`: 标定主线 T7→T10→T11（`verify_dual_mid360_sync.py` / `record_calib_bag.sh` / `calibrate_dual_mid360.sh`）
-  - `tools/`: 可视化与开发辅助（`preview_real_xmacro.sh`）
+  - `tools/`: 可视化与开发辅助（`preview_real_xmacro.sh` 3D 预览、`lidar_only_debug.sh` 一键起只含激光的最小调试栈）
   - `qa/`: 运行态诊断（`qa_merger_latency.py` / `qa_odom_bridge_dual.py` / `qa_terrain_coverage.py` / `analyze_map_odom_stability.py` / `analyze_static_drift.py`）
   - `e2e/`: 系统级静态回归（`test_real_dual_mid360_static.sh` / `test_sim_dual_mid360.sh`）
 - `docs`: 相关文档
@@ -69,3 +69,16 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
   spawn 在原点，只做可视化——不拉 nav2/slam/Point-LIO，关窗口即退出。
   加 `--headless` 只校验 SDF 是否能加载，加 `--keep-sdf` 保留展开结果便于
   diff 对比。
+
+- **只看激光的最小调试栈**：下位机没接 / 只想在 rviz 里肉眼验证双雷达
+  点云叠加，不用起整套 nav2/slam/serial：
+  ```bash
+  source /opt/ros/jazzy/setup.bash
+  source install/setup.bash
+  bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh --with-merger --with-rviz
+  ```
+  一个终端内起：livox driver + robot_state_publisher（发 xmacro 静态
+  TF） + 两条 identity static TF（`map→odom`、`odom→base_footprint` 替代
+  small_gicp / Point-LIO） + merger + rviz2。Ctrl-C 一次收尾全部子进程。
+  `--with-merger` / `--with-rviz` 可选；如果某些组件你已经单独起好，
+  `--no-driver` / `--no-rsp` 跳过。
