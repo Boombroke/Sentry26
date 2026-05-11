@@ -320,7 +320,10 @@ main() {
     local topics_str
     topics_str="${RECORD_TOPICS[*]}"
 
-    record_cmd_display="ros2 bag record -o ${bag_dir} --duration ${DURATION} ${topics_str}"
+    # Jazzy's `ros2 bag record` dropped the `--duration N` flag that Humble had
+    # (only `-d/--max-bag-duration` for file splitting remains). Use `timeout`
+    # with SIGINT so rosbag2 flushes metadata cleanly before exiting.
+    record_cmd_display="timeout --signal=SIGINT ${DURATION} ros2 bag record -o ${bag_dir} ${topics_str}"
 
     # ---------------------------------------------------------------------------
     # Dry-run path
@@ -398,12 +401,18 @@ main() {
     log_info "Command: $record_cmd_display"
     log_info "Recording for ${DURATION}s. Do NOT move the robot."
 
-    # Execute recording
+    # Execute recording. `timeout` sends SIGINT at $DURATION so rosbag2 can
+    # flush its metadata; that exit path returns 124, which we treat as a
+    # successful timed stop. Any other non-zero code is a real failure.
     local record_exit=0
-    "$ros2_bin" bag record \
+    timeout --signal=SIGINT "$DURATION" \
+        "$ros2_bin" bag record \
         -o "$bag_dir" \
-        --duration "$DURATION" \
         "${RECORD_TOPICS[@]}" || record_exit=$?
+
+    if [ $record_exit -eq 124 ]; then
+        record_exit=0
+    fi
 
     if [ $record_exit -eq 0 ]; then
         log_info "Recording complete."
