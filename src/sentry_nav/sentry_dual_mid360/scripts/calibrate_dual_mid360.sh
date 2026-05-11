@@ -52,6 +52,15 @@ TEASER_PLUSPLUS_DIR="${MULTI_LICA_DIR}/TEASER-plusplus"
 MAX_TRANSLATION_ERROR_CM="2.0"
 MAX_ROTATION_ERROR_DEG="0.5"
 
+# Bootstrap-mode thresholds: used when --bootstrap is passed, meaning the CAD
+# xmacro values are still placeholders and `candidate - CAD` comparison is
+# not meaningful. In that case we only gate on Multi_LiCa's intrinsic quality
+# (fitness / inlier RMSE) — i.e. "did TEASER++ actually register the two
+# clouds" — and then allow --write-xmacro to seed xmacro with the measured
+# back_lidar_pose. First-time calibration relies on this path.
+MIN_BOOTSTRAP_FITNESS="0.99"
+MAX_BOOTSTRAP_INLIER_RMSE_M="0.10"
+
 # CAD default back_lidar_pose. Kept in sync with
 # wheeled_biped_real.sdf.xmacro to detect drift in --check-deps output.
 CAD_BACK_LIDAR_POSE="0.05 0 0.05 0.0 0.5235987755982988 3.141592653589793"
@@ -67,6 +76,7 @@ PRECISION_CHECK_PATH=""
 XMACRO_UPDATE_PATH=""
 WRITE_XMACRO="no"
 DRY_RUN="no"
+BOOTSTRAP="no"
 LOG_LEVEL="info"
 
 # Accumulators populated during dep / input checks.
@@ -95,7 +105,7 @@ USAGE:
   bash ${SCRIPT_NAME} --check-deps [--evidence-dir <dir>]
   bash ${SCRIPT_NAME} --bag <rosbag2_dir> --output-report <path>
                      [--evidence-dir <dir>] [--write-xmacro]
-                     [--dry-run] [--log-level info|debug]
+                     [--bootstrap] [--dry-run] [--log-level info|debug]
 
 REQUIRED INPUTS (calibrate mode)
   --bag <rosbag2_dir>
@@ -119,6 +129,14 @@ OPTIONAL
   --write-xmacro
       Opt-in switch to update back_lidar_pose in wheeled_biped_real.sdf.xmacro
       AFTER a real accepted calibration report. Refused otherwise.
+  --bootstrap
+      Treat xmacro CAD values as placeholders and gate on Multi_LiCa's
+      intrinsic registration quality (fitness >= ${MIN_BOOTSTRAP_FITNESS},
+      inlier_rmse <= ${MAX_BOOTSTRAP_INLIER_RMSE_M}m) instead of
+      \`candidate - CAD\` deltas. Use for the first-time real-robot
+      calibration where CAD is not yet trustworthy; once xmacro is seeded
+      with measured values, drop --bootstrap for subsequent micro-tuning
+      runs (translation < ${MAX_TRANSLATION_ERROR_CM}cm, rotation < ${MAX_ROTATION_ERROR_DEG}deg).
   --dry-run
       Run the preflight audit only; skip Multi_LiCa invocation. Still
       emits BLOCKED evidence when inputs are missing.
@@ -254,6 +272,10 @@ parse_args() {
                 ;;
             --dry-run)
                 DRY_RUN="yes"
+                shift
+                ;;
+            --bootstrap)
+                BOOTSTRAP="yes"
                 shift
                 ;;
             --log-level)
@@ -827,7 +849,7 @@ PY
 parse_multi_lica_result() {
     local results_file_path="$1"
     local parsed_env_path="$2"
-    python3 - "${results_file_path}" "${parsed_env_path}" "${PRECISION_CHECK_PATH}" "${REAL_XMACRO_PATH}" "${MAX_TRANSLATION_ERROR_CM}" "${MAX_ROTATION_ERROR_DEG}" <<'PY'
+    python3 - "${results_file_path}" "${parsed_env_path}" "${PRECISION_CHECK_PATH}" "${REAL_XMACRO_PATH}" "${MAX_TRANSLATION_ERROR_CM}" "${MAX_ROTATION_ERROR_DEG}" "${BOOTSTRAP}" "${MIN_BOOTSTRAP_FITNESS}" "${MAX_BOOTSTRAP_INLIER_RMSE_M}" <<'PY'
 import math
 import re
 import shlex
@@ -836,9 +858,14 @@ import sys
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-results_path, env_path, precision_path, xmacro_path, max_t_cm, max_r_deg = sys.argv[1:]
+(results_path, env_path, precision_path, xmacro_path,
+ max_t_cm, max_r_deg, bootstrap_flag,
+ min_bootstrap_fitness, max_bootstrap_rmse_m) = sys.argv[1:]
 max_t_cm = float(max_t_cm)
 max_r_deg = float(max_r_deg)
+bootstrap = bootstrap_flag == "yes"
+min_bootstrap_fitness = float(min_bootstrap_fitness)
+max_bootstrap_rmse_m = float(max_bootstrap_rmse_m)
 text = open(results_path, encoding="utf-8", errors="replace").read()
 
 def get_pose_attr(attr):
@@ -859,6 +886,10 @@ block_match = block_re.search(text)
 search_text = block_match.group("body") if block_match else text
 xyz_match = re.search(r"calibrated xyz\s*=\s*([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)", search_text)
 rpy_match = re.search(r"calibrated rpy\s*=\s*([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)", search_text)
+# fitness / RMSE quantify Multi_LiCa's intrinsic registration quality. They
+# exist regardless of CAD trustworthiness, so --bootstrap mode gates on them
+# instead of `candidate - CAD` comparison.
+fit_match = re.search(r"fitness:\s*([-+0-9.eE]+)\s*,\s*inlier_rmse:\s*([-+0-9.eE]+)", search_text)
 if not xyz_match or not rpy_match:
     reason = "Could not parse 'calibrated xyz' and 'calibrated rpy' for back_mid360 to front_mid360 from Multi_LiCa results"
     with open(precision_path, "w", encoding="utf-8") as f:
@@ -872,6 +903,8 @@ if not xyz_match or not rpy_match:
 
 candidate_xyz = np.array([float(xyz_match.group(i)) for i in range(1, 4)], dtype=float)
 candidate_rpy_deg = np.array([float(rpy_match.group(i)) for i in range(1, 4)], dtype=float)
+fitness = float(fit_match.group(1)) if fit_match else float("nan")
+inlier_rmse_m = float(fit_match.group(2)) if fit_match else float("nan")
 
 front_pose = get_pose_attr("front_lidar_pose")
 back_pose = get_pose_attr("back_lidar_pose")
@@ -898,26 +931,82 @@ candidate_back_xyz = candidate_back_base[:3, 3]
 candidate_back_rpy = R.from_matrix(candidate_back_base[:3, :3]).as_euler("xyz", degrees=False)
 candidate_back_pose_vals = list(candidate_back_xyz) + list(candidate_back_rpy)
 candidate_back_pose = " ".join(f"{v:.15g}" for v in candidate_back_pose_vals)
-candidate_pair_pose = " ".join([*(f"{v:.15g}" for v in candidate_xyz), *(f"{v:.15g}" for v in np.deg2rad(candidate_rpy_deg))])
+# Relative extrinsic T_back->front is the CAD-independent measurement.
+# Keep it as a first-class output so re-deriving back_lidar_pose after any
+# future front_lidar_pose revision is a single matrix multiply — no re-cal.
+candidate_rpy_rad = np.deg2rad(candidate_rpy_deg)
+candidate_pair_pose = " ".join([*(f"{v:.15g}" for v in candidate_xyz), *(f"{v:.15g}" for v in candidate_rpy_rad)])
+candidate_pair_pose_deg = " ".join([*(f"{v:.15g}" for v in candidate_xyz), *(f"{v:.15g}" for v in candidate_rpy_deg)])
 
-accepted = translation_error_cm < max_t_cm and rotation_error_deg < max_r_deg
-verdict = "PASS" if accepted else "FAIL"
+if bootstrap:
+    # Bootstrap: CAD is placeholder, only gate on registration quality.
+    reasons_fail = []
+    if math.isnan(fitness) or math.isnan(inlier_rmse_m):
+        reasons_fail.append(
+            "fitness / inlier_rmse not found in Multi_LiCa results; "
+            "upstream output format may have changed"
+        )
+    else:
+        if fitness < min_bootstrap_fitness:
+            reasons_fail.append(
+                f"fitness={fitness:.6f} < {min_bootstrap_fitness}"
+            )
+        if inlier_rmse_m > max_bootstrap_rmse_m:
+            reasons_fail.append(
+                f"inlier_rmse={inlier_rmse_m:.6f}m > {max_bootstrap_rmse_m}m"
+            )
+    accepted = not reasons_fail
+    verdict = "PASS" if accepted else "FAIL"
+    verdict_mode = "bootstrap"
+else:
+    reasons_fail = []
+    if translation_error_cm >= max_t_cm:
+        reasons_fail.append(
+            f"translation_error_cm={translation_error_cm:.6f} >= {max_t_cm}"
+        )
+    if rotation_error_deg >= max_r_deg:
+        reasons_fail.append(
+            f"rotation_error_deg={rotation_error_deg:.6f} >= {max_r_deg}"
+        )
+    accepted = not reasons_fail
+    verdict = "PASS" if accepted else "FAIL"
+    verdict_mode = "strict"
+
 with open(precision_path, "w", encoding="utf-8") as f:
     f.write(f"verdict: {verdict}\n")
+    f.write(f"verdict_mode: {verdict_mode}\n")
     f.write(f"translation_error_cm: {translation_error_cm:.6f}\n")
     f.write(f"rotation_error_deg: {rotation_error_deg:.6f}\n")
     f.write(f"max_translation_error_cm: {max_t_cm}\n")
     f.write(f"max_rotation_error_deg: {max_r_deg}\n")
-    f.write(f"candidate_back_in_front_pose_xyz_rpy_rad: {candidate_pair_pose}\n")
+    f.write(f"fitness: {fitness:.6f}\n")
+    f.write(f"inlier_rmse_m: {inlier_rmse_m:.6f}\n")
+    f.write(f"min_bootstrap_fitness: {min_bootstrap_fitness}\n")
+    f.write(f"max_bootstrap_inlier_rmse_m: {max_bootstrap_rmse_m}\n")
+    # Relative extrinsic T_back->front (CAD-independent, from point clouds).
+    # Use these values directly when re-deriving back_lidar_pose after a
+    # future front_lidar_pose change — no recalibration needed.
+    f.write(f"relative_back_in_front_xyz_rpy_rad: {candidate_pair_pose}\n")
+    f.write(f"relative_back_in_front_xyz_rpy_deg: {candidate_pair_pose_deg}\n")
+    # Absolute back_lidar_pose (= front_base @ T_back->front). Only trust
+    # this when front_lidar_pose in xmacro is itself trustworthy.
     f.write(f"candidate_back_lidar_pose_xyz_rpy_rad: {candidate_back_pose}\n")
+    if reasons_fail:
+        f.write("fail_reasons:\n")
+        for reason in reasons_fail:
+            f.write(f"  - {reason}\n")
     f.write(f"results_file: {results_path}\n")
 
 with open(env_path, "w", encoding="utf-8") as f:
     f.write(f"PARSE_VERDICT={verdict}\n")
+    f.write(f"PARSE_VERDICT_MODE={verdict_mode}\n")
     f.write(f"TRANSLATION_ERROR_CM={translation_error_cm:.6f}\n")
     f.write(f"ROTATION_ERROR_DEG={rotation_error_deg:.6f}\n")
+    f.write(f"FITNESS={fitness:.6f}\n")
+    f.write(f"INLIER_RMSE_M={inlier_rmse_m:.6f}\n")
     f.write("CANDIDATE_BACK_POSE=" + shlex.quote(candidate_back_pose) + "\n")
     f.write("CANDIDATE_PAIR_POSE=" + shlex.quote(candidate_pair_pose) + "\n")
+    f.write("CANDIDATE_PAIR_POSE_DEG=" + shlex.quote(candidate_pair_pose_deg) + "\n")
     f.write("PARSE_REASON=''\n")
 PY
 }
@@ -930,12 +1019,46 @@ write_live_report() {
     local translation_error_cm="$5"
     local rotation_error_deg="$6"
     local candidate_back_pose="$7"
+    local fitness="${FITNESS:-unknown}"
+    local inlier_rmse_m="${INLIER_RMSE_M:-unknown}"
+    local verdict_mode="${PARSE_VERDICT_MODE:-strict}"
+    local rel_pose_rad="${CANDIDATE_PAIR_POSE:-unknown}"
+    local rel_pose_deg="${CANDIDATE_PAIR_POSE_DEG:-unknown}"
     local now
     now="$(date '+%Y-%m-%dT%H:%M:%S%z')"
+    local precision_gate_block
+    if [ "${verdict_mode}" = "bootstrap" ]; then
+        precision_gate_block=$(cat <<EOM
+## Precision Gate (bootstrap mode)
+
+CAD xmacro values are treated as placeholders; gated on Multi_LiCa's
+intrinsic registration quality instead of \`candidate - CAD\` deltas.
+
+- fitness: ${fitness} (min ${MIN_BOOTSTRAP_FITNESS})
+- inlier_rmse_m: ${inlier_rmse_m} (max ${MAX_BOOTSTRAP_INLIER_RMSE_M})
+- translation_error_cm vs CAD: ${translation_error_cm} (informational)
+- rotation_error_deg vs CAD: ${rotation_error_deg} (informational)
+EOM
+        )
+    else
+        precision_gate_block=$(cat <<EOM
+## Precision Gate (strict mode)
+
+- translation_error_cm: ${translation_error_cm}
+- rotation_error_deg: ${rotation_error_deg}
+- max_translation_error_cm: ${MAX_TRANSLATION_ERROR_CM}
+- max_rotation_error_deg: ${MAX_ROTATION_ERROR_DEG}
+- fitness: ${fitness} (informational)
+- inlier_rmse_m: ${inlier_rmse_m} (informational)
+EOM
+        )
+    fi
+
     cat > "${OUTPUT_REPORT}" <<EOF
 # Dual Mid360 Extrinsic Calibration - Live Run
 
 - verdict: **${verdict}**
+- verdict_mode: ${verdict_mode}
 - generated_at: ${now}
 - bag: ${BAG_PATH}
 - work_dir: ${work_dir}
@@ -943,18 +1066,29 @@ write_live_report() {
 - multi_lica_results: ${results_file_path}
 - run_log: ${RUN_LOG_PATH}
 
-## Precision Gate
+${precision_gate_block}
 
-- translation_error_cm: ${translation_error_cm}
-- rotation_error_deg: ${rotation_error_deg}
-- max_translation_error_cm: ${MAX_TRANSLATION_ERROR_CM}
-- max_rotation_error_deg: ${MAX_ROTATION_ERROR_DEG}
+## Relative Extrinsic (CAD-independent, T_back->front)
 
-## Candidate xmacro Pose
+Direct TEASER++ measurement of back_mid360 relative to front_mid360,
+computed purely from the two point clouds. This value survives future
+front_lidar_pose revisions — re-derive back_lidar_pose via
+\`front_base @ T_back_to_front\` without recalibrating.
+
+\`\`\`
+xyz rpy_rad : ${rel_pose_rad}
+xyz rpy_deg : ${rel_pose_deg}
+\`\`\`
+
+## Candidate xmacro Pose (absolute, depends on front_lidar_pose)
 
 \`\`\`
 back_lidar_pose="${candidate_back_pose}"
 \`\`\`
+
+Only trust this absolute pose when \`front_lidar_pose\` in xmacro is
+itself trustworthy. If front CAD is still a placeholder, prefer the
+relative extrinsic above and re-derive later.
 
 See task-11-precision-check.txt and task-11-xmacro-update.txt for the
 machine-readable threshold and writeback status.
@@ -1021,7 +1155,7 @@ EOF
 run_calibrate_mode() {
     resolve_evidence_paths
     : > "${RUN_LOG_PATH}"
-    info "Running calibrate mode (dry-run=${DRY_RUN}, write-xmacro=${WRITE_XMACRO})."
+    info "Running calibrate mode (dry-run=${DRY_RUN}, write-xmacro=${WRITE_XMACRO}, bootstrap=${BOOTSTRAP})."
     record_run_log "mode: calibrate"
     record_run_log "workspace_root: ${WORKSPACE_ROOT}"
     record_run_log "evidence_dir:   ${EVIDENCE_DIR}"
@@ -1029,6 +1163,7 @@ run_calibrate_mode() {
     record_run_log "output_report:  ${OUTPUT_REPORT}"
     record_run_log "write_xmacro:   ${WRITE_XMACRO}"
     record_run_log "dry_run:        ${DRY_RUN}"
+    record_run_log "bootstrap:      ${BOOTSTRAP}"
 
     run_dependency_audit
     # Bag check accumulates its own blocker reasons; we never short-circuit
@@ -1152,8 +1287,13 @@ EOF
             cat > "${XMACRO_UPDATE_PATH}" <<EOF
 xmacro_path: ${REAL_XMACRO_PATH}
 action: UPDATED
+verdict_mode: ${PARSE_VERDICT_MODE}
 before_back_lidar_pose: ${before_pose}
 after_back_lidar_pose: ${CANDIDATE_BACK_POSE}
+relative_back_in_front_xyz_rpy_rad: ${CANDIDATE_PAIR_POSE}
+relative_back_in_front_xyz_rpy_deg: ${CANDIDATE_PAIR_POSE_DEG}
+fitness: ${FITNESS}
+inlier_rmse_m: ${INLIER_RMSE_M}
 translation_error_cm: ${TRANSLATION_ERROR_CM}
 rotation_error_deg: ${ROTATION_ERROR_DEG}
 EOF
@@ -1162,14 +1302,14 @@ EOF
         fi
         write_live_report "PASS" "${work_dir}" "${multi_lica_log}" "${results_file_path}" "${TRANSLATION_ERROR_CM}" "${ROTATION_ERROR_DEG}" "${CANDIDATE_BACK_POSE}"
         rm -f "${BLOCKER_PATH}"
-        record_run_log "verdict: PASS"
+        record_run_log "verdict: PASS (${PARSE_VERDICT_MODE} mode)"
         return 0
     fi
 
     write_live_report "FAIL" "${work_dir}" "${multi_lica_log}" "${results_file_path}" "${TRANSLATION_ERROR_CM}" "${ROTATION_ERROR_DEG}" "${CANDIDATE_BACK_POSE}"
-    write_xmacro_no_update_reason "calibration numeric result failed thresholds; xmacro unchanged"
+    write_xmacro_no_update_reason "calibration numeric result failed thresholds (${PARSE_VERDICT_MODE} mode); xmacro unchanged"
     rm -f "${BLOCKER_PATH}"
-    record_run_log "verdict: FAIL (thresholds not met)"
+    record_run_log "verdict: FAIL (${PARSE_VERDICT_MODE} mode, thresholds not met)"
     return 1
 }
 
