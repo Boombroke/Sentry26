@@ -22,19 +22,14 @@
 #   --no-rviz         不起 rviz2（默认会起；ssh/无屏环境/已开 rviz 时关掉）
 #   --no-driver       不起 livox driver（你在别处已经起好了）
 #   --no-rsp          不起 robot_state_publisher（同上）
-#   --xfer-format N   传给 driver launch 的 xfer_format (默认 4=AllMsg, 也发 PC2
-#                     让 rviz 直接看；生产路径用 1=CustomMsg only)
 #   --help
 
 set -euo pipefail
 
 WITH_MERGER="no"
-WITH_RVIZ="yes"    # 默认起 rviz；--no-rviz 可关
+WITH_RVIZ="yes"   # 默认起 rviz；--no-rviz 可关
 NO_DRIVER="no"
 NO_RSP="no"
-# 默认 4 = Livox AllMsg (CustomMsg + PointCloud2)，rviz 能直接订阅 PC2。
-# Point-LIO / merger 仍消费 CustomMsg，不受影响。
-XFER_FORMAT="4"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -43,11 +38,8 @@ while [ $# -gt 0 ]; do
         --no-rviz)     WITH_RVIZ="no";  shift ;;
         --no-driver)   NO_DRIVER="yes"; shift ;;
         --no-rsp)      NO_RSP="yes"; shift ;;
-        --xfer-format)
-            [ $# -ge 2 ] || { echo "[ERROR] --xfer-format requires an argument" >&2; exit 2; }
-            XFER_FORMAT="$2"; shift 2 ;;
         --help|-h)
-            sed -n '2,27p' "$0"
+            sed -n '2,25p' "$0"
             exit 0
             ;;
         *)
@@ -80,9 +72,8 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 if [ "$NO_DRIVER" = "no" ]; then
-    echo "[INFO] starting livox driver (xfer_format=${XFER_FORMAT})..."
-    ros2 launch sentry_dual_mid360 dual_mid360_driver_launch.py \
-        xfer_format:="${XFER_FORMAT}" &
+    echo "[INFO] starting livox driver..."
+    ros2 launch sentry_dual_mid360 dual_mid360_driver_launch.py &
     PIDS+=($!)
 fi
 
@@ -119,25 +110,12 @@ cat <<EOF
 ================================================================
 [INFO] lidar-only debug stack up. Processes started: ${#PIDS[@]}
 
-Driver is running in xfer_format=${XFER_FORMAT}:
-$(if [ "$XFER_FORMAT" = "4" ]; then
-    echo "  - /livox/lidar_front, /livox/lidar_back publish BOTH"
-    echo "    sensor_msgs/PointCloud2 (for rviz) AND CustomMsg (for merger / Point-LIO)."
-  else
-    echo "  - /livox/lidar_front, /livox/lidar_back publish CustomMsg only."
-    echo "    rviz will NOT render these. Pass --xfer-format 4 to also get PC2."
-  fi)
-
 In rviz:
   Fixed Frame: base_footprint  (或 front_mid360 直接看原始点云)
-  Add -> PointCloud2  -> Topic: /livox/lidar_front  (red)
-  Add -> PointCloud2  -> Topic: /livox/lidar_back   (green)
-$(if [ "$WITH_MERGER" = "yes" ]; then echo "  Add -> PointCloud2  -> Topic: /livox/lidar        (merger 输出, white)"; fi)
+  Add -> PointCloud2  -> Topic: /livox/lidar_front
+  Add -> PointCloud2  -> Topic: /livox/lidar_back
+$(if [ "$WITH_MERGER" = "yes" ]; then echo "  Add -> PointCloud2  -> Topic: /livox/lidar        (merger 输出，换个颜色看)"; fi)
   Add -> TF           (确认 map -> odom -> base_footprint -> ... -> front_mid360 全连通)
-
-如何判断标定好坏:
-  - 红绿点在墙/立柱上叠成一层 = 标定好
-  - 双层 / 错位 / 扭曲 = 外参还需调整
 
 Ctrl-C 停止所有进程。
 ================================================================
