@@ -104,11 +104,22 @@ MergerNode::MergerNode(const rclcpp::NodeOptions & options)
 
   merged_pub_ = this->create_publisher<CustomMsg>(output_topic_, rclcpp::SensorDataQoS());
   if (publish_pc2_preview_) {
+    // rviz2 's PointCloud2 default subscription uses the "System Default"
+    // reliability which resolves to RELIABLE; matching it against a
+    // SensorDataQoS (BEST_EFFORT) publisher produces "incompatible QoS"
+    // warnings and silently drops messages. Since this preview topic is
+    // only for human visualization (not the production Point-LIO path),
+    // we publish on RELIABLE with a small depth so rviz's default works
+    // out of the box. Queue depth stays small to avoid backlog on slow
+    // rviz clients.
+    rclcpp::QoS pc2_qos(5);
+    pc2_qos.reliable();
     merged_pc2_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-      pc2_preview_topic_, rclcpp::SensorDataQoS());
+      pc2_preview_topic_, pc2_qos);
     RCLCPP_INFO(
       this->get_logger(),
-      "publish_pc2_preview=true: mirroring merged output to %s for rviz visualization",
+      "publish_pc2_preview=true: mirroring merged output to %s (RELIABLE, depth=5) "
+      "for rviz visualization",
       pc2_preview_topic_.c_str());
   }
 
