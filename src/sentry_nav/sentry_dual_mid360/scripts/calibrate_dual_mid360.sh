@@ -301,12 +301,19 @@ record_run_log() {
 }
 
 check_python_module() {
+    # Real import, not just find_spec. find_spec only resolves the top-level
+    # package and will pass for a package whose __init__.py fails at runtime
+    # (e.g. teaserpp_python installed without its compiled .so — the shell
+    # is on disk but `from .teaserpp_python import *` raises ModuleNotFound).
     local module="$1"
-    python3 - "${module}" <<'PY'
-import importlib.util
+    python3 - "${module}" <<'PY' 2>/dev/null
+import importlib
 import sys
-spec = importlib.util.find_spec(sys.argv[1])
-sys.exit(0 if spec is not None else 1)
+try:
+    importlib.import_module(sys.argv[1])
+except BaseException:
+    sys.exit(1)
+sys.exit(0)
 PY
 }
 
@@ -1088,6 +1095,19 @@ EOF
         write_xmacro_no_update_reason "Multi_LiCa invocation failed; no accepted numeric calibration"
         write_precision_blocked "Multi_LiCa invocation failed before parseable result was produced"
         record_run_log "verdict: BLOCKED (Multi_LiCa exit ${launch_rc})"
+        return 2
+    fi
+
+    # ros2 launch returns 0 even when a child node crashed. Scan the log for
+    # the telltale markers before trusting the exit code.
+    local node_crash_line
+    node_crash_line="$(grep -m1 -E 'process has died|exit code [1-9]|Traceback \(most recent call last\)' "${multi_lica_log}" || true)"
+    if [ -n "${node_crash_line}" ]; then
+        BLOCKER_REASONS+=("Multi_LiCa node crashed despite ros2 launch exit 0: ${node_crash_line}; full log at ${multi_lica_log}")
+        write_blocked_report
+        write_xmacro_no_update_reason "Multi_LiCa node crashed; no accepted numeric calibration"
+        write_precision_blocked "Multi_LiCa node crashed before producing a parseable result"
+        record_run_log "verdict: BLOCKED (node crash detected in launch log)"
         return 2
     fi
 
