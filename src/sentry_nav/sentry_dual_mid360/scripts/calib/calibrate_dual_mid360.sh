@@ -31,7 +31,9 @@ set -euo pipefail
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# This script now lives at .../sentry_dual_mid360/scripts/calib/<file>;
+# climb two levels to reach the package root.
+PACKAGE_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 WORKSPACE_ROOT="$(cd "${PACKAGE_DIR}/../../.." && pwd)"
 REAL_XMACRO_PATH="${WORKSPACE_ROOT}/src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro"
 

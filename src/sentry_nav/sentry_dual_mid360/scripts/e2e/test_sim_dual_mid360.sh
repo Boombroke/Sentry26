@@ -52,8 +52,8 @@ set -euo pipefail
 SCRIPT_VERSION="0.1.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Resolve workspace root: scripts/ -> pkg/ -> sentry_nav/ -> src/ -> ws/
-WS_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+# Resolve workspace root: scripts/e2e/ -> scripts/ -> pkg/ -> sentry_nav/ -> src/ -> ws/
+WS_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
 
 # Launch entry points used by T15.
 GAZEBO_LAUNCH_PKG="rmu_gazebo_simulator"

@@ -134,10 +134,11 @@ NOTES:
 EOF
 }
 
-# Resolve workspace root (4 levels up from scripts/): scripts/ -> pkg/ -> sentry_nav/ -> src/ -> ws/
+# Resolve workspace root (5 levels up):
+#   scripts/calib/ -> scripts/ -> pkg/ -> sentry_nav/ -> src/ -> ws/
 resolve_workspace_root() {
     local candidate
-    candidate="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+    candidate="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"
     echo "$candidate"
 }
 

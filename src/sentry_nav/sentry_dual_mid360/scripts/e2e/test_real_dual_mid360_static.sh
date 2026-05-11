@@ -61,8 +61,8 @@ set -euo pipefail
 SCRIPT_VERSION="0.1.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# scripts/ -> pkg/ -> sentry_nav/ -> src/ -> ws/
-WS_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+# scripts/e2e/ -> scripts/ -> pkg/ -> sentry_nav/ -> src/ -> ws/
+WS_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
 
 NAV_LAUNCH_PKG="sentry_nav_bringup"
 NAV_LAUNCH_FILE="rm_navigation_reality_launch.py"

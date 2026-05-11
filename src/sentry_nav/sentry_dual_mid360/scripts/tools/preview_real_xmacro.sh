@@ -34,7 +34,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+# 5 levels up: scripts/tools/ -> scripts/ -> pkg/ -> sentry_nav/ -> src/ -> ws/
+WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
 XMACRO_PATH="${WORKSPACE_ROOT}/src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro"
 
 HEADLESS="no"
