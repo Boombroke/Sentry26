@@ -83,7 +83,7 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
 
   rviz 里 Fixed Frame 手打 `front_mid360`，加 `PointCloud2 → /livox/lidar_pc2`
   就能看到融合点云——墙单层、柱单根 = 外参对。livox CustomMsg 本身 rviz
-  无法 render，PC2 镜像是专为这个调试场景设计的。`--with-pointlio` 会额外
-  起 Point-LIO 看 `/cloud_registered`，但无整车桌面摆放通常 ESKF 不收敛；
+  无法 render，PC2 镜像是专为这个调试场景设计的。整车级验证（Point-LIO
+  收敛、回环定位精度等）请走 `ros2 launch sentry_nav_bringup rm_sentry_launch.py`。
   `--no-rviz` / `--no-driver` / `--no-rsp` / `--no-merger` 可按需跳过对应
   组件。

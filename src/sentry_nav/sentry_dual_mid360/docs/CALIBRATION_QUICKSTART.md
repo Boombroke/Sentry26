@@ -214,9 +214,13 @@ rviz 里：
 - 看墙是薄一层、立柱是一根、地面单平面 → 标定 OK
 - 双层墙 / 错位柱 / V 字形 → 回标定查 xmacro
 
-如果你也想看 Point-LIO 的 `/cloud_registered`（有 IMU 驱动的世界系点云），
-加 `--with-pointlio`。但无整车桌面摆放下 Point-LIO ESKF 经常不收敛，
-快速验证外参推荐用上面的默认模式。
+如果要看 Point-LIO 的 `/cloud_registered` 或做整车级验证（回环、定位
+精度、重定位等），直接走完整实车 bringup：
+```bash
+ros2 launch sentry_nav_bringup rm_sentry_launch.py
+```
+它带 Point-LIO + SLAM + Nav2 + odom_bridge，有整车 IMU 稳定条件 ESKF
+能收敛。桌面摆雷达模式看 `/livox/lidar_pc2` 已足够验证外参是否正确。
 
 ## 常见坑
 
