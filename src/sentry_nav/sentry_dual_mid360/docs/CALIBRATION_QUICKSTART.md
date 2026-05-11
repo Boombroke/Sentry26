@@ -49,7 +49,7 @@ ros2 launch sentry_dual_mid360 dual_mid360_driver_launch.py
 ### 2. 依赖自检
 
 ```bash
-bash src/sentry_nav/sentry_dual_mid360/scripts/calibrate_dual_mid360.sh --check-deps
+bash src/sentry_nav/sentry_dual_mid360/scripts/calib/calibrate_dual_mid360.sh --check-deps
 ```
 
 输出 `All prerequisites satisfied` 才继续。缺什么它会一条条列出来，
@@ -63,7 +63,7 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/calibrate_dual_mid360.sh --check-
 ### 3. 验证时间同步（可选但强烈推荐）
 
 ```bash
-python3 src/sentry_nav/sentry_dual_mid360/scripts/verify_dual_mid360_sync.py \
+python3 src/sentry_nav/sentry_dual_mid360/scripts/calib/verify_dual_mid360_sync.py \
     --front-topic /livox/lidar_front \
     --back-topic  /livox/lidar_back \
     --sample-count 600 --timeout-s 120
@@ -82,7 +82,7 @@ python3 src/sentry_nav/sentry_dual_mid360/scripts/verify_dual_mid360_sync.py \
 **让雷达保持 60 秒不动**，执行：
 
 ```bash
-bash src/sentry_nav/sentry_dual_mid360/scripts/record_calib_bag.sh \
+bash src/sentry_nav/sentry_dual_mid360/scripts/calib/record_calib_bag.sh \
     --env real --duration 60
 ```
 
@@ -116,7 +116,7 @@ BAG="$LATEST"/$(basename "$LATEST").bag
 **首次标定 / xmacro 里 CAD 值还不准**（绝大多数第一次做的场景）：
 
 ```bash
-bash src/sentry_nav/sentry_dual_mid360/scripts/calibrate_dual_mid360.sh \
+bash src/sentry_nav/sentry_dual_mid360/scripts/calib/calibrate_dual_mid360.sh \
     --bag "$BAG" \
     --output-report logs/evidence/calib-report.md \
     --bootstrap --write-xmacro
@@ -132,7 +132,7 @@ Multi_LiCa 自己的点云配准质量够（`fitness ≥ 0.99`、`RMSE ≤ 10cm`
 **日常微调 / xmacro 已经是上次标定过的好值**：去掉 `--bootstrap`：
 
 ```bash
-bash src/sentry_nav/sentry_dual_mid360/scripts/calibrate_dual_mid360.sh \
+bash src/sentry_nav/sentry_dual_mid360/scripts/calib/calibrate_dual_mid360.sh \
     --bag "$BAG" \
     --output-report logs/evidence/calib-report.md \
     --write-xmacro
@@ -179,7 +179,7 @@ source install/setup.bash
 ```bash
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-bash src/sentry_nav/sentry_dual_mid360/scripts/preview_real_xmacro.sh
+bash src/sentry_nav/sentry_dual_mid360/scripts/tools/preview_real_xmacro.sh
 ```
 
 脚本做三件事：`xmacro4sdf` 展开 `wheeled_biped_real.sdf.xmacro` → 组一个空世界 →

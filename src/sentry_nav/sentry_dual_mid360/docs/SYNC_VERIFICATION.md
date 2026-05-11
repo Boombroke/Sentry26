@@ -147,10 +147,10 @@ ros2 run sentry_dual_mid360 verify_dual_mid360_sync.py \
 
 ```bash
 # 打印帮助
-python3 src/sentry_nav/sentry_dual_mid360/scripts/verify_dual_mid360_sync.py --help
+python3 src/sentry_nav/sentry_dual_mid360/scripts/calib/verify_dual_mid360_sync.py --help
 
 # 无 ROS 环境：mock 数据跑一遍，期望得到 HARDWARE_SYNC
-python3 src/sentry_nav/sentry_dual_mid360/scripts/verify_dual_mid360_sync.py \
+python3 src/sentry_nav/sentry_dual_mid360/scripts/calib/verify_dual_mid360_sync.py \
     --mock-data --expected-result HARDWARE_SYNC
 
 # 实车：接到真实话题跑 100 对样本

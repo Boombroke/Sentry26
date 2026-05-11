@@ -80,11 +80,11 @@ LOG=$(ls -t ~/.ros/log/latest/small_gicp_relocalization*.log 2>/dev/null | head 
 grep -E "inlier_ratio|fitness_error|no valid correction|Emergency" "$LOG" | tail -40
 
 # 信号 2：map→odom 持续漂移或瞬跳
-python3 src/sentry_nav/sentry_dual_mid360/scripts/analyze_map_odom_stability.py \
+python3 src/sentry_nav/sentry_dual_mid360/scripts/qa/analyze_map_odom_stability.py \
     --duration 60 --jitter-threshold-cm 10
 
 # 信号 3：Point-LIO 外参过期
-python3 src/sentry_nav/sentry_dual_mid360/scripts/verify_pointlio_overrides_fresh.py
+python3 src/sentry_nav/sentry_dual_mid360/scripts/codegen/verify_pointlio_overrides_fresh.py
 ```
 
 如果信号 1 频繁出现 `inlier_ratio < 0.5` 或 Emergency 事件，并且信号 3 是 PASS（override 新鲜），基本确认 PCD 是根因。
@@ -296,7 +296,7 @@ LOG=$(ls -t ~/.ros/log/latest/small_gicp_relocalization*.log | head -1)
 grep -E "inlier_ratio|fitness_error|per_point_error|num_inliers|Emergency" "$LOG" | tail -40
 
 # 6.3.3 map→odom 抖动
-python3 src/sentry_nav/sentry_dual_mid360/scripts/analyze_map_odom_stability.py \
+python3 src/sentry_nav/sentry_dual_mid360/scripts/qa/analyze_map_odom_stability.py \
     --duration 60 --jitter-threshold-cm 10
 ```
 

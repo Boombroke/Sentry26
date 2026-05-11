@@ -21,7 +21,7 @@
 
 ## 一、Point-LIO 里程计参数
 
-> **双 Mid360 模式下 `extrinsic_T / extrinsic_R / mapping.gravity / gravity_init` 不是手调参数**。这些字段由 `src/sentry_nav/sentry_dual_mid360/scripts/generate_pointlio_overrides.py` 在 `colcon build --packages-select sentry_dual_mid360` 时从 xmacro 单源派生到 `install/sentry_dual_mid360/share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml`；生成 YAML 是 build 产物，**不在源码 `config/` 提交、禁止手编辑**。机械师改 Mid360 安装位置后只改 xmacro（`wheeled_biped_real.sdf.xmacro` 的 `front_lidar_pose` / `back_lidar_pose` 与 `sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro` 的 IMU factory pose），重跑一次 build 即同步更新。想知道当前安装外参与 override 是否一致，跑 `python3 src/sentry_nav/sentry_dual_mid360/scripts/verify_pointlio_overrides_fresh.py`；不一致就重新 build，不要手改 YAML。`nav2_params.yaml` 中的 Point-LIO `mapping` section 仅在 `use_dual_mid360:=False` 的单雷达回退路径下生效，不要把双雷达 codegen 结果抄回去。
+> **双 Mid360 模式下 `extrinsic_T / extrinsic_R / mapping.gravity / gravity_init` 不是手调参数**。这些字段由 `src/sentry_nav/sentry_dual_mid360/scripts/codegen/generate_pointlio_overrides.py` 在 `colcon build --packages-select sentry_dual_mid360` 时从 xmacro 单源派生到 `install/sentry_dual_mid360/share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml`；生成 YAML 是 build 产物，**不在源码 `config/` 提交、禁止手编辑**。机械师改 Mid360 安装位置后只改 xmacro（`wheeled_biped_real.sdf.xmacro` 的 `front_lidar_pose` / `back_lidar_pose` 与 `sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro` 的 IMU factory pose），重跑一次 build 即同步更新。想知道当前安装外参与 override 是否一致，跑 `python3 src/sentry_nav/sentry_dual_mid360/scripts/codegen/verify_pointlio_overrides_fresh.py`；不一致就重新 build，不要手改 YAML。`nav2_params.yaml` 中的 Point-LIO `mapping` section 仅在 `use_dual_mid360:=False` 的单雷达回退路径下生效，不要把双雷达 codegen 结果抄回去。
 
 ### 1. point_filter_num（点云抽稀比例）
 
@@ -288,7 +288,7 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 **调优方法**：
 ```bash
 # 1. 先跑硬件同步验证（四步法）
-python3 src/sentry_nav/sentry_dual_mid360/scripts/verify_dual_mid360_sync.py --duration 60
+python3 src/sentry_nav/sentry_dual_mid360/scripts/calib/verify_dual_mid360_sync.py --duration 60
 
 # 2. 观察 merger 吞吐率
 ros2 topic hz /livox/lidar_front
@@ -350,11 +350,11 @@ ros2 node info /pointcloud_merger
 
 ```bash
 # 合成数据 mock 剖析（无硬件依赖，默认种子 20260506）
-python3 src/sentry_nav/sentry_dual_mid360/scripts/qa_merger_latency.py \
+python3 src/sentry_nav/sentry_dual_mid360/scripts/qa/qa_merger_latency.py \
     --max-median-ms 2.0 --max-p99-ms 5.0
 
 # 在线剖析 merger_node 的 CPU / RSS（需要 merger 已运行）
-python3 src/sentry_nav/sentry_dual_mid360/scripts/qa_merger_latency.py \
+python3 src/sentry_nav/sentry_dual_mid360/scripts/qa/qa_merger_latency.py \
     --live-pid "$(pgrep -f merger_node | head -1)"
 ```
 

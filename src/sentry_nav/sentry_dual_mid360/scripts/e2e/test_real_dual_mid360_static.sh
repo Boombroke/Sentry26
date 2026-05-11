@@ -189,8 +189,8 @@ EXIT CODES:
 
 REFERENCES:
     .sisyphus/plans/dual-mid360-fusion.md Task 16
-    src/sentry_nav/sentry_dual_mid360/scripts/verify_dual_mid360_sync.py (T7)
-    src/sentry_nav/sentry_dual_mid360/scripts/test_sim_dual_mid360.sh (T15)
+    src/sentry_nav/sentry_dual_mid360/scripts/calib/verify_dual_mid360_sync.py (T7)
+    src/sentry_nav/sentry_dual_mid360/scripts/e2e/test_sim_dual_mid360.sh (T15)
     src/docs/QUICKSTART.md
 EOF
 }

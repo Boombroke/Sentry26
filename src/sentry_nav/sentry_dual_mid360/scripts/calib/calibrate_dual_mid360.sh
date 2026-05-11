@@ -623,7 +623,7 @@ the calibration could not complete. CAD default remains in place:
    \`\`\`
 4. Record a calibration bag (T10):
    \`\`\`
-   bash src/sentry_nav/sentry_dual_mid360/scripts/record_calib_bag.sh --env real --duration 60
+   bash src/sentry_nav/sentry_dual_mid360/scripts/calib/record_calib_bag.sh --env real --duration 60
    \`\`\`
    Required topics: /livox/lidar_front, /livox/lidar_back, /tf, /tf_static.
 5. Re-invoke:

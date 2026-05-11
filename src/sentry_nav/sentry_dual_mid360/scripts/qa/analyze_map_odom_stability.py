@@ -225,7 +225,7 @@ def _format_report(report: StabilityReport) -> str:
         "Rerun command (5-minute window, 5 cm threshold):",
         "  ```",
         "  source install/setup.bash",
-        "  python3 src/sentry_nav/sentry_dual_mid360/scripts/analyze_map_odom_stability.py \\",
+        "  python3 src/sentry_nav/sentry_dual_mid360/scripts/qa/analyze_map_odom_stability.py \\",
         "    --duration 300 --max-jitter-cm 5.0 \\",
         "    --output logs/evidence/task-19-stability.md",
         "  ```",

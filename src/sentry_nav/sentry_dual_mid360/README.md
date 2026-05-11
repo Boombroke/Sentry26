@@ -15,8 +15,15 @@
 - `urdf`: 机器人描述文件（双雷达配置）
 - `config`: 配置文件
 - `launch`: 启动文件
-- `scripts`: 辅助脚本
+- `scripts`: 辅助脚本，按用途分子目录：
+  - `codegen/`: 构建期 codegen 与 freshness 校验（`generate_pointlio_overrides.py` / `verify_pointlio_overrides_fresh.py`）
+  - `calib/`: 标定主线 T7→T10→T11（`verify_dual_mid360_sync.py` / `record_calib_bag.sh` / `calibrate_dual_mid360.sh`）
+  - `tools/`: 可视化与开发辅助（`preview_real_xmacro.sh`）
+  - `qa/`: 运行态诊断（`qa_merger_latency.py` / `qa_odom_bridge_dual.py` / `qa_terrain_coverage.py` / `analyze_map_odom_stability.py` / `analyze_static_drift.py`）
+  - `e2e/`: 系统级静态回归（`test_real_dual_mid360_static.sh` / `test_sim_dual_mid360.sh`）
 - `docs`: 相关文档
+
+> `ros2 run sentry_dual_mid360 <script>` 仍然接受扁平脚本名——`CMakeLists.txt` 把各子目录脚本一起装到 `lib/sentry_dual_mid360/` 下，源码树分类、运行时扁平。
 
 ## Point-LIO override 生成流程
 
@@ -26,7 +33,7 @@
 colcon build --symlink-install --packages-select sentry_dual_mid360 --cmake-args -DCMAKE_BUILD_TYPE=Release
 ```
 
-CMake 会运行 `scripts/generate_pointlio_overrides.py`，生成并安装：
+CMake 会运行 `scripts/codegen/generate_pointlio_overrides.py`，生成并安装：
 
 ```text
 share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
@@ -47,7 +54,7 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
 - [架构设计](docs/ARCHITECTURE.md)：包级权威架构文档，覆盖双 Mid360 融合链路、TF 树、Point-LIO override codegen 与运行时 QA。
 - [硬件同步验证 SOP](docs/SYNC_VERIFICATION.md)：Livox PTP / PPS 硬件同步四步判定与现场排查流程。
 - [PCD 迁移 SOP](docs/PCD_MIGRATION.md)：从单 Mid360 向双 Mid360 切换时先验点云的备份、重建、校验流程。
-- 外参标定入口脚本：[`scripts/calibrate_dual_mid360.sh`](scripts/calibrate_dual_mid360.sh)（`--check-deps` / `--dry-run` / `--bootstrap` / 标定流程说明均在脚本内）；依赖 `third_party/Multi_LiCa` 与标定 bag，具体先决条件见 `ARCHITECTURE.md`。
+- 外参标定入口脚本：[`scripts/calib/calibrate_dual_mid360.sh`](scripts/calib/calibrate_dual_mid360.sh)（`--check-deps` / `--dry-run` / `--bootstrap` / 标定流程说明均在脚本内）；依赖 `third_party/Multi_LiCa` 与标定 bag，具体先决条件见 `ARCHITECTURE.md`。
 
 ## 常用小工具
 
@@ -56,7 +63,7 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
   ```bash
   source /opt/ros/jazzy/setup.bash
   source install/setup.bash
-  bash src/sentry_nav/sentry_dual_mid360/scripts/preview_real_xmacro.sh
+  bash src/sentry_nav/sentry_dual_mid360/scripts/tools/preview_real_xmacro.sh
   ```
   脚本用 `xmacro4sdf` 展开到临时 SDF，起一个空世界的 Gazebo Harmonic 把模型
   spawn 在原点，只做可视化——不拉 nav2/slam/Point-LIO，关窗口即退出。

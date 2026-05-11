@@ -13,7 +13,7 @@ ament_auto_find_build_dependencies()
 
 set(POINTLIO_OVERRIDE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/config")
 set(POINTLIO_OVERRIDE_OUTPUT "${POINTLIO_OVERRIDE_OUTPUT_DIR}/pointlio_dual_overrides.yaml")
-set(POINTLIO_OVERRIDE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_pointlio_overrides.py")
+set(POINTLIO_OVERRIDE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/scripts/codegen/generate_pointlio_overrides.py")
 set(POINTLIO_OVERRIDE_IMU_XMACRO "${CMAKE_CURRENT_SOURCE_DIR}/urdf/mid360_imu_tf.sdf.xmacro")
 
 # Keep sentry_dual_mid360 independently buildable: locate the real robot xmacro
@@ -87,8 +87,16 @@ install(FILES ${POINTLIO_OVERRIDE_OUTPUT}
   DESTINATION share/${PROJECT_NAME}/config
 )
 
-# Install scripts defensively as programs (exclude .gitkeep)
-file(GLOB SCRIPT_PROGRAMS "scripts/*.py" "scripts/*.sh")
+# Install scripts defensively as programs. Scripts are grouped by purpose
+# under scripts/{codegen,calib,tools,qa,e2e}/; ros2 run <pkg> <script> expects
+# a flat layout, so flatten here by collecting from each subdir explicitly.
+file(GLOB SCRIPT_PROGRAMS
+  "scripts/codegen/*.py" "scripts/codegen/*.sh"
+  "scripts/calib/*.py"   "scripts/calib/*.sh"
+  "scripts/tools/*.py"   "scripts/tools/*.sh"
+  "scripts/qa/*.py"      "scripts/qa/*.sh"
+  "scripts/e2e/*.py"     "scripts/e2e/*.sh"
+)
 if(SCRIPT_PROGRAMS)
   install(PROGRAMS ${SCRIPT_PROGRAMS}
     DESTINATION lib/${PROJECT_NAME}

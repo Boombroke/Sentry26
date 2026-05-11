@@ -19,7 +19,7 @@
 #
 # Typical workflow:
 #   edit src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro
-#   bash src/sentry_nav/sentry_dual_mid360/scripts/preview_real_xmacro.sh
+#   bash src/sentry_nav/sentry_dual_mid360/scripts/tools/preview_real_xmacro.sh
 #   (inspect Gazebo GUI, close when done)
 #
 # Prerequisites:
