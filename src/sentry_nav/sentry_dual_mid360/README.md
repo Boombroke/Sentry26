@@ -40,7 +40,11 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
 缺失或非法输入会直接失败，不会静默回退到默认值，也不会读取环境变量、JSON、已有 YAML 或文档作为第二真相源。修改外参时请先改 xmacro，再重新构建本包。
 
 ## 文档索引
+
+> **第一次做标定？直接看 [外参标定速通](docs/CALIBRATION_QUICKSTART.md)，一页纸跑通 T7→T10→T11。**
+
+- [**外参标定速通** (新手必看)](docs/CALIBRATION_QUICKSTART.md)：从插电到 xmacro 写回的最短路径，附 `--bootstrap` 模式说明与常见坑。
 - [架构设计](docs/ARCHITECTURE.md)：包级权威架构文档，覆盖双 Mid360 融合链路、TF 树、Point-LIO override codegen 与运行时 QA。
 - [硬件同步验证 SOP](docs/SYNC_VERIFICATION.md)：Livox PTP / PPS 硬件同步四步判定与现场排查流程。
 - [PCD 迁移 SOP](docs/PCD_MIGRATION.md)：从单 Mid360 向双 Mid360 切换时先验点云的备份、重建、校验流程。
-- 外参标定入口脚本：[`scripts/calibrate_dual_mid360.sh`](scripts/calibrate_dual_mid360.sh)（`--check-deps` / `--dry-run` / 标定流程说明均在脚本内）；依赖 `third_party/Multi_LiCa` 与标定 bag，具体先决条件见 `ARCHITECTURE.md`。
+- 外参标定入口脚本：[`scripts/calibrate_dual_mid360.sh`](scripts/calibrate_dual_mid360.sh)（`--check-deps` / `--dry-run` / `--bootstrap` / 标定流程说明均在脚本内）；依赖 `third_party/Multi_LiCa` 与标定 bag，具体先决条件见 `ARCHITECTURE.md`。

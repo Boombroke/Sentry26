@@ -104,24 +104,40 @@ Livox 官方仅支持三种硬件同步方式：**PTP (IEEE 1588v2) / gPTP / GPS
 
 ## 6. Extrinsic Calibration (Multi_LiCa)
 
+> 新手操作手册见 [CALIBRATION_QUICKSTART.md](CALIBRATION_QUICKSTART.md)。本节是原理与判决规则。
+
 外参流程与写入规则：
 
 1. **CAD 默认值**：`src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro` 定义
    - `front_lidar_pose="-0.17 0 0.10 0.0 0.5235987755982988 3.141592653589793"`（前雷达下俯 30°、yaw π 反装）
    - `back_lidar_pose="0.05 0 0.05 0.0 0.5235987755982988 3.141592653589793"`（后雷达 yaw π 反向，保持与前对称的下俯角）
-2. **标定工具**：Multi_LiCa 离线标定（依赖 teaserpp_python / open3d / pandas）。入口脚本：`scripts/calibrate_dual_mid360.sh`。命令形如
+2. **标定工具**：Multi_LiCa 离线标定（依赖 teaserpp_python / open3d / pandas / ros2_numpy / scipy）。入口脚本：`scripts/calibrate_dual_mid360.sh`。命令形如
    ```bash
    scripts/calibrate_dual_mid360.sh --check-deps
-   scripts/calibrate_dual_mid360.sh --bag <calib_bag_dir> --output-report <path> [--write-xmacro]
+   # 首次标定 / CAD 值仍是占位（bootstrap 模式）：
+   scripts/calibrate_dual_mid360.sh --bag <calib_bag_dir> --output-report <path> --bootstrap --write-xmacro
+   # 日常微调 / xmacro 已是上次标定过的好值（strict 模式）：
+   scripts/calibrate_dual_mid360.sh --bag <calib_bag_dir> --output-report <path> --write-xmacro
    ```
-3. **写回规则（MH8，强制）**：脚本 **不会** 修改 xmacro，除非同时满足三个条件：
-   (1) 成功解析 Multi_LiCa 报告得到数值误差；
-   (2) `translation_error_cm < 2.0` **且** `rotation_error_deg < 0.5`；
+3. **写回规则（MH8，强制）**：脚本 **不会** 修改 xmacro，除非同时满足：
+   (1) 成功解析 Multi_LiCa 报告得到数值；
+   (2) 门控判据通过：
+       - **strict 模式（默认）**：`translation_error_cm < 2.0` **且** `rotation_error_deg < 0.5`。用于
+         "xmacro CAD 接近真值，只做微调验收"的场景。
+       - **bootstrap 模式（`--bootstrap`）**：`fitness ≥ 0.99` **且** `inlier_rmse ≤ 0.10m`。用于
+         首次标定 / CAD 是占位值的场景——此时 `candidate - CAD` 的 delta 无意义，
+         只看 Multi_LiCa 点云配准的内在质量。
    (3) 操作员显式传 `--write-xmacro`。
-   任一条件不满足，保留 CAD 默认值，不得强行落盘。
-4. **派生参数自动更新**：xmacro 改动后，`colcon build --packages-select sentry_dual_mid360` 自动触发 codegen（见 §8），Point-LIO 的 `extrinsic_T/R` 与 `gravity` 同步刷新。禁止绕过 codegen 直接手改 override YAML。
+   任一条件不满足，保留 xmacro 当前值，不得强行落盘。
+4. **同时产出相对与绝对测量**：精度检查文件（`task-11-precision-check.txt`）一级字段同时包含：
+   - `relative_back_in_front_xyz_rpy_rad/deg`：`T_back→front` 纯点云配准结果，**与 xmacro 值无关**。
+     以后 `front_lidar_pose` 定版 / 修订时，用这个相对值一次矩阵乘即可推出新
+     `back_lidar_pose`，不需要重录 bag / 重标。
+   - `candidate_back_lidar_pose_xyz_rpy_rad`：`front_base @ T_back→front` 的绝对 pose，
+     绑定当前 xmacro 的 `front_lidar_pose`；front 一旦修订，这个值即失效，必须重算或重标。
+5. **派生参数自动更新**：xmacro 改动后，`colcon build --packages-select sentry_dual_mid360` 自动触发 codegen（见 §8），Point-LIO 的 `extrinsic_T/R` 与 `gravity` 同步刷新。禁止绕过 codegen 直接手改 override YAML。
 
-**本地状态**：Multi_LiCa + teaserpp_python 在当前 workspace 仍未完全落地（open3d / pandas / TEASER++ 未安装）。`--check-deps` 会把这些缺失项标记为 BLOCKED 并给出修复指令；live 标定分支是 fail-stop placeholder，没有解析到真数值前绝不声称 PASS。详见 notepad T11 的安全不变量检查。
+**本地状态（2026-05-11）**：Multi_LiCa + TEASER++ + 依赖已全部落地、链路跑通。`--bootstrap` 模式首次标定已验证回写 xmacro 成功。首次 live 标定见 `logs/evidence/task-11-relative-extrinsic.md`。
 
 ---
 
@@ -371,9 +387,9 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py slam:=True use_dual_mid360:=F
 
 ## 13. Known Blockers (本地环境)
 
-本包的大量验证项需要真机 + 双雷达 + 先验 PCD，当前开发机不具备：
+本包的大量验证项需要真机 + 双雷达 + 先验 PCD，下列为已清除 / 仍 BLOCKED 的分项：
 
-- **T11（外参标定 live 分支）**：`teaserpp_python / open3d / pandas` 未安装，Multi_LiCa live 执行不通；`--check-deps` 正确报 BLOCKED，xmacro 未被触碰。
+- ~~**T11（外参标定 live 分支）**~~：**已清除（2026-05-11）**。依赖齐全，`--bootstrap` 首次标定链路跑通并成功回写 xmacro，相对外参 `T_back→front` 固化于 `logs/evidence/task-11-relative-extrinsic.md`。下一次标定等 `front_lidar_pose` 机械定版后再跑 strict 模式。
 - **T15（仿真双雷达）**：`rmu_gazebo_simulator` 的 gz→ROS 桥已切换成 dual 布局（前后 `gpu_lidar` 到 `livox/lidar_front_points` / `livox/lidar_back_points` PointCloud2，前 IMU 到 `livox/imu`，后 IMU 到 `livox/imu_back`）。仿真 dual mode 通过本包 `SimPointCloudToCustomMsgNode` 两实例把 PC2 转成 Livox `CustomMsg` 喂 `MergerNode`，Point-LIO 消费合并后的 `livox/lidar` CustomMsg。实际 Gazebo smoke 仍需在能启动仿真的机器上跑。
 - **T16 / T19 / T20 / T21**：无实车双 Mid360、无新版 dual Mid360 PCD、无运行中 nav 栈 → 实机评测、`map→odom` 抖动、merger live 剖析、实车 mapping + PCD 全部 BLOCKED。对应证据是**精确复跑手册**（见 `logs/evidence/task-21-blocker.md` 等），**不是伪造的 PASS**。
 

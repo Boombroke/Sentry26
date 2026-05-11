@@ -1,5 +1,9 @@
 # Livox Mid360 双雷达硬件同步验证指南
 
+> **先看 [CALIBRATION_QUICKSTART.md](CALIBRATION_QUICKSTART.md)**。本文档是
+> 深入 SOP：覆盖 Livox 官方三种同步模式、四步现场判定、PTP/GNSS 配接模板、
+> 硬件不同步的排查路径。只有需要诊断或部署同步链路时才需要通读。
+
 > **Maintainer**: Boombroke <boombroke@icloud.com>
 > **Scope**: 验证 `front_mid360` 与 `back_mid360` 两台 Livox Mid360 的 header.stamp 是否源自同一个硬件时钟源。
 > **Why it matters**: Point-LIO 以 `msg->header.stamp` 作为权威时间。pointcloud_merger 的 ApproximateTime 同步器默认 `slop=10ms`；若两路时间戳由各自设备的独立时钟各自分配，两台 Mid360 的 header.stamp 会线性漂移，数小时后超出 slop，匹配率断崖式下降，融合结果退化为单雷达。
