@@ -75,10 +75,10 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
   ```bash
   source /opt/ros/jazzy/setup.bash
   source install/setup.bash
-  bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh --with-merger --with-rviz
+  bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh --with-merger
   ```
   一个终端内起：livox driver + robot_state_publisher（发 xmacro 静态
   TF） + 两条 identity static TF（`map→odom`、`odom→base_footprint` 替代
   small_gicp / Point-LIO） + merger + rviz2。Ctrl-C 一次收尾全部子进程。
-  `--with-merger` / `--with-rviz` 可选；如果某些组件你已经单独起好，
-  `--no-driver` / `--no-rsp` 跳过。
+  `--with-merger` 可选；rviz **默认会起**，无屏 / ssh 环境加 `--no-rviz`
+  关掉；某些组件你已单独起好可加 `--no-driver` / `--no-rsp` 跳过。

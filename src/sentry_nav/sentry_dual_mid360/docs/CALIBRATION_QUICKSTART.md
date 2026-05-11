@@ -193,9 +193,10 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/tools/preview_real_xmacro.sh
 不想起整套 `rm_sentry_launch.py`（会卡在等 serial）：
 
 ```bash
-bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh \
-    --with-merger --with-rviz
+bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh --with-merger
 ```
+
+（rviz 默认会一起起；无屏 / ssh 环境加 `--no-rviz` 跳过。）
 
 一个终端内包办：livox driver + robot_state_publisher（xmacro 静态 TF） +
 `map→odom` / `odom→base_footprint` 两条 identity fake TF（替代 small_gicp /

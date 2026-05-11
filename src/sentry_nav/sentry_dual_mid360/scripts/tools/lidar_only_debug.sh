@@ -17,9 +17,9 @@
 #
 # Ctrl-C 会把所有子进程一起杀掉，不留僵尸。
 #
-# Flags:
+# Flags (defaults are the "一键调试" common case):
 #   --with-merger     额外起 pointcloud_merger，看合并后的 /livox/lidar
-#   --with-rviz       顺手起 rviz2（需要有 DISPLAY / X11）
+#   --no-rviz         不起 rviz2（默认会起；ssh/无屏环境/已开 rviz 时关掉）
 #   --no-driver       不起 livox driver（你在别处已经起好了）
 #   --no-rsp          不起 robot_state_publisher（同上）
 #   --help
@@ -27,14 +27,15 @@
 set -euo pipefail
 
 WITH_MERGER="no"
-WITH_RVIZ="no"
+WITH_RVIZ="yes"   # 默认起 rviz；--no-rviz 可关
 NO_DRIVER="no"
 NO_RSP="no"
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --with-merger) WITH_MERGER="yes"; shift ;;
-        --with-rviz)   WITH_RVIZ="yes"; shift ;;
+        --with-rviz)   WITH_RVIZ="yes"; shift ;;   # 兼容旧调用，等价于默认
+        --no-rviz)     WITH_RVIZ="no";  shift ;;
         --no-driver)   NO_DRIVER="yes"; shift ;;
         --no-rsp)      NO_RSP="yes"; shift ;;
         --help|-h)
