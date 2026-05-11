@@ -82,3 +82,5 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
   small_gicp / Point-LIO） + merger + rviz2。Ctrl-C 一次收尾全部子进程。
   `--with-merger` 可选；rviz **默认会起**，无屏 / ssh 环境加 `--no-rviz`
   关掉；某些组件你已单独起好可加 `--no-driver` / `--no-rsp` 跳过。
+  `--xfer-format 4`（默认）让 driver 同时发 PC2 + CustomMsg，rviz 能直接
+  显示；生产路径切回 `--xfer-format 1`。

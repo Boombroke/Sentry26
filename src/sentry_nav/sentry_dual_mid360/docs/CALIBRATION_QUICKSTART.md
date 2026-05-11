@@ -198,15 +198,16 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh --with-
 
 （rviz 默认会一起起；无屏 / ssh 环境加 `--no-rviz` 跳过。）
 
-一个终端内包办：livox driver + robot_state_publisher（xmacro 静态 TF） +
-`map→odom` / `odom→base_footprint` 两条 identity fake TF（替代 small_gicp /
-Point-LIO） + `pointcloud_merger`（发 `/livox/lidar`） + `rviz2`。Ctrl-C 一次
-把所有子进程一起收尾。
+一个终端内包办：livox driver（默认 `xfer_format=4`，同时发 CustomMsg + PointCloud2
+让 rviz 能直接订）+ robot_state_publisher（xmacro 静态 TF） + `map→odom` /
+`odom→base_footprint` 两条 identity fake TF（替代 small_gicp / Point-LIO） +
+`pointcloud_merger`（发 `/livox/lidar`） + `rviz2`。Ctrl-C 一次把所有子进程一起收尾。
 
 rviz 里：`Fixed Frame=base_footprint`（或 `front_mid360` 看原始点云），
-`Add → PointCloud2` 分别订阅 `/livox/lidar_front` / `/livox/lidar_back` /
-`/livox/lidar` 对照。融合好的输出：墙单层、柱单根、地面单平面；叠成双层
-或错位，就回到标定步骤查 xmacro。
+`Add → PointCloud2` 分别订阅 `/livox/lidar_front`（设红色）/ `/livox/lidar_back`
+（设绿色）对照；融合好的输出：红绿点叠在同一墙面、同一立柱上，不是双层/错位。
+如果 rviz 里 topic 显示灰色不能添加，说明 driver 还在 `xfer_format=1`——加
+`--xfer-format 4` 或检查 `lidar_only_debug.sh` 有没有传这个参数。
 
 ## 常见坑
 

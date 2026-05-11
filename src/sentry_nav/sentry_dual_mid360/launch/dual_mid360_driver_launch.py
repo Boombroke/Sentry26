@@ -35,7 +35,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
-from launch_ros.descriptions import ParameterFile
+from launch_ros.descriptions import ParameterFile, ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -62,6 +62,22 @@ def generate_launch_description():
         "namespace",
         default_value="",
         description="ROS namespace to apply to the Livox driver node.",
+    )
+    # livox_driver_dual_override.yaml defaults xfer_format=1 (CustomMsg only)
+    # — that is what Point-LIO and the merger consume in production. rviz2
+    # cannot render CustomMsg directly, so pass xfer_format:=4 when the goal
+    # is pure lidar debugging / calibration visualization; the driver then
+    # publishes /livox/lidar_<ip> as sensor_msgs/PointCloud2 on the AllMsg
+    # code path while still producing CustomMsg for Point-LIO.
+    # Do NOT enable this on the production real-robot bringup — the extra
+    # PC2 doubles the driver's publish CPU for no downstream benefit.
+    declare_xfer_format_cmd = DeclareLaunchArgument(
+        "xfer_format",
+        default_value="1",
+        description=(
+            "Livox xfer_format: 1 = CustomMsg only (default, production); "
+            "4 = AllMsg (CustomMsg + PointCloud2, rviz-friendly debug)."
+        ),
     )
 
     front_ip_sfx, back_ip_sfx = _load_dual_mid360_ip_suffixes()
@@ -93,11 +109,17 @@ def generate_launch_description():
         namespace=LaunchConfiguration("namespace"),
         parameters=[
             ParameterFile(livox_dual_override_file, allow_substs=True),
+            # Last parameters entry wins — this lets `xfer_format:=4` on the
+            # CLI override whatever is baked in livox_driver_dual_override.yaml.
+            # ParameterValue(value_type=int) coerces the CLI string to the
+            # integer type the driver expects; a raw str would be rejected.
+            {"xfer_format": ParameterValue(LaunchConfiguration("xfer_format"), value_type=int)},
         ],
         remappings=livox_dual_remappings,
     )
 
     return LaunchDescription([
         declare_namespace_cmd,
+        declare_xfer_format_cmd,
         start_livox_driver,
     ])
