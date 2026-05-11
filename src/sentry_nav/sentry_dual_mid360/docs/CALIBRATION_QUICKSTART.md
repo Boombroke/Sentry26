@@ -171,6 +171,22 @@ source install/setup.bash
 
 下次起实车 launch 就会用新的 `back_lidar_pose`。
 
+## 想先在 3D 里看看 xmacro 是否合理
+
+标定回写 xmacro（或者机械手动改 `front_lidar_pose` / `back_lidar_pose`）之后，
+可以不起实车就在 Gazebo 里预览一下传感器挂载是否合理：
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+bash src/sentry_nav/sentry_dual_mid360/scripts/preview_real_xmacro.sh
+```
+
+脚本做三件事：`xmacro4sdf` 展开 `wheeled_biped_real.sdf.xmacro` → 组一个空世界 →
+`gz sim` 起一个纯可视化的 Gazebo（没有 nav2/slam/Point-LIO）。关窗口即退出。
+加 `--headless` 只校验 SDF 能否加载，加 `--keep-sdf` 保留展开结果便于和上一次
+做 diff。
+
 ## 常见坑
 
 - **bag 录完只有几 KB，Count=0**：驱动没跑，或 QoS 被下游吃了。确认第 1 步的

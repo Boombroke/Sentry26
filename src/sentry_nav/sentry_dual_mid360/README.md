@@ -48,3 +48,17 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
 - [硬件同步验证 SOP](docs/SYNC_VERIFICATION.md)：Livox PTP / PPS 硬件同步四步判定与现场排查流程。
 - [PCD 迁移 SOP](docs/PCD_MIGRATION.md)：从单 Mid360 向双 Mid360 切换时先验点云的备份、重建、校验流程。
 - 外参标定入口脚本：[`scripts/calibrate_dual_mid360.sh`](scripts/calibrate_dual_mid360.sh)（`--check-deps` / `--dry-run` / `--bootstrap` / 标定流程说明均在脚本内）；依赖 `third_party/Multi_LiCa` 与标定 bag，具体先决条件见 `ARCHITECTURE.md`。
+
+## 常用小工具
+
+- **实车 xmacro 3D 预览**：改完 `wheeled_biped_real.sdf.xmacro` 的
+  `front_lidar_pose` / `back_lidar_pose` 想立刻在 3D 里看效果，跑：
+  ```bash
+  source /opt/ros/jazzy/setup.bash
+  source install/setup.bash
+  bash src/sentry_nav/sentry_dual_mid360/scripts/preview_real_xmacro.sh
+  ```
+  脚本用 `xmacro4sdf` 展开到临时 SDF，起一个空世界的 Gazebo Harmonic 把模型
+  spawn 在原点，只做可视化——不拉 nav2/slam/Point-LIO，关窗口即退出。
+  加 `--headless` 只校验 SDF 是否能加载，加 `--keep-sdf` 保留展开结果便于
+  diff 对比。
