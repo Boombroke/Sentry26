@@ -75,14 +75,15 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
   ```bash
   source /opt/ros/jazzy/setup.bash
   source install/setup.bash
-  bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh --with-pointlio
+  bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh
   ```
-  一个终端内起：livox driver + robot_state_publisher（发 xmacro 静态
-  TF） + 两条 identity static TF（`map→odom`、`odom→base_footprint`） +
-  merger + Point-LIO + rviz2。Ctrl-C 一次收尾全部子进程。
+  一个终端内起：livox driver + robot_state_publisher + identity fake TF +
+  merger（开 `publish_pc2_preview`，同时发 `/livox/lidar` CustomMsg 和
+  `/livox/lidar_pc2` PointCloud2 镜像）+ rviz2。Ctrl-C 一次收尾全部子进程。
 
-  rviz 里 Fixed Frame 手打 `map`（脚本已补 `map→camera_init` identity TF），
-  加 `PointCloud2 → /cloud_registered` 就能看到融合点云。`--with-pointlio`
-  隐含 `--with-merger`。因为 livox CustomMsg 本身 rviz 无法 render，必须
-  通过 Point-LIO 得到 PointCloud2。`--no-rviz` / `--no-driver` / `--no-rsp`
-  可按需关掉对应组件。
+  rviz 里 Fixed Frame 手打 `front_mid360`，加 `PointCloud2 → /livox/lidar_pc2`
+  就能看到融合点云——墙单层、柱单根 = 外参对。livox CustomMsg 本身 rviz
+  无法 render，PC2 镜像是专为这个调试场景设计的。`--with-pointlio` 会额外
+  起 Point-LIO 看 `/cloud_registered`，但无整车桌面摆放通常 ESKF 不收敛；
+  `--no-rviz` / `--no-driver` / `--no-rsp` / `--no-merger` 可按需跳过对应
+  组件。

@@ -11,6 +11,7 @@
 #include "message_filters/sync_policies/approximate_time.h"
 #include "message_filters/synchronizer.h"
 #include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/point_cloud2.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
 
@@ -39,6 +40,7 @@ private:
   std::string front_topic_;
   std::string back_topic_;
   std::string output_topic_;
+  std::string pc2_preview_topic_;
   std::string common_frame_;
   std::string back_frame_;
   double sync_tolerance_ms_;
@@ -47,8 +49,10 @@ private:
   int queue_size_;
   int tf_cache_retry_count_;
   int tf_cache_retry_interval_ms_;
+  bool publish_pc2_preview_;
 
   rclcpp::Publisher<CustomMsg>::SharedPtr merged_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr merged_pc2_pub_;
   message_filters::Subscriber<CustomMsg> front_sub_;
   message_filters::Subscriber<CustomMsg> back_sub_;
   std::unique_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;

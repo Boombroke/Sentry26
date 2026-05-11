@@ -18,11 +18,13 @@
 # Ctrl-C 会把所有子进程一起杀掉，不留僵尸。
 #
 # Flags (defaults are the "一键调试" common case):
-#   --with-merger     额外起 pointcloud_merger，看合并后的 /livox/lidar
-#   --with-pointlio   额外起 Point-LIO，发 /cloud_registered (PointCloud2)
-#                     rviz 能直接看的 PC2 点云。livox CustomMsg 本身 rviz
-#                     无法 render，加这个才能看到实际融合点云。隐含
-#                     --with-merger（Point-LIO 消费 /livox/lidar）
+#   --no-merger       不起 pointcloud_merger；默认会起，并开 publish_pc2_preview
+#                     同时发 /livox/lidar (CustomMsg, Point-LIO 用) 和
+#                     /livox/lidar_pc2 (PointCloud2, rviz 能直接看)
+#   --with-pointlio   额外起 Point-LIO，发 /cloud_registered 和
+#                     /aft_mapped_to_init。需要 gravity / IMU 外参正确，静态
+#                     无整车桌面摆放通常收敛不理想；看 merger 融合效果优先
+#                     用默认模式（不加这个 flag），只看 /livox/lidar_pc2 即可
 #   --no-rviz         不起 rviz2（默认会起；ssh/无屏环境/已开 rviz 时关掉）
 #   --no-driver       不起 livox driver（你在别处已经起好了）
 #   --no-rsp          不起 robot_state_publisher（同上）
@@ -30,17 +32,18 @@
 
 set -euo pipefail
 
-WITH_MERGER="no"
+WITH_MERGER="yes"  # 默认带 merger；--no-merger 关掉
 WITH_POINTLIO="no"
-WITH_RVIZ="yes"   # 默认起 rviz；--no-rviz 可关
+WITH_RVIZ="yes"    # 默认起 rviz；--no-rviz 可关
 NO_DRIVER="no"
 NO_RSP="no"
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --with-merger)   WITH_MERGER="yes"; shift ;;
+        --with-merger)   WITH_MERGER="yes"; shift ;;   # 兼容旧调用
+        --no-merger)     WITH_MERGER="no"; shift ;;
         --with-pointlio) WITH_POINTLIO="yes"; WITH_MERGER="yes"; shift ;;
-        --with-rviz)     WITH_RVIZ="yes"; shift ;;   # 兼容旧调用，等价于默认
+        --with-rviz)     WITH_RVIZ="yes"; shift ;;   # 兼容旧调用
         --no-rviz)       WITH_RVIZ="no";  shift ;;
         --no-driver)     NO_DRIVER="yes"; shift ;;
         --no-rsp)        NO_RSP="yes"; shift ;;
@@ -100,8 +103,12 @@ ros2 run tf2_ros static_transform_publisher --x 0 --y 0 --z 0 \
 PIDS+=($!)
 
 if [ "$WITH_MERGER" = "yes" ]; then
-    echo "[INFO] starting pointcloud_merger (/livox/lidar)..."
-    ros2 launch sentry_dual_mid360 pointcloud_merger_launch.py &
+    # publish_pc2_preview:=true lets the merger mirror /livox/lidar (CustomMsg)
+    # as /livox/lidar_pc2 (sensor_msgs/PointCloud2). rviz can't render
+    # CustomMsg, so this mirror is what you Add in rviz to eyeball calibration.
+    echo "[INFO] starting pointcloud_merger (/livox/lidar + /livox/lidar_pc2 mirror)..."
+    ros2 launch sentry_dual_mid360 pointcloud_merger_launch.py \
+        publish_pc2_preview:=true &
     PIDS+=($!)
 fi
 
@@ -160,36 +167,50 @@ cat <<EOF
 ================================================================
 [INFO] lidar-only debug stack up. Processes started: ${#PIDS[@]}
 
-注意: /livox/lidar_front、/livox/lidar_back、/livox/lidar 都是
-livox_ros_driver2/CustomMsg，rviz 无法 render (Add 列表里灰色无法添加)。
-
-要在 rviz 里看到实际点云，加 --with-pointlio，Point-LIO 会发
-/cloud_registered (PointCloud2)：
-
-$(if [ "$WITH_POINTLIO" = "yes" ]; then
+$(if [ "$WITH_MERGER" = "yes" ] && [ "$WITH_POINTLIO" = "no" ]; then
 cat <<'HINT'
+推荐模式: 只看 merger 的 PC2 mirror（无整车、快速验证外参）
+
 In rviz:
-  Fixed Frame: map   (手打，rviz 下拉框里可能没有，直接编辑该字段)
-  Add -> PointCloud2  -> Topic: /cloud_registered
-      (Point-LIO 的世界系融合点云，frame_id=camera_init)
+  Fixed Frame: front_mid360      (手打到 Global Options > Fixed Frame)
+  Add -> PointCloud2  -> Topic: /livox/lidar_pc2
+      merger 输出的 sensor_msgs/PointCloud2 镜像，intensity=reflectivity
       Size (Pixels): 3
-      Color Transformer: Intensity 或 AxisColor
+      Color Transformer: Intensity (推荐) 或 AxisColor
       Decay Time: 0
-  Add -> Odometry     -> Topic: /aft_mapped_to_init (Point-LIO 里程计)
-  Add -> TF           (看 map -> camera_init -> aft_mapped 是否连通)
 
 判断标定好坏:
-  看 /cloud_registered 里墙是薄一层、立柱是一根、地面单平面 = 标定OK
-  双层墙 / 错位柱 = xmacro 里 front/back_lidar_pose 还有偏差
+  - 墙体是薄的一层、立柱单根、地面单平面 = 外参对
+  - 双层墙 / 错位柱 / V 字形折角 = xmacro 里 front/back_lidar_pose 还偏
 
-注意：Point-LIO 原生发 camera_init 系，生产栈靠 odom_bridge 桥到
-lidar_odom/map；这里没起 odom_bridge，我们补了一条 identity static TF
-map -> camera_init 让 rviz 能在 map 系里显示点云。
+对比单雷达:
+  暂时把 /livox/lidar_pc2 隐藏，加 /livox/lidar_front、/livox/lidar_back
+  （如果 rviz 能订 Livox CustomMsg 就能看；通常不能），或录 bag 后离线
+  用 Multi_LiCa。
+HINT
+elif [ "$WITH_POINTLIO" = "yes" ]; then
+cat <<'HINT'
+Point-LIO 模式 (需要静态稳定几分钟让 ESKF 收敛):
+
+In rviz:
+  Fixed Frame: map   (手打, 脚本已补 map->camera_init identity TF)
+  Add -> PointCloud2  -> Topic: /cloud_registered
+      Point-LIO 的世界系融合点云，frame_id=camera_init
+      Size 3, Color Transformer: Intensity 或 AxisColor, Decay Time: 0
+  Add -> Odometry     -> Topic: /aft_mapped_to_init
+
+如果 /cloud_registered 点云在 rviz 里漂浮/穿插: ESKF 没收敛，通常是
+重力方向错。检查是否叠加了 pointlio_dual_overrides.yaml（启动日志里
+应看到 "override: ... (gravity aligned to xmacro)" 行）。
+
+无整车快速验证外参时，建议不加 --with-pointlio，直接看
+/livox/lidar_pc2 更稳定。
 HINT
 else
 cat <<'HINT'
-当前没起 Point-LIO，只能用 ros2 topic echo / ros2 topic hz 看 raw 数据。
-想在 rviz 里看到双雷达叠加效果，Ctrl-C 后重跑并加 --with-pointlio。
+当前没起 merger，只有 driver + TF。
+ros2 topic echo / ros2 topic hz 能看 raw 数据，但 rviz 里看不到点云。
+删掉 --no-merger 就能在 rviz 里看到 /livox/lidar_pc2。
 HINT
 fi)
 

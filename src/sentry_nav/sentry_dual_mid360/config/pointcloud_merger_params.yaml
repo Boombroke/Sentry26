@@ -11,3 +11,8 @@ pointcloud_merger:
     queue_size: 10
     tf_cache_retry_count: 10
     tf_cache_retry_interval_ms: 500
+    # Optional PointCloud2 copy of the merged output for rviz visualization.
+    # Production path leaves this off — Point-LIO consumes the CustomMsg
+    # output_topic. lidar_only_debug.sh flips it to true via CLI override.
+    publish_pc2_preview: false
+    pc2_preview_topic: livox/lidar_pc2

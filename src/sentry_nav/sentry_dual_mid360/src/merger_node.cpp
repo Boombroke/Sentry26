@@ -57,6 +57,8 @@ MergerNode::MergerNode(const rclcpp::NodeOptions & options)
   front_topic_ = this->declare_parameter<std::string>("front_topic", "/livox/lidar_front");
   back_topic_ = this->declare_parameter<std::string>("back_topic", "/livox/lidar_back");
   output_topic_ = this->declare_parameter<std::string>("output_topic", "/livox/lidar");
+  pc2_preview_topic_ =
+    this->declare_parameter<std::string>("pc2_preview_topic", "/livox/lidar_pc2");
   common_frame_ = this->declare_parameter<std::string>("common_frame", "front_mid360");
   back_frame_ = this->declare_parameter<std::string>("back_frame", "back_mid360");
   sync_tolerance_ms_ = this->declare_parameter<double>("sync_tolerance_ms", sync_tolerance_ms_);
@@ -68,6 +70,11 @@ MergerNode::MergerNode(const rclcpp::NodeOptions & options)
     this->declare_parameter<int>("tf_cache_retry_count", tf_cache_retry_count_);
   tf_cache_retry_interval_ms_ =
     this->declare_parameter<int>("tf_cache_retry_interval_ms", tf_cache_retry_interval_ms_);
+  // Optional PointCloud2 copy of the merged output, for rviz visualization.
+  // Off by default — production consumers (Point-LIO) want CustomMsg. Enable
+  // when debugging extrinsic calibration without the full bringup stack.
+  publish_pc2_preview_ =
+    this->declare_parameter<bool>("publish_pc2_preview", false);
   if (sync_tolerance_ms_ < 0.0) {
     RCLCPP_WARN(
       this->get_logger(), "sync_tolerance_ms=%.3f is invalid, clamping to 0.0",
@@ -96,6 +103,14 @@ MergerNode::MergerNode(const rclcpp::NodeOptions & options)
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
 
   merged_pub_ = this->create_publisher<CustomMsg>(output_topic_, rclcpp::SensorDataQoS());
+  if (publish_pc2_preview_) {
+    merged_pc2_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+      pc2_preview_topic_, rclcpp::SensorDataQoS());
+    RCLCPP_INFO(
+      this->get_logger(),
+      "publish_pc2_preview=true: mirroring merged output to %s for rviz visualization",
+      pc2_preview_topic_.c_str());
+  }
 
   rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
   qos_profile.depth = static_cast<size_t>(queue_size_);
@@ -201,6 +216,37 @@ void MergerNode::mergeCallback(
     });
   output_msg.point_num = static_cast<uint32_t>(output_msg.points.size());
   const uint32_t published_point_num = output_msg.point_num;
+
+  // Optional PC2 mirror for rviz. Build before moving output_msg away.
+  // sensor_msgs/PointCloud2 layout: x y z (float32) + intensity (float32).
+  // We map Livox 'reflectivity' (uint8) to intensity for a useful color map.
+  if (publish_pc2_preview_ && merged_pc2_pub_) {
+    auto pc2 = std::make_unique<sensor_msgs::msg::PointCloud2>();
+    pc2->header = output_msg.header;
+    pc2->height = 1;
+    pc2->width = published_point_num;
+    pc2->is_dense = true;
+    pc2->is_bigendian = false;
+    pc2->fields.resize(4);
+    const char * names[4] = {"x", "y", "z", "intensity"};
+    for (size_t i = 0; i < 4; ++i) {
+      pc2->fields[i].name = names[i];
+      pc2->fields[i].offset = static_cast<uint32_t>(i * sizeof(float));
+      pc2->fields[i].datatype = sensor_msgs::msg::PointField::FLOAT32;
+      pc2->fields[i].count = 1;
+    }
+    pc2->point_step = 4 * sizeof(float);
+    pc2->row_step = pc2->point_step * pc2->width;
+    pc2->data.resize(pc2->row_step);
+    float * out = reinterpret_cast<float *>(pc2->data.data());
+    for (const auto & pt : output_msg.points) {
+      *out++ = pt.x;
+      *out++ = pt.y;
+      *out++ = pt.z;
+      *out++ = static_cast<float>(pt.reflectivity);
+    }
+    merged_pc2_pub_->publish(std::move(pc2));
+  }
 
   merged_pub_->publish(std::move(output_msg));
   last_published_stamp_ = published_stamp;

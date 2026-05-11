@@ -16,6 +16,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -23,6 +24,7 @@ def generate_launch_description():
     namespace = LaunchConfiguration("namespace")
     use_sim_time = LaunchConfiguration("use_sim_time")
     params_file = LaunchConfiguration("params_file")
+    publish_pc2_preview = LaunchConfiguration("publish_pc2_preview")
 
     default_params_file = PathJoinSubstitution(
         [
@@ -37,6 +39,18 @@ def generate_launch_description():
             DeclareLaunchArgument("namespace", default_value=""),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("params_file", default_value=default_params_file),
+            # Off by default (production path); rviz debug paths pass True to
+            # get a sensor_msgs/PointCloud2 mirror of the merged CustomMsg.
+            DeclareLaunchArgument(
+                "publish_pc2_preview",
+                default_value="false",
+                description=(
+                    "Also publish the merged cloud as sensor_msgs/PointCloud2 "
+                    "on /livox/lidar_pc2 so rviz can visualize it. Off by "
+                    "default since the production consumer (Point-LIO) reads "
+                    "CustomMsg only."
+                ),
+            ),
             Node(
                 package="sentry_dual_mid360",
                 executable="merger_node",
@@ -45,7 +59,13 @@ def generate_launch_description():
                 output="screen",
                 respawn=True,
                 respawn_delay=2.0,
-                parameters=[params_file, {"use_sim_time": use_sim_time}],
+                parameters=[
+                    params_file,
+                    {"use_sim_time": use_sim_time},
+                    # ROS params "last wins" — this overrides the yaml default.
+                    {"publish_pc2_preview": ParameterValue(
+                        publish_pc2_preview, value_type=bool)},
+                ],
             ),
         ]
     )

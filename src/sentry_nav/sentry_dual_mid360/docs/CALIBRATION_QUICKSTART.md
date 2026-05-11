@@ -193,29 +193,30 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/tools/preview_real_xmacro.sh
 不想起整套 `rm_sentry_launch.py`（会卡在等 serial）：
 
 ```bash
-bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh --with-pointlio
+bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh
 ```
 
-（`--with-pointlio` 隐含 `--with-merger`；rviz 默认会一起起；无屏 / ssh 环境
-加 `--no-rviz` 跳过。）
+（`merger` 和 `rviz` 默认会一起起；无屏 / ssh 环境加 `--no-rviz` 跳过。）
 
-为什么要加 `--with-pointlio`：`/livox/lidar_front` / `_back` / `/livox/lidar`
-都是 `livox_ros_driver2/CustomMsg`，rviz 无法 render（Add 列表里灰色不能选）。
-Point-LIO 消费 CustomMsg，产出 `/cloud_registered`（`sensor_msgs/PointCloud2`）
-就是 rviz 能看的融合点云。
+为什么不直接看 `/livox/lidar_front` / `_back` / `/livox/lidar`：它们是
+`livox_ros_driver2/CustomMsg`，rviz 不能 render（Add 列表里灰色不能选）。
+脚本起的 `pointcloud_merger` 会同时发 `/livox/lidar_pc2`
+（`sensor_msgs/PointCloud2` 镜像），rviz 就能直接看。
 
 一个终端内包办：livox driver + robot_state_publisher（xmacro 静态 TF） +
-`map→odom` / `odom→base_footprint` 两条 identity fake TF + `pointcloud_merger`
-+ Point-LIO + `rviz2`。Ctrl-C 一次把所有子进程一起收尾。
+`map→odom` / `odom→base_footprint` identity fake TF + `pointcloud_merger`
+（同时发 CustomMsg 和 PC2 副本）+ `rviz2`。Ctrl-C 一次把所有子进程一起收尾。
 
 rviz 里：
-- **Fixed Frame**: 手打 `map`（直接编辑 Global Options 第一行，下拉框可能
-  没有；我们内部补了 `map→camera_init` 的 static TF 让 rviz 能显示）
-- `Add → PointCloud2 → /cloud_registered`（**融合后的点云**，frame_id
-  是 `camera_init`，Point-LIO 原生输出）
-- Size 调 3、Color Transformer 选 `Intensity` 或 `AxisColor`
+- **Fixed Frame**: 手打 `front_mid360`（直接编辑 Global Options 第一行）
+- `Add → PointCloud2 → /livox/lidar_pc2`（**merger 输出的 PC2 镜像**）
+- Size 调 3、Color Transformer 选 `Intensity` 或 `AxisColor`、Decay Time `0`
 - 看墙是薄一层、立柱是一根、地面单平面 → 标定 OK
-- 双层墙 / 错位柱 / 倾斜 → 回标定查 xmacro
+- 双层墙 / 错位柱 / V 字形 → 回标定查 xmacro
+
+如果你也想看 Point-LIO 的 `/cloud_registered`（有 IMU 驱动的世界系点云），
+加 `--with-pointlio`。但无整车桌面摆放下 Point-LIO ESKF 经常不收敛，
+快速验证外参推荐用上面的默认模式。
 
 ## 常见坑
 
