@@ -400,6 +400,23 @@ run_dependency_audit() {
     fi
 }
 
+is_rosbag2_root() {
+    # A rosbag2 root has (a) metadata.yaml whose top-level key is
+    # `rosbag2_bagfile_information` AND (b) at least one .mcap or .db3 file
+    # alongside it. record_calib_bag.sh wraps the rosbag2 root in an outer
+    # directory whose metadata.yaml is its own operator log, so we explicitly
+    # check both the header AND a data file to avoid false positives.
+    local candidate="$1"
+    [ -d "${candidate}" ] || return 1
+    [ -f "${candidate}/metadata.yaml" ] || return 1
+    # metadata.yaml starts with `rosbag2_bagfile_information:` for native bags.
+    head -n 1 "${candidate}/metadata.yaml" 2>/dev/null \
+        | grep -q '^rosbag2_bagfile_information:' || return 1
+    compgen -G "${candidate}/*.mcap" >/dev/null 2>&1 && return 0
+    compgen -G "${candidate}/*.db3"  >/dev/null 2>&1 && return 0
+    return 1
+}
+
 check_bag_path() {
     if [ -z "${BAG_PATH}" ]; then
         warn "No --bag argument provided for calibrate mode."
@@ -415,10 +432,34 @@ check_bag_path() {
         return 1
     fi
 
-    if [ ! -f "${BAG_PATH}/metadata.yaml" ]; then
-        warn "Bag ${BAG_PATH} lacks metadata.yaml; run 'ros2 bag reindex' before calibrating."
-        BLOCKER_REASONS+=("bag ${BAG_PATH} lacks metadata.yaml; run 'ros2 bag reindex ${BAG_PATH}' first")
-        return 1
+    # record_calib_bag.sh emits <outer>/<outer>.bag/<mcap>, where the outer
+    # directory's metadata.yaml is the operator note (not the rosbag2
+    # metadata). If the given --bag is that wrapper, descend into the real
+    # rosbag2 root so downstream rosbag2_py / extract calls see a valid
+    # storage directory.
+    if ! is_rosbag2_root "${BAG_PATH}"; then
+        local nested=""
+        local candidate
+        for candidate in "${BAG_PATH}"/*/; do
+            [ -d "${candidate}" ] || continue
+            if is_rosbag2_root "${candidate%/}"; then
+                if [ -n "${nested}" ]; then
+                    warn "Multiple rosbag2 roots found under ${BAG_PATH}; refusing to guess."
+                    BLOCKER_REASONS+=("multiple rosbag2 roots under ${BAG_PATH}; pass --bag pointing at a single rosbag2 directory")
+                    return 1
+                fi
+                nested="${candidate%/}"
+            fi
+        done
+        if [ -n "${nested}" ]; then
+            info "  --bag looks like a record_calib_bag.sh wrapper; descending to: ${nested}"
+            BAG_PATH="${nested}"
+        else
+            warn "Bag ${BAG_PATH} is neither a rosbag2 root nor a wrapper containing one."
+            BLOCKER_REASONS+=("bag ${BAG_PATH} has no rosbag2 metadata.yaml and no nested rosbag2 directory")
+            MISSING_DEPS+=("valid rosbag2 directory at ${BAG_PATH} (expected metadata.yaml with rosbag2_bagfile_information and a .mcap/.db3 file)")
+            return 1
+        fi
     fi
 
     info "Bag structure looks valid: ${BAG_PATH}"
