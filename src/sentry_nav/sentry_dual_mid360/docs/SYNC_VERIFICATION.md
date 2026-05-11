@@ -175,7 +175,9 @@ ros2 run sentry_dual_mid360 verify_dual_mid360_sync.py \
 - `median_diff_ms < 1.0`
 - `max_diff_ms   < 3.0`
 - `stddev_ms     < 0.5`
-- 60 秒 drift slope 绝对值 < 0.5 ms/min 且 drift range < 0.5 ms
+- 60 秒 drift slope 绝对值 < 0.5 ms/min 且 monotonic drift（= `|slope| * duration`）< 0.5 ms
+
+> 注意：这里的 monotonic drift 是"单调漂移量"，即斜率乘以观察时长，反映两台雷达时钟真的在拉开的那部分。早期版本用 `max(diff) - min(diff)` 的峰峰值（peak-to-peak），它混入了随机抖动且会随样本数变大，不适合做阈值判决。当前报告把 peak-to-peak 保留为信息项展示。
 
 **含义**：两雷达共享同一硬件时钟源，header.stamp 抖动基本来自 USB/以太网栈与 ROS 时间戳派发。
 
@@ -189,7 +191,7 @@ ros2 run sentry_dual_mid360 verify_dual_mid360_sync.py \
 **判据**（任一满足，且 `median_diff` 起始时仍然较小）：
 
 - 60 秒内 drift slope 绝对值 ≥ 0.5 ms/min。
-- drift range ≥ 0.5 ms。
+- monotonic drift（`|slope| * duration`）≥ 0.5 ms。
 - median 起步 < 5 ms，但趋势明显向一侧偏。
 
 **含义**：两雷达挂着各自的 RTC，同步线只是控制线或只做"软同步"，没有真正的硬件时钟共用。一开机差得不多，越跑越远。
@@ -350,3 +352,4 @@ pmc -u -b 0 'GET CURRENT_DATA_SET'
 ## 10. 变更记录
 
 - 2026-05-06：初版。覆盖官方三种同步模式、四步验证流程、三分支判据、PTP 与 GNSS 两条修复路径、绝对禁止事项。
+- 2026-05-11：把 drift_range 阈值由峰峰值改为单调漂移量（`|slope| * duration`），消除大样本下 Gaussian 抖动冒充漂移的误判；peak-to-peak 仅保留为信息项。

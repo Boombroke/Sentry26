@@ -96,7 +96,14 @@ class Statistics:
     max_diff_ms: float = 0.0
     stddev_ms: float = 0.0
     drift_slope_ms_per_min: float = 0.0
+    # Monotonic drift magnitude over the observation window:
+    # |slope * duration|. This is the component actually drifting the two
+    # clocks apart, independent of per-sample jitter. Peak-to-peak (max-min)
+    # is kept separately for reporting because it mixes drift with jitter
+    # and scales up with sample count under a finite stddev.
     drift_range_ms: float = 0.0
+    peak_to_peak_ms: float = 0.0
+    observation_duration_s: float = 0.0
     per_sample_ms: List[float] = field(default_factory=list)
 
 
@@ -150,6 +157,9 @@ def compute_statistics(samples: Sequence[PairedSample]) -> Statistics:
     else:
         stddev = 0.0
 
+    duration_s = rel_s[-1] - rel_s[0]
+    monotonic_drift_ms = abs(slope_ms_per_sec) * duration_s
+
     return Statistics(
         sample_count=len(diffs_ms),
         median_diff_ms=statistics.median(diffs_ms),
@@ -159,7 +169,9 @@ def compute_statistics(samples: Sequence[PairedSample]) -> Statistics:
         max_diff_ms=max(diffs_ms),
         stddev_ms=stddev,
         drift_slope_ms_per_min=slope_ms_per_min,
-        drift_range_ms=max(diffs_ms) - min(diffs_ms),
+        drift_range_ms=monotonic_drift_ms,
+        peak_to_peak_ms=max(diffs_ms) - min(diffs_ms),
+        observation_duration_s=duration_s,
         per_sample_ms=list(diffs_ms),
     )
 
@@ -216,7 +228,8 @@ def classify(stats: Statistics, thresholds: Thresholds) -> Tuple[str, List[str]]
         hw_ok = False
     if stats.drift_range_ms >= thresholds.hardware_drift_range_ms:
         reasons.append(
-            f"drift range={stats.drift_range_ms:.3f}ms >= "
+            f"monotonic drift={stats.drift_range_ms:.3f}ms over "
+            f"{stats.observation_duration_s:.1f}s >= "
             f"{thresholds.hardware_drift_range_ms}ms"
         )
         hw_ok = False
@@ -368,7 +381,9 @@ def _format_report(report: VerdictReport) -> str:
         f" max |diff|      : {s.max_abs_diff_ms:.3f} ms",
         f" stddev          : {s.stddev_ms:.3f} ms",
         f" drift slope     : {s.drift_slope_ms_per_min:+.3f} ms/min",
-        f" drift range     : {s.drift_range_ms:.3f} ms",
+        f" monotonic drift : {s.drift_range_ms:.3f} ms "
+        f"over {s.observation_duration_s:.1f} s",
+        f" peak-to-peak    : {s.peak_to_peak_ms:.3f} ms (info only)",
         "--------------------------------------------------",
         f" thresholds (HARDWARE_SYNC requires ALL):",
         f"   |median|      < {report.thresholds.hardware_median_ms} ms",
@@ -376,8 +391,9 @@ def _format_report(report: VerdictReport) -> str:
         f"   stddev        < {report.thresholds.hardware_stddev_ms} ms",
         f"   |slope|       < "
         f"{report.thresholds.hardware_drift_slope_ms_per_min} ms/min",
-        f"   drift range   < "
-        f"{report.thresholds.hardware_drift_range_ms} ms",
+        f"   monotonic drift < "
+        f"{report.thresholds.hardware_drift_range_ms} ms "
+        f"(|slope| * duration)",
         f" NOT_SYNCED when |median| >= "
         f"{report.thresholds.not_synced_median_ms} ms",
         "--------------------------------------------------",
