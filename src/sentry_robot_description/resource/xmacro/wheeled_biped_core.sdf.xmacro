@@ -67,6 +67,77 @@
         </link>
     </xmacro_define_block>
 
+    <!-- Visual-only leg link between chassis bottom and each driving wheel.
+         Purpose: make the wheel-leg geometry obvious in rviz. Placeholder single
+         cylinder; swap for the real four-bar suspension mesh when that asset
+         arrives. Keep collision OFF so these links never interact with the
+         ground in physics, and keep inertial near-zero so KDL tolerates them. -->
+    <xmacro_define_block name="wheeled_biped_leg_visuals">
+        <joint name="left_leg_joint" type="fixed">
+            <pose relative_to="chassis">0 0.325 -0.11 0 0 0</pose>
+            <parent>chassis</parent>
+            <child>left_leg</child>
+        </joint>
+        <link name="left_leg">
+            <pose relative_to="left_leg_joint">0 0 0 0 0 0</pose>
+            <inertial>
+                <mass>0.05</mass>
+                <inertia>
+                    <ixx>1e-5</ixx>
+                    <iyy>1e-5</iyy>
+                    <izz>1e-5</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
+                </inertia>
+            </inertial>
+            <visual name="visual">
+                <geometry>
+                    <cylinder>
+                        <radius>0.025</radius>
+                        <length>0.22</length>
+                    </cylinder>
+                </geometry>
+                <material>
+                    <ambient>0.25 0.25 0.3 1</ambient>
+                    <diffuse>0.35 0.35 0.4 1</diffuse>
+                </material>
+            </visual>
+        </link>
+
+        <joint name="right_leg_joint" type="fixed">
+            <pose relative_to="chassis">0 -0.325 -0.11 0 0 0</pose>
+            <parent>chassis</parent>
+            <child>right_leg</child>
+        </joint>
+        <link name="right_leg">
+            <pose relative_to="right_leg_joint">0 0 0 0 0 0</pose>
+            <inertial>
+                <mass>0.05</mass>
+                <inertia>
+                    <ixx>1e-5</ixx>
+                    <iyy>1e-5</iyy>
+                    <izz>1e-5</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
+                </inertia>
+            </inertial>
+            <visual name="visual">
+                <geometry>
+                    <cylinder>
+                        <radius>0.025</radius>
+                        <length>0.22</length>
+                    </cylinder>
+                </geometry>
+                <material>
+                    <ambient>0.25 0.25 0.3 1</ambient>
+                    <diffuse>0.35 0.35 0.4 1</diffuse>
+                </material>
+            </visual>
+        </link>
+    </xmacro_define_block>
+
     <!-- Gazebo-only caster support. The real robot has an active wheel-leg balancer instead. -->
     <xmacro_define_block name="wheeled_biped_casters">
         <joint name="front_caster_joint" type="fixed">
@@ -268,7 +339,7 @@
         use_fixed_gimbal=True keeps chassis -> gimbal_yaw -> gimbal_pitch as static TF.
         The real robot currently uses this mode; Gazebo keeps revolute joints.
     -->
-    <xmacro_define_block name="wheeled_biped_model" params="model_name chassis_length chassis_width chassis_z primary_lidar_pose secondary_lidar_pose use_sim_sensors use_real_sensors use_casters use_gazebo_plugins use_fixed_gimbal">
+    <xmacro_define_block name="wheeled_biped_model" params="model_name chassis_length chassis_width chassis_z primary_lidar_pose secondary_lidar_pose use_sim_sensors use_real_sensors use_casters use_gazebo_plugins use_fixed_gimbal use_leg_visuals">
         <model name="${model_name}" canonical_link="chassis" placement_frame="base_footprint">
             <pose>0 0 0 0 0 0</pose>
 
@@ -461,6 +532,8 @@
                     </surface>
                 </collision>
             </link>
+
+            <xmacro_block condition="${use_leg_visuals}" name="wheeled_biped_leg_visuals" />
 
             <xmacro_block condition="${use_casters}" name="wheeled_biped_casters" />
 

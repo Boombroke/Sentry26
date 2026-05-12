@@ -30,5 +30,6 @@
         use_casters="True"
         use_gazebo_plugins="True"
         use_fixed_gimbal="False"
+        use_leg_visuals="False"
     />
 </sdf>
