@@ -27,7 +27,7 @@ namespace sentry_dual_mid360
 
 // Convert Gazebo gpu_lidar PointCloud2 into Livox CustomMsg so that the sim
 // dual-Mid360 chain can reuse the real-robot MergerNode and keep Point-LIO as a
-// black box. One converter node per simulated Mid360 (front/back).
+// black box. One converter node per simulated Mid360 (primary/secondary).
 class SimPointCloudToCustomMsgNode : public rclcpp::Node
 {
 public:

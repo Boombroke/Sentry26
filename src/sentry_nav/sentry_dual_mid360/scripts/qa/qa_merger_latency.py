@@ -5,7 +5,7 @@ The synthetic mode intentionally mirrors the hot operations in
 src/merger_node.cpp without importing ROS 2 or Livox Python packages:
 
 * front/back native-frame min-distance filtering (isBeyondMinDistance)
-* back_mid360 -> front_mid360 affine transform
+* secondary_mid360 -> primary_mid360 affine transform
 * per-message offset_time rebasing and uint32 overflow drop checks
 * stable sort by offset_time before publishing
 
@@ -67,8 +67,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Profile dual Mid360 merger hot operations with synthetic CustomMsg-like data."
     )
-    parser.add_argument("--front-points", type=int, default=2000, help="Synthetic front CustomMsg point count.")
-    parser.add_argument("--back-points", type=int, default=2000, help="Synthetic back CustomMsg point count.")
+    parser.add_argument("--primary-points", type=int, default=2000, help="Synthetic primary CustomMsg point count.")
+    parser.add_argument("--secondary-points", type=int, default=2000, help="Synthetic secondary CustomMsg point count.")
     parser.add_argument("--iterations", type=int, default=160, help="Measured synthetic iterations.")
     parser.add_argument("--warmup-iterations", type=int, default=10, help="Untimed warmup iterations.")
     parser.add_argument("--seed", type=int, default=20260506, help="Fixed synthetic data seed.")
@@ -84,17 +84,17 @@ def parse_args() -> argparse.Namespace:
         "--stamp-diff-ms",
         type=float,
         default=0.4,
-        help="Synthetic back stamp delay relative to front; used for offset rebasing.",
+        help="Synthetic secondary stamp delay relative to front; used for offset rebasing.",
     )
     parser.add_argument(
-        "--back-translation",
+        "--secondary-translation",
         type=float,
         nargs=3,
         default=(-0.10, 0.0, 0.0),
         metavar=("X", "Y", "Z"),
-        help="Synthetic back->front translation in meters.",
+        help="Synthetic secondary->front translation in meters.",
     )
-    parser.add_argument("--back-yaw-rad", type=float, default=math.pi, help="Synthetic back->front yaw.")
+    parser.add_argument("--secondary-yaw-rad", type=float, default=math.pi, help="Synthetic secondary->front yaw.")
     parser.add_argument("--max-median-ms", type=float, default=2.0, help="Median latency threshold.")
     parser.add_argument("--max-p99-ms", type=float, default=5.0, help="P99 latency threshold.")
     parser.add_argument("--live-pid", type=int, help="Inspect a live merger_node PID via /proc instead of synthetic mode.")
@@ -104,15 +104,15 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_args(args: argparse.Namespace) -> None:
-    if args.front_points < 0 or args.back_points < 0:
+    if args.primary_points < 0 or args.secondary_points < 0:
         raise ValueError("point counts must be non-negative")
-    if args.front_points + args.back_points <= 0:
+    if args.primary_points + args.secondary_points <= 0:
         raise ValueError("at least one synthetic point is required")
     if args.iterations <= 0:
         raise ValueError("--iterations must be positive")
     if args.warmup_iterations < 0:
         raise ValueError("--warmup-iterations must be non-negative")
-    if args.min_dist_front_m < 0.0 or args.min_dist_back_m < 0.0:
+    if args.min_dist_primary_m < 0.0 or args.min_dist_secondary_m < 0.0:
         raise ValueError("min-distance thresholds must be non-negative")
     if not 0.0 <= args.close_point_ratio <= 1.0:
         raise ValueError("--close-point-ratio must be in [0, 1]")
@@ -162,8 +162,8 @@ def build_input_pool(args: argparse.Namespace) -> list[tuple[list[Point], list[P
     rng = random.Random(args.seed)
     return [
         (
-            generate_points(args.front_points, rng, args.min_dist_front_m, args.close_point_ratio),
-            generate_points(args.back_points, rng, args.min_dist_back_m, args.close_point_ratio),
+            generate_points(args.primary_points, rng, args.min_dist_primary_m, args.close_point_ratio),
+            generate_points(args.secondary_points, rng, args.min_dist_secondary_m, args.close_point_ratio),
         )
         for _ in range(args.iterations)
     ]
@@ -183,11 +183,11 @@ def append_with_rebased_offset(
 
 
 def merge_pair(
-    front_points: list[Point],
-    back_points: list[Point],
+    primary_points: list[Point],
+    secondary_points: list[Point],
     transform: Transform,
-    min_dist_front_sq: float,
-    min_dist_back_sq: float,
+    min_dist_primary_sq: float,
+    min_dist_secondary_sq: float,
     front_offset_rebase_ns: int,
     back_offset_rebase_ns: int,
 ) -> tuple[list[tuple[int, int, float, float, float, int, int, int]], MergeStats]:
@@ -198,18 +198,18 @@ def merge_pair(
     drop_back_offset_overflow = 0
     stable_index = 0
 
-    for point in front_points:
+    for point in primary_points:
         x, y, z = point[0], point[1], point[2]
-        if x * x + y * y + z * z < min_dist_front_sq:
+        if x * x + y * y + z * z < min_dist_primary_sq:
             drop_front_min_dist += 1
             continue
         if not append_with_rebased_offset(merged, point, front_offset_rebase_ns, stable_index):
             drop_front_offset_overflow += 1
         stable_index += 1
 
-    for point in back_points:
+    for point in secondary_points:
         x, y, z = point[0], point[1], point[2]
-        if x * x + y * y + z * z < min_dist_back_sq:
+        if x * x + y * y + z * z < min_dist_secondary_sq:
             drop_back_min_dist += 1
             continue
         tx = transform.r00 * x + transform.r01 * y + transform.r02 * z + transform.tx
@@ -264,8 +264,8 @@ def summarize(latency_ms: list[float]) -> LatencySummary:
 def run_synthetic(args: argparse.Namespace) -> int:
     pool = build_input_pool(args)
     transform = make_yaw_transform(args.back_yaw_rad, args.back_translation)
-    min_dist_front_sq = args.min_dist_front_m * args.min_dist_front_m
-    min_dist_back_sq = args.min_dist_back_m * args.min_dist_back_m
+    min_dist_primary_sq = args.min_dist_primary_m * args.min_dist_primary_m
+    min_dist_secondary_sq = args.min_dist_secondary_m * args.min_dist_secondary_m
     front_offset_rebase_ns = 0
     back_offset_rebase_ns = int(round(args.stamp_diff_ms * NSEC_PER_MSEC))
 
@@ -274,8 +274,8 @@ def run_synthetic(args: argparse.Namespace) -> int:
             pool[index % len(pool)][0],
             pool[index % len(pool)][1],
             transform,
-            min_dist_front_sq,
-            min_dist_back_sq,
+            min_dist_primary_sq,
+            min_dist_secondary_sq,
             front_offset_rebase_ns,
             back_offset_rebase_ns,
         )
@@ -288,14 +288,14 @@ def run_synthetic(args: argparse.Namespace) -> int:
     total_drop_front_overflow = 0
     total_drop_back_overflow = 0
 
-    for index, (front_points, back_points) in enumerate(pool):
+    for index, (primary_points, secondary_points) in enumerate(pool):
         start_ns = time.perf_counter_ns()
         merged, stats = merge_pair(
-            front_points,
-            back_points,
+            primary_points,
+            secondary_points,
             transform,
-            min_dist_front_sq,
-            min_dist_back_sq,
+            min_dist_primary_sq,
+            min_dist_secondary_sq,
             front_offset_rebase_ns,
             back_offset_rebase_ns,
         )
@@ -316,10 +316,10 @@ def run_synthetic(args: argparse.Namespace) -> int:
     print(f"python: {sys.version.split()[0]}")
     print(f"platform: {os.uname().sysname} {os.uname().release} {os.uname().machine}")
     print(f"seed: {args.seed}")
-    print(f"front_points: {args.front_points}")
-    print(f"back_points: {args.back_points}")
-    print(f"min_dist_front_m: {args.min_dist_front_m:.6f}")
-    print(f"min_dist_back_m: {args.min_dist_back_m:.6f}")
+    print(f"primary_points: {args.primary_points}")
+    print(f"secondary_points: {args.secondary_points}")
+    print(f"min_dist_primary_m: {args.min_dist_primary_m:.6f}")
+    print(f"min_dist_secondary_m: {args.min_dist_secondary_m:.6f}")
     print(f"stamp_diff_ms_for_rebase: {args.stamp_diff_ms:.6f}")
     print("operations: native min-distance filters, affine back transform, offset rebasing, uint32 overflow drops, stable sort by offset_time")
     print(f"samples: {summary.samples}")

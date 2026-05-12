@@ -4,8 +4,8 @@
 本包是 Sentry26 机器人双 Mid360 激光雷达融合与相关资产的统一存放地，集中维护点云融合节点、双雷达 xmacro / 配置 / launch 资产，以及 Point-LIO 派生参数生成脚本。
 
 ## 包含模块
-- **pointcloud_merger**: 将前 / 后 Mid360 的 Livox CustomMsg 点云融合到 `front_mid360` 系，保留逐点时间戳、反射率、tag、line 等 Point-LIO 需要的字段。
-- **sim_pointcloud_to_custommsg_node**: 仿真侧 bridge。把 Gazebo gpu_lidar 发布的 `sensor_msgs/PointCloud2` 转换成 `livox_ros_driver2/msg/CustomMsg`，使 `MergerNode` 和 Point-LIO 在仿真与实车复用同一条 CustomMsg 链路（Point-LIO 源码零改动）。`launch/sim_custommsg_bridge_launch.py` 启动前后两实例，对应 `livox/lidar_front_points` / `livox/lidar_back_points` → `livox/lidar_front` / `livox/lidar_back`。
+- **pointcloud_merger**: 将前 / 后 Mid360 的 Livox CustomMsg 点云融合到 `primary_mid360` 系，保留逐点时间戳、反射率、tag、line 等 Point-LIO 需要的字段。
+- **sim_pointcloud_to_custommsg_node**: 仿真侧 bridge。把 Gazebo gpu_lidar 发布的 `sensor_msgs/PointCloud2` 转换成 `livox_ros_driver2/msg/CustomMsg`，使 `MergerNode` 和 Point-LIO 在仿真与实车复用同一条 CustomMsg 链路（Point-LIO 源码零改动）。`launch/sim_custommsg_bridge_launch.py` 启动前后两实例，对应 `livox/lidar_primary_points` / `livox/lidar_secondary_points` → `livox/lidar_primary` / `livox/lidar_secondary`。
 - **双 Mid360 资产**: `urdf/` 提供后雷达与 IMU TF xmacro fragment，`config/` 提供双雷达驱动与 merger 参数（相对话题命名，namespace 安全），`launch/` 提供 merger 与仿真 bridge 启动入口。
 - **Point-LIO override codegen**: 构建时从 xmacro 单源派生 `mapping.gravity`、`gravity_init`、`extrinsic_T` 和 `extrinsic_R`，供后续 dual launch 覆盖 Point-LIO 参数。
 
@@ -41,7 +41,7 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
 
 生成器只读取两个 xmacro 输入：
 
-- `src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro` 的 `front_lidar_pose`（Layer A：前雷达安装位姿，用于派生 gravity）。
+- `src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro` 的 `primary_lidar_pose`（Layer A：前雷达安装位姿，用于派生 gravity）。
 - `src/sentry_nav/sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro` 的 IMU factory pose（Layer B：用于派生 `extrinsic_T/R`）。
 
 缺失或非法输入会直接失败，不会静默回退到默认值，也不会读取环境变量、JSON、已有 YAML 或文档作为第二真相源。修改外参时请先改 xmacro，再重新构建本包。
@@ -59,7 +59,7 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
 ## 常用小工具
 
 - **实车 xmacro 3D 预览**：改完 `wheeled_biped_real.sdf.xmacro` 的
-  `front_lidar_pose` / `back_lidar_pose` 想立刻在 3D 里看效果，跑：
+  `primary_lidar_pose` / `secondary_lidar_pose` 想立刻在 3D 里看效果，跑：
   ```bash
   source /opt/ros/jazzy/setup.bash
   source install/setup.bash
@@ -81,7 +81,7 @@ share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml
   merger（开 `publish_pc2_preview`，同时发 `/livox/lidar` CustomMsg 和
   `/livox/lidar_pc2` PointCloud2 镜像）+ rviz2。Ctrl-C 一次收尾全部子进程。
 
-  rviz 里 Fixed Frame 手打 `front_mid360`，加 `PointCloud2 → /livox/lidar_pc2`
+  rviz 里 Fixed Frame 手打 `primary_mid360`，加 `PointCloud2 → /livox/lidar_pc2`
   就能看到融合点云——墙单层、柱单根 = 外参对。livox CustomMsg 本身 rviz
   无法 render，PC2 镜像是专为这个调试场景设计的。整车级验证（Point-LIO
   收敛、回环定位精度等）请走 `ros2 launch sentry_nav_bringup rm_sentry_launch.py`。

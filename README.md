@@ -12,10 +12,10 @@ RoboMaster 2026 赛季哨兵机器人自主导航系统。基于 ROS2 Jazzy + Na
 ```mermaid
 graph LR
     subgraph 感知层
-        FL[Livox Mid360 #1<br/>frame=front_mid360<br/>挂 gimbal_pitch] --> MG[pointcloud_merger<br/>外部前融合 CustomMsg]
-        BL[Livox Mid360 #2<br/>frame=back_mid360<br/>挂 gimbal_pitch, X 轴镜像] --> MG
+        FL[Livox Mid360 #1<br/>frame=primary_mid360<br/>挂 gimbal_pitch] --> MG[pointcloud_merger<br/>外部前融合 CustomMsg]
+        BL[Livox Mid360 #2<br/>frame=secondary_mid360<br/>挂 gimbal_pitch, X 轴镜像] --> MG
         MG --> PL[Point-LIO<br/>激光惯性里程计]
-        IMU[BMI088 IMU<br/>front_mid360 IMU 喂 LIO] --> PL
+        IMU[BMI088 IMU<br/>primary_mid360 IMU 喂 LIO] --> PL
         MG --> TA[terrain_analysis<br/>地形分析]
     end
 
@@ -61,13 +61,13 @@ controller_server (base_footprint 系, TwistStamped)
 ### TF 树（双 Mid360）
 
 ```
-map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch ┬─ front_mid360 → front_mid360_imu
-                                                                  └─ back_mid360  → back_mid360_imu
+map → odom → base_footprint → chassis → gimbal_yaw → gimbal_pitch ┬─ primary_mid360 → front_mid360_imu
+                                                                  └─ secondary_mid360  → back_mid360_imu
 ```
 
 - `base_footprint` 为 Nav2 的 `robot_base_frame`（业界惯例，水平 2D 投影点）。
 - 当前实车 profile 中，`gimbal_yaw → gimbal_pitch` 与底盘是静态 TF；仿真 profile 仍保留动态云台关节。
-- 两颗 Mid360（frame `front_mid360` / `back_mid360`）均挂在 `gimbal_pitch` 上，**绕 X 轴镜像安装**（roll 相反，无 yaw offset，不是前后 180° 反装）。实车当前 `front_lidar_pose="0 0.102 0.3 -0.733 0.0 0.0"`、`back_lidar_pose="0 -0.102 0.3 0.733 0.0 0.0"`。`front_mid360` 的 IMU 进入 Point-LIO，`back_mid360` 的 IMU 仅作诊断不进 LIO。odom_bridge 通过 TF 查询统一消化 LiDAR 外参。名字里 `front/back` 仅是历史标识符。
+- 两颗 Mid360（frame `primary_mid360` / `secondary_mid360`）均挂在 `gimbal_pitch` 上，**绕 X 轴镜像安装**（roll 相反，无 yaw offset，不是前后 180° 反装）。实车当前 `primary_lidar_pose="0 0.102 0.3 -0.733 0.0 0.0"`、`secondary_lidar_pose="0 -0.102 0.3 0.733 0.0 0.0"`。`primary_mid360` 的 IMU 进入 Point-LIO，`secondary_mid360` 的 IMU 仅作诊断不进 LIO。odom_bridge 通过 TF 查询统一消化 LiDAR 外参。名字里 `front/back` 仅是历史标识符。
 
 ## 功能特性
 
@@ -199,7 +199,7 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
   - imu 包二进制布局从 11B → 27B
   - 电控端需用新版 `src/serial/serial_driver/example/navigation_auto.h` 重编固件
 
-- 实车 TF 与传感器安装外参在 `src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro` 调整；当前实车默认是固定云台 + 两颗 Mid360 绕 X 轴镜像安装（`front_lidar_pose="0 0.102 0.3 -0.733 0.0 0.0"`、`back_lidar_pose="0 -0.102 0.3 0.733 0.0 0.0"`；两组 pose 只差 y 分量和 roll 符号，**不带 yaw=π**）。仿真专用底盘缩小、caster、DiffDrive 和仿真下俯角只在 `wheeled_biped_sim.sdf.xmacro` 调整；共享轮距/轮径/云台拓扑位于 `wheeled_biped_core.sdf.xmacro`。双 Mid360 相关 xmacro fragment、merger 节点与 Point-LIO override codegen 集中在 `src/sentry_nav/sentry_dual_mid360/`。`back_lidar_pose` 经机械调整后须用 `scripts/calib/calibrate_dual_mid360.sh --bootstrap --write-xmacro` 重新标定更新。
+- 实车 TF 与传感器安装外参在 `src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro` 调整；当前实车默认是固定云台 + 两颗 Mid360 绕 X 轴镜像安装（`primary_lidar_pose="0 0.102 0.3 -0.733 0.0 0.0"`、`secondary_lidar_pose="0 -0.102 0.3 0.733 0.0 0.0"`；两组 pose 只差 y 分量和 roll 符号，**不带 yaw=π**）。仿真专用底盘缩小、caster、DiffDrive 和仿真下俯角只在 `wheeled_biped_sim.sdf.xmacro` 调整；共享轮距/轮径/云台拓扑位于 `wheeled_biped_core.sdf.xmacro`。双 Mid360 相关 xmacro fragment、merger 节点与 Point-LIO override codegen 集中在 `src/sentry_nav/sentry_dual_mid360/`。`secondary_lidar_pose` 经机械调整后须用 `scripts/calib/calibrate_dual_mid360.sh --bootstrap --write-xmacro` 重新标定更新。
 
 - `use_dual_mid360` launch argument 默认 `True`，整条链路（merger + Point-LIO override YAML + Livox multi-topic 驱动）自动启用；回退单 Mid360 链路执行 `ros2 launch sentry_nav_bringup rm_sentry_launch.py use_dual_mid360:=False`。实车硬件同步验证 / 双 Mid360 PCD 重建 / 实车台架 smoke 依赖目标硬件，本地开发机缺双雷达硬件时走 BLOCKED，不得伪装 PASS（详见 `src/sentry_nav/sentry_dual_mid360/docs/ARCHITECTURE.md`）。
 

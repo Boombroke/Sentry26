@@ -5,8 +5,8 @@ Verify that odom_bridge publishes a /registered_scan with adequate coverage
 of both the front and back hemispheres when dual Mid360 is active.
 
 /registered_scan is published in the ``odom`` frame by odom_bridge.  Hemisphere
-classification (x > 0 = front, x < 0 = back) is defined in the ``front_mid360``
-frame.  Therefore a TF lookup from the scan's frame to ``front_mid360`` is
+classification (x > 0 = front, x < 0 = back) is defined in the ``primary_mid360``
+frame.  Therefore a TF lookup from the scan's frame to ``primary_mid360`` is
 required before classifying points.  If the TF cannot be obtained, the script
 emits an honest BLOCKED report rather than classifying in the wrong frame.
 
@@ -78,7 +78,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--target-frame",
-        default="front_mid360",
+        default="primary_mid360",
         help="Frame in which hemisphere classification is performed (x>0=front, x<0=back)",
     )
     parser.add_argument(

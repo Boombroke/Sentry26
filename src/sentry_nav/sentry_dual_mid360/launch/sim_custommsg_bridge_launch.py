@@ -23,12 +23,12 @@ def generate_launch_description():
     namespace = LaunchConfiguration("namespace")
     use_sim_time = LaunchConfiguration("use_sim_time")
 
-    front_input_topic = LaunchConfiguration("front_input_topic")
-    back_input_topic = LaunchConfiguration("back_input_topic")
-    front_output_topic = LaunchConfiguration("front_output_topic")
-    back_output_topic = LaunchConfiguration("back_output_topic")
-    front_frame_id = LaunchConfiguration("front_frame_id")
-    back_frame_id = LaunchConfiguration("back_frame_id")
+    primary_input_topic = LaunchConfiguration("primary_input_topic")
+    secondary_input_topic = LaunchConfiguration("secondary_input_topic")
+    primary_output_topic = LaunchConfiguration("primary_output_topic")
+    secondary_output_topic = LaunchConfiguration("secondary_output_topic")
+    primary_frame_id = LaunchConfiguration("primary_frame_id")
+    secondary_frame_id = LaunchConfiguration("secondary_frame_id")
     line_count = ParameterValue(LaunchConfiguration("line_count"), value_type=int)
     scan_period_s = ParameterValue(
         LaunchConfiguration("scan_period_s"), value_type=float
@@ -38,19 +38,19 @@ def generate_launch_description():
     )
     tag = ParameterValue(LaunchConfiguration("tag"), value_type=int)
 
-    front_node = Node(
+    primary_node = Node(
         package="sentry_dual_mid360",
         executable="sim_pointcloud_to_custommsg_node",
-        name="sim_pc2_to_custom_front",
+        name="sim_pc2_to_custom_primary",
         namespace=namespace,
         output="screen",
         respawn=True,
         respawn_delay=2.0,
         parameters=[
             {
-                "input_topic": front_input_topic,
-                "output_topic": front_output_topic,
-                "frame_id": front_frame_id,
+                "input_topic": primary_input_topic,
+                "output_topic": primary_output_topic,
+                "frame_id": primary_frame_id,
                 "lidar_id": 0,
                 "line_count": line_count,
                 "scan_period_s": scan_period_s,
@@ -61,19 +61,19 @@ def generate_launch_description():
         ],
     )
 
-    back_node = Node(
+    secondary_node = Node(
         package="sentry_dual_mid360",
         executable="sim_pointcloud_to_custommsg_node",
-        name="sim_pc2_to_custom_back",
+        name="sim_pc2_to_custom_secondary",
         namespace=namespace,
         output="screen",
         respawn=True,
         respawn_delay=2.0,
         parameters=[
             {
-                "input_topic": back_input_topic,
-                "output_topic": back_output_topic,
-                "frame_id": back_frame_id,
+                "input_topic": secondary_input_topic,
+                "output_topic": secondary_output_topic,
+                "frame_id": secondary_frame_id,
                 "lidar_id": 1,
                 "line_count": line_count,
                 "scan_period_s": scan_period_s,
@@ -89,24 +89,24 @@ def generate_launch_description():
             DeclareLaunchArgument("namespace", default_value=""),
             DeclareLaunchArgument("use_sim_time", default_value="true"),
             DeclareLaunchArgument(
-                "front_input_topic", default_value="livox/lidar_front_points"
+                "primary_input_topic", default_value="livox/lidar_primary_points"
             ),
             DeclareLaunchArgument(
-                "back_input_topic", default_value="livox/lidar_back_points"
+                "secondary_input_topic", default_value="livox/lidar_secondary_points"
             ),
             DeclareLaunchArgument(
-                "front_output_topic", default_value="livox/lidar_front"
+                "primary_output_topic", default_value="livox/lidar_primary"
             ),
             DeclareLaunchArgument(
-                "back_output_topic", default_value="livox/lidar_back"
+                "secondary_output_topic", default_value="livox/lidar_secondary"
             ),
-            DeclareLaunchArgument("front_frame_id", default_value="front_mid360"),
-            DeclareLaunchArgument("back_frame_id", default_value="back_mid360"),
+            DeclareLaunchArgument("primary_frame_id", default_value="primary_mid360"),
+            DeclareLaunchArgument("secondary_frame_id", default_value="secondary_mid360"),
             DeclareLaunchArgument("line_count", default_value="4"),
             DeclareLaunchArgument("scan_period_s", default_value="0.1"),
             DeclareLaunchArgument("reflectivity", default_value="10"),
             DeclareLaunchArgument("tag", default_value="16"),
-            front_node,
-            back_node,
+            primary_node,
+            secondary_node,
         ]
     )

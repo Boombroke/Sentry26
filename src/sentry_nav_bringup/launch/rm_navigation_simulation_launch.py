@@ -148,14 +148,14 @@ def generate_launch_description():
         "use_dual_mid360",
         default_value="True",
         description=(
-            "When True (default), bridges front/back Gazebo gpu_lidar PointCloud2 "
-            "into Livox CustomMsg via sentry_dual_mid360 sim converter nodes, "
-            "runs pointcloud_merger (inside slam/localization launch), and "
-            "applies pointlio_dual_overrides plus CustomMsg preprocess settings "
-            "on top of base Point-LIO params. When False, the sim converter is "
-            "disabled; ign_sim_pointcloud_tool falls back to the front Mid360 "
-            "PointCloud2 and publishes velodyne_points for single-lidar "
-            "Point-LIO operation."
+            "When True (default), bridges primary/secondary Gazebo gpu_lidar "
+            "PointCloud2 into Livox CustomMsg via sentry_dual_mid360 sim "
+            "converter nodes, runs pointcloud_merger (inside slam/localization "
+            "launch), and applies pointlio_dual_overrides plus CustomMsg "
+            "preprocess settings on top of base Point-LIO params. When False, "
+            "the sim converter is disabled; ign_sim_pointcloud_tool falls back "
+            "to the primary Mid360 PointCloud2 and publishes velodyne_points "
+            "for single-lidar Point-LIO operation."
         ),
     )
 

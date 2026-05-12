@@ -59,13 +59,13 @@ MAX_ROTATION_ERROR_DEG="0.5"
 # not meaningful. In that case we only gate on Multi_LiCa's intrinsic quality
 # (fitness / inlier RMSE) — i.e. "did TEASER++ actually register the two
 # clouds" — and then allow --write-xmacro to seed xmacro with the measured
-# back_lidar_pose. First-time calibration relies on this path.
+# secondary_lidar_pose. First-time calibration relies on this path.
 MIN_BOOTSTRAP_FITNESS="0.99"
 MAX_BOOTSTRAP_INLIER_RMSE_M="0.10"
 
-# CAD default back_lidar_pose. Kept in sync with
+# CAD default secondary_lidar_pose. Kept in sync with
 # wheeled_biped_real.sdf.xmacro to detect drift in --check-deps output.
-CAD_BACK_LIDAR_POSE="0.05 0 0.05 0.0 0.5235987755982988 3.141592653589793"
+CAD_SECONDARY_LIDAR_POSE="0.05 0 0.05 0.0 0.5235987755982988 3.141592653589793"
 
 # CLI inputs populated by parse_args.
 MODE="usage"
@@ -112,7 +112,7 @@ USAGE:
 REQUIRED INPUTS (calibrate mode)
   --bag <rosbag2_dir>
       Calibration bag produced by record_calib_bag.sh (T10). Must contain
-      /livox/lidar_front and /livox/lidar_back (Livox CustomMsg) plus
+      /livox/lidar_primary and /livox/lidar_secondary (Livox CustomMsg) plus
       /tf and /tf_static. Multi_LiCa cannot ingest CustomMsg directly;
       this script extracts CustomMsg point data into deterministic front/back
       PCD files before invoking the calibrator, so the bag does NOT need to
@@ -129,7 +129,7 @@ OPTIONAL
       produces task-11-run.log, task-11-report.md, task-11-blocker.md,
       task-11-precision-check.txt, task-11-xmacro-update.txt.
   --write-xmacro
-      Opt-in switch to update back_lidar_pose in wheeled_biped_real.sdf.xmacro
+      Opt-in switch to update secondary_lidar_pose in wheeled_biped_real.sdf.xmacro
       AFTER a real accepted calibration report. Refused otherwise.
   --bootstrap
       Treat xmacro CAD values as placeholders and gate on Multi_LiCa's
@@ -149,7 +149,7 @@ MODES
   --help        Print this usage and exit 0.
   --check-deps  Probe Multi_LiCa source, COLCON_IGNORE marker, runtime
                 Python deps (teaserpp_python, open3d, pandas), ros2 CLI,
-                xmacro source file, back_lidar_pose declaration, and
+                xmacro source file, secondary_lidar_pose declaration, and
                 evidence-dir writability. Exit 0 when every prerequisite
                 is in place; exit 2 BLOCKED otherwise. Never invokes
                 Multi_LiCa.
@@ -184,14 +184,14 @@ REQUIRED DEPENDENCIES (live calibration run)
     * Calibration bag recorded by record_calib_bag.sh (static rig, flat
       ground, varied geometry). Multi_LiCa needs PointCloud2/PCD, not
       CustomMsg, so this script prepares PCD artifacts inside the pipeline.
-    * wheeled_biped_real.sdf.xmacro with a back_lidar_pose parameter.
+    * wheeled_biped_real.sdf.xmacro with a secondary_lidar_pose parameter.
 
 SAFETY RULES
   * wheeled_biped_real.sdf.xmacro is NEVER edited unless a Multi_LiCa
     report exists, translation_error_cm < ${MAX_TRANSLATION_ERROR_CM},
     rotation_error_deg < ${MAX_ROTATION_ERROR_DEG}, AND --write-xmacro was
     passed. Missing any condition keeps the CAD default in place:
-      back_lidar_pose="${CAD_BACK_LIDAR_POSE}"
+      secondary_lidar_pose="${CAD_SECONDARY_LIDAR_POSE}"
   * Calibration results live in xmacro only (Layer A installation pose).
     Do NOT write calibrated extrinsics into any JSON driver config or
     runtime YAML (MN16 / MN20 / MN22).
@@ -410,11 +410,11 @@ run_dependency_audit() {
     info "Probing sentry_robot_description xmacro source"
     if [ -f "${REAL_XMACRO_PATH}" ]; then
         info "  Real-robot xmacro OK: ${REAL_XMACRO_PATH}"
-        if grep -q "back_lidar_pose" "${REAL_XMACRO_PATH}"; then
-            info "  back_lidar_pose parameter declared in xmacro (T4 complete)."
+        if grep -q "secondary_lidar_pose" "${REAL_XMACRO_PATH}"; then
+            info "  secondary_lidar_pose parameter declared in xmacro (T4 complete)."
         else
-            err "  back_lidar_pose parameter NOT declared. Writeback target missing."
-            BLOCKER_REASONS+=("back_lidar_pose not declared in ${REAL_XMACRO_PATH}; complete T4 xmacro injection")
+            err "  secondary_lidar_pose parameter NOT declared. Writeback target missing."
+            BLOCKER_REASONS+=("secondary_lidar_pose not declared in ${REAL_XMACRO_PATH}; complete T4 xmacro injection")
         fi
     else
         err "  xmacro source MISSING at ${REAL_XMACRO_PATH}"
@@ -545,13 +545,13 @@ xmacro_path: ${REAL_XMACRO_PATH}
 action: NO_UPDATE
 reason: ${reason}
 safety_rule: |
-  ${SCRIPT_NAME} refuses to edit back_lidar_pose unless ALL of the following hold:
+  ${SCRIPT_NAME} refuses to edit secondary_lidar_pose unless ALL of the following hold:
     1. A Multi_LiCa calibration report exists and was parsed to numeric errors.
     2. translation_error_cm < ${MAX_TRANSLATION_ERROR_CM}
        AND rotation_error_deg < ${MAX_ROTATION_ERROR_DEG}
     3. The operator passed --write-xmacro explicitly.
   Any violation keeps the xmacro unchanged. The CAD default
-      back_lidar_pose="${CAD_BACK_LIDAR_POSE}"
+      secondary_lidar_pose="${CAD_SECONDARY_LIDAR_POSE}"
   remains in place until a real accepted calibration is produced.
 EOF
 }
@@ -585,7 +585,7 @@ ${missing_block}
 \`\`\`
 translation error: <x.xx> cm
 rotation error:    <y.yy> deg
-back_lidar_pose:   <x y z roll pitch yaw>
+secondary_lidar_pose:   <x y z roll pitch yaw>
 \`\`\`
 
 Acceptance thresholds (plan MH8):
@@ -597,7 +597,7 @@ Acceptance thresholds (plan MH8):
 
 See task-11-xmacro-update.txt. This run performed NO writeback because
 the calibration could not complete. CAD default remains in place:
-\`back_lidar_pose="${CAD_BACK_LIDAR_POSE}"\`.
+\`secondary_lidar_pose="${CAD_SECONDARY_LIDAR_POSE}"\`.
 
 ## Recovery Steps
 
@@ -627,13 +627,13 @@ the calibration could not complete. CAD default remains in place:
    \`\`\`
    bash src/sentry_nav/sentry_dual_mid360/scripts/calib/record_calib_bag.sh --env real --duration 60
    \`\`\`
-   Required topics: /livox/lidar_front, /livox/lidar_back, /tf, /tf_static.
+   Required topics: /livox/lidar_primary, /livox/lidar_secondary, /tf, /tf_static.
 5. Re-invoke:
    \`\`\`
    bash ${SCRIPT_NAME} --bag <bag_dir> --output-report <report.md>
    \`\`\`
 6. Only after a PASS verdict (both thresholds met) should --write-xmacro
-   be used to update back_lidar_pose.
+   be used to update secondary_lidar_pose.
 
 ## Notes
 
@@ -709,8 +709,8 @@ from rosidl_runtime_py.utilities import get_message
 
 bag_dir, pcd_dir = sys.argv[1:3]
 topics = {
-    "/livox/lidar_front": "front_mid360",
-    "/livox/lidar_back": "back_mid360",
+    "/livox/lidar_primary": "primary_mid360",
+    "/livox/lidar_secondary": "secondary_mid360",
 }
 max_points_per_lidar = int(os.environ.get("SENTRY_DUAL_MID360_CALIB_MAX_POINTS", "300000"))
 
@@ -774,16 +774,16 @@ generate_multi_lica_params() {
     local pcd_rel="$3"
     local output_rel="$4"
     local results_file="$5"
-    local front_pose
-    local back_pose
-    front_pose="$(get_pose_attr front_lidar_pose)"
-    back_pose="$(get_pose_attr back_lidar_pose)"
+    local primary_pose
+    local secondary_pose
+    primary_pose="$(get_pose_attr primary_lidar_pose)"
+    secondary_pose="$(get_pose_attr secondary_lidar_pose)"
 
-    python3 - "${params_path}" "${output_params_path}" "${pcd_rel}" "${output_rel}" "${results_file}" "${front_pose}" "${back_pose}" <<'PY'
+    python3 - "${params_path}" "${output_params_path}" "${pcd_rel}" "${output_rel}" "${results_file}" "${primary_pose}" "${secondary_pose}" <<'PY'
 import math
 import sys
 
-params_path, output_params_path, pcd_rel, output_rel, results_file, front_pose, back_pose = sys.argv[1:]
+params_path, output_params_path, pcd_rel, output_rel, results_file, primary_pose, secondary_pose = sys.argv[1:]
 
 def pose_to_table(pose):
     vals = [float(x) for x in pose.split()]
@@ -804,8 +804,8 @@ def fmt(values):
         return s
     return "[" + ", ".join(_as_double(v) for v in values) + "]"
 
-front = pose_to_table(front_pose)
-back = pose_to_table(back_pose)
+front = pose_to_table(primary_pose)
+back = pose_to_table(secondary_pose)
 with open(params_path, "w", encoding="utf-8") as f:
     f.write("/**:\n")
     f.write("  ros__parameters:\n")
@@ -813,15 +813,15 @@ with open(params_path, "w", encoding="utf-8") as f:
     f.write("    runs_count: 1\n")
     f.write("    visualize: false\n")
     f.write("    use_fitness_based_calibration: false\n")
-    f.write("    lidar_topics: [front_mid360, back_mid360]\n")
+    f.write("    lidar_topics: [primary_mid360, secondary_mid360]\n")
     f.write("    tf_topic: /tf_static\n")
     f.write("    read_tf_from_table: true\n")
     f.write("    table_degrees: true\n")
-    f.write(f"    front_mid360: {fmt(front)}\n")
-    f.write(f"    back_mid360: {fmt(back)}\n")
+    f.write(f"    primary_mid360: {fmt(front)}\n")
+    f.write(f"    secondary_mid360: {fmt(back)}\n")
     f.write("    read_pcds_from_file: true\n")
     f.write(f"    pcd_directory: {pcd_rel}\n")
-    f.write("    target_frame_id: front_mid360\n")
+    f.write("    target_frame_id: primary_mid360\n")
     f.write("    base_frame_id: gimbal_pitch\n")
     f.write("    calibrate_target: false\n")
     f.write("    calibrate_to_base: false\n")
@@ -881,7 +881,7 @@ def get_pose_attr(attr):
     return vals
 
 block_re = re.compile(
-    r"back_mid360\s+to\s+front_mid360\s+calibration(?P<body>.*?)(?:_{10,}|Complete calibration time|\Z)",
+    r"secondary_mid360\s+to\s+primary_mid360\s+calibration(?P<body>.*?)(?:_{10,}|Complete calibration time|\Z)",
     re.S,
 )
 block_match = block_re.search(text)
@@ -893,7 +893,7 @@ rpy_match = re.search(r"calibrated rpy\s*=\s*([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-
 # instead of `candidate - CAD` comparison.
 fit_match = re.search(r"fitness:\s*([-+0-9.eE]+)\s*,\s*inlier_rmse:\s*([-+0-9.eE]+)", search_text)
 if not xyz_match or not rpy_match:
-    reason = "Could not parse 'calibrated xyz' and 'calibrated rpy' for back_mid360 to front_mid360 from Multi_LiCa results"
+    reason = "Could not parse 'calibrated xyz' and 'calibrated rpy' for secondary_mid360 to primary_mid360 from Multi_LiCa results"
     with open(precision_path, "w", encoding="utf-8") as f:
         f.write("verdict: BLOCKED\n")
         f.write(f"reason: {reason}\n")
@@ -908,8 +908,8 @@ candidate_rpy_deg = np.array([float(rpy_match.group(i)) for i in range(1, 4)], d
 fitness = float(fit_match.group(1)) if fit_match else float("nan")
 inlier_rmse_m = float(fit_match.group(2)) if fit_match else float("nan")
 
-front_pose = get_pose_attr("front_lidar_pose")
-back_pose = get_pose_attr("back_lidar_pose")
+primary_pose = get_pose_attr("primary_lidar_pose")
+secondary_pose = get_pose_attr("secondary_lidar_pose")
 
 def matrix_from_pose(vals):
     mat = np.eye(4)
@@ -917,25 +917,25 @@ def matrix_from_pose(vals):
     mat[:3, :3] = R.from_euler("xyz", vals[3:], degrees=False).as_matrix()
     return mat
 
-front_base = matrix_from_pose(front_pose)
-back_base_cad = matrix_from_pose(back_pose)
-cad_back_in_front = np.linalg.inv(front_base) @ back_base_cad
-candidate_back_in_front = np.eye(4)
-candidate_back_in_front[:3, 3] = candidate_xyz
-candidate_back_in_front[:3, :3] = R.from_euler("xyz", candidate_rpy_deg, degrees=True).as_matrix()
+primary_base = matrix_from_pose(primary_pose)
+secondary_base_cad = matrix_from_pose(secondary_pose)
+cad_secondary_in_primary = np.linalg.inv(primary_base) @ secondary_base_cad
+candidate_secondary_in_primary = np.eye(4)
+candidate_secondary_in_primary[:3, 3] = candidate_xyz
+candidate_secondary_in_primary[:3, :3] = R.from_euler("xyz", candidate_rpy_deg, degrees=True).as_matrix()
 
-translation_error_cm = float(np.linalg.norm(candidate_back_in_front[:3, 3] - cad_back_in_front[:3, 3]) * 100.0)
-rot_delta = R.from_matrix(candidate_back_in_front[:3, :3] @ cad_back_in_front[:3, :3].T)
+translation_error_cm = float(np.linalg.norm(candidate_secondary_in_primary[:3, 3] - cad_secondary_in_primary[:3, 3]) * 100.0)
+rot_delta = R.from_matrix(candidate_secondary_in_primary[:3, :3] @ cad_secondary_in_primary[:3, :3].T)
 rotation_error_deg = float(np.linalg.norm(rot_delta.as_rotvec()) * 180.0 / math.pi)
 
-candidate_back_base = front_base @ candidate_back_in_front
-candidate_back_xyz = candidate_back_base[:3, 3]
-candidate_back_rpy = R.from_matrix(candidate_back_base[:3, :3]).as_euler("xyz", degrees=False)
-candidate_back_pose_vals = list(candidate_back_xyz) + list(candidate_back_rpy)
-candidate_back_pose = " ".join(f"{v:.15g}" for v in candidate_back_pose_vals)
-# Relative extrinsic T_back->front is the CAD-independent measurement.
-# Keep it as a first-class output so re-deriving back_lidar_pose after any
-# future front_lidar_pose revision is a single matrix multiply — no re-cal.
+candidate_secondary_base = primary_base @ candidate_secondary_in_primary
+candidate_secondary_xyz = candidate_secondary_base[:3, 3]
+candidate_secondary_rpy = R.from_matrix(candidate_secondary_base[:3, :3]).as_euler("xyz", degrees=False)
+candidate_secondary_pose_vals = list(candidate_secondary_xyz) + list(candidate_secondary_rpy)
+candidate_secondary_pose = " ".join(f"{v:.15g}" for v in candidate_secondary_pose_vals)
+# Relative extrinsic T_secondary->primary is the CAD-independent measurement.
+# Keep it as a first-class output so re-deriving secondary_lidar_pose after any
+# future primary_lidar_pose revision is a single matrix multiply — no re-cal.
 candidate_rpy_rad = np.deg2rad(candidate_rpy_deg)
 candidate_pair_pose = " ".join([*(f"{v:.15g}" for v in candidate_xyz), *(f"{v:.15g}" for v in candidate_rpy_rad)])
 candidate_pair_pose_deg = " ".join([*(f"{v:.15g}" for v in candidate_xyz), *(f"{v:.15g}" for v in candidate_rpy_deg)])
@@ -985,14 +985,14 @@ with open(precision_path, "w", encoding="utf-8") as f:
     f.write(f"inlier_rmse_m: {inlier_rmse_m:.6f}\n")
     f.write(f"min_bootstrap_fitness: {min_bootstrap_fitness}\n")
     f.write(f"max_bootstrap_inlier_rmse_m: {max_bootstrap_rmse_m}\n")
-    # Relative extrinsic T_back->front (CAD-independent, from point clouds).
-    # Use these values directly when re-deriving back_lidar_pose after a
-    # future front_lidar_pose change — no recalibration needed.
-    f.write(f"relative_back_in_front_xyz_rpy_rad: {candidate_pair_pose}\n")
-    f.write(f"relative_back_in_front_xyz_rpy_deg: {candidate_pair_pose_deg}\n")
-    # Absolute back_lidar_pose (= front_base @ T_back->front). Only trust
-    # this when front_lidar_pose in xmacro is itself trustworthy.
-    f.write(f"candidate_back_lidar_pose_xyz_rpy_rad: {candidate_back_pose}\n")
+    # Relative extrinsic T_secondary->primary (CAD-independent, from point clouds).
+    # Use these values directly when re-deriving secondary_lidar_pose after a
+    # future primary_lidar_pose change — no recalibration needed.
+    f.write(f"relative_secondary_in_primary_xyz_rpy_rad: {candidate_pair_pose}\n")
+    f.write(f"relative_secondary_in_primary_xyz_rpy_deg: {candidate_pair_pose_deg}\n")
+    # Absolute secondary_lidar_pose (= primary_base @ T_secondary->primary). Only trust
+    # this when primary_lidar_pose in xmacro is itself trustworthy.
+    f.write(f"candidate_secondary_lidar_pose_xyz_rpy_rad: {candidate_secondary_pose}\n")
     if reasons_fail:
         f.write("fail_reasons:\n")
         for reason in reasons_fail:
@@ -1006,7 +1006,7 @@ with open(env_path, "w", encoding="utf-8") as f:
     f.write(f"ROTATION_ERROR_DEG={rotation_error_deg:.6f}\n")
     f.write(f"FITNESS={fitness:.6f}\n")
     f.write(f"INLIER_RMSE_M={inlier_rmse_m:.6f}\n")
-    f.write("CANDIDATE_BACK_POSE=" + shlex.quote(candidate_back_pose) + "\n")
+    f.write("CANDIDATE_SECONDARY_POSE=" + shlex.quote(candidate_secondary_pose) + "\n")
     f.write("CANDIDATE_PAIR_POSE=" + shlex.quote(candidate_pair_pose) + "\n")
     f.write("CANDIDATE_PAIR_POSE_DEG=" + shlex.quote(candidate_pair_pose_deg) + "\n")
     f.write("PARSE_REASON=''\n")
@@ -1020,7 +1020,7 @@ write_live_report() {
     local results_file_path="$4"
     local translation_error_cm="$5"
     local rotation_error_deg="$6"
-    local candidate_back_pose="$7"
+    local candidate_secondary_pose="$7"
     local fitness="${FITNESS:-unknown}"
     local inlier_rmse_m="${INLIER_RMSE_M:-unknown}"
     local verdict_mode="${PARSE_VERDICT_MODE:-strict}"
@@ -1070,25 +1070,25 @@ EOM
 
 ${precision_gate_block}
 
-## Relative Extrinsic (CAD-independent, T_back->front)
+## Relative Extrinsic (CAD-independent, T_secondary->primary)
 
-Direct TEASER++ measurement of back_mid360 relative to front_mid360,
+Direct TEASER++ measurement of secondary_mid360 relative to primary_mid360,
 computed purely from the two point clouds. This value survives future
-front_lidar_pose revisions — re-derive back_lidar_pose via
-\`front_base @ T_back_to_front\` without recalibrating.
+primary_lidar_pose revisions — re-derive secondary_lidar_pose via
+\`primary_base @ T_secondary_to_primary\` without recalibrating.
 
 \`\`\`
 xyz rpy_rad : ${rel_pose_rad}
 xyz rpy_deg : ${rel_pose_deg}
 \`\`\`
 
-## Candidate xmacro Pose (absolute, depends on front_lidar_pose)
+## Candidate xmacro Pose (absolute, depends on primary_lidar_pose)
 
 \`\`\`
-back_lidar_pose="${candidate_back_pose}"
+secondary_lidar_pose="${candidate_secondary_pose}"
 \`\`\`
 
-Only trust this absolute pose when \`front_lidar_pose\` in xmacro is
+Only trust this absolute pose when \`primary_lidar_pose\` in xmacro is
 itself trustworthy. If front CAD is still a placeholder, prefer the
 relative extrinsic above and re-derive later.
 
@@ -1105,9 +1105,9 @@ import sys
 
 path, pose = sys.argv[1:]
 text = open(path, encoding="utf-8").read()
-new_text, count = re.subn(r'back_lidar_pose="[^"]+"', f'back_lidar_pose="{pose}"', text, count=1)
+new_text, count = re.subn(r'secondary_lidar_pose="[^"]+"', f'secondary_lidar_pose="{pose}"', text, count=1)
 if count != 1:
-    raise SystemExit(f"expected exactly one back_lidar_pose in {path}, replaced {count}")
+    raise SystemExit(f"expected exactly one secondary_lidar_pose in {path}, replaced {count}")
 with open(path, "w", encoding="utf-8") as f:
     f.write(new_text)
 PY
@@ -1284,16 +1284,16 @@ EOF
     if [ "${PARSE_VERDICT}" = "PASS" ]; then
         if [ "${WRITE_XMACRO}" = "yes" ]; then
             local before_pose
-            before_pose="$(get_pose_attr back_lidar_pose)"
-            update_xmacro_pose "${CANDIDATE_BACK_POSE}"
+            before_pose="$(get_pose_attr secondary_lidar_pose)"
+            update_xmacro_pose "${CANDIDATE_SECONDARY_POSE}"
             cat > "${XMACRO_UPDATE_PATH}" <<EOF
 xmacro_path: ${REAL_XMACRO_PATH}
 action: UPDATED
 verdict_mode: ${PARSE_VERDICT_MODE}
-before_back_lidar_pose: ${before_pose}
-after_back_lidar_pose: ${CANDIDATE_BACK_POSE}
-relative_back_in_front_xyz_rpy_rad: ${CANDIDATE_PAIR_POSE}
-relative_back_in_front_xyz_rpy_deg: ${CANDIDATE_PAIR_POSE_DEG}
+before_secondary_lidar_pose: ${before_pose}
+after_secondary_lidar_pose: ${CANDIDATE_SECONDARY_POSE}
+relative_secondary_in_primary_xyz_rpy_rad: ${CANDIDATE_PAIR_POSE}
+relative_secondary_in_primary_xyz_rpy_deg: ${CANDIDATE_PAIR_POSE_DEG}
 fitness: ${FITNESS}
 inlier_rmse_m: ${INLIER_RMSE_M}
 translation_error_cm: ${TRANSLATION_ERROR_CM}
@@ -1302,13 +1302,13 @@ EOF
         else
             write_xmacro_no_update_reason "calibration accepted, but --write-xmacro was not supplied"
         fi
-        write_live_report "PASS" "${work_dir}" "${multi_lica_log}" "${results_file_path}" "${TRANSLATION_ERROR_CM}" "${ROTATION_ERROR_DEG}" "${CANDIDATE_BACK_POSE}"
+        write_live_report "PASS" "${work_dir}" "${multi_lica_log}" "${results_file_path}" "${TRANSLATION_ERROR_CM}" "${ROTATION_ERROR_DEG}" "${CANDIDATE_SECONDARY_POSE}"
         rm -f "${BLOCKER_PATH}"
         record_run_log "verdict: PASS (${PARSE_VERDICT_MODE} mode)"
         return 0
     fi
 
-    write_live_report "FAIL" "${work_dir}" "${multi_lica_log}" "${results_file_path}" "${TRANSLATION_ERROR_CM}" "${ROTATION_ERROR_DEG}" "${CANDIDATE_BACK_POSE}"
+    write_live_report "FAIL" "${work_dir}" "${multi_lica_log}" "${results_file_path}" "${TRANSLATION_ERROR_CM}" "${ROTATION_ERROR_DEG}" "${CANDIDATE_SECONDARY_POSE}"
     write_xmacro_no_update_reason "calibration numeric result failed thresholds (${PARSE_VERDICT_MODE} mode); xmacro unchanged"
     rm -f "${BLOCKER_PATH}"
     record_run_log "verdict: FAIL (${PARSE_VERDICT_MODE} mode, thresholds not met)"

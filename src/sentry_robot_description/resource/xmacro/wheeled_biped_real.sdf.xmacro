@@ -1,30 +1,27 @@
 <?xml version="1.0"?>
 <sdf version="1.8">
     <xmacro_include uri="file://wheeled_biped_core.sdf.xmacro" />
-    <xmacro_include uri="model://urdf/back_mid360.sdf.xmacro" />
+    <xmacro_include uri="model://urdf/secondary_mid360.sdf.xmacro" />
     <xmacro_include uri="model://urdf/mid360_imu_tf.sdf.xmacro" />
-    <!-- Include sim fragment so back_mid360_sim_macro is defined (name-check-before-condition rule). -->
-    <xmacro_include uri="model://urdf/back_mid360_sim.sdf.xmacro" />
+    <!-- Include sim fragment so secondary_mid360_sim_macro is defined (name-check-before-condition rule). -->
+    <xmacro_include uri="model://urdf/secondary_mid360_sim.sdf.xmacro" />
 
     <!--
         Real robot TF profile.
         Keep measured sensor extrinsics here. Do not copy Gazebo-only pitch,
         caster, reduced chassis, or DiffDrive plugin settings into this file.
 
-        Dual Mid360 mounting note (2026-05-12):
-        The two Mid360 are NOT installed as a front/back 180-deg flip despite
-        their historical names `front_mid360` / `back_mid360`. They are bolted
-        to the same gimbal_pitch plate, mirrored across the X axis (roll
-        opposite, |roll| ~ 42 deg), with no yaw offset. The `front`/`back`
-        identifiers are preserved only to avoid a repo-wide rename; treat them
-        as arbitrary labels for the two Mid360 ("primary" and "secondary").
-        See src/sentry_nav/sentry_dual_mid360/docs/ARCHITECTURE.md for the
-        up-to-date geometric description and Multi_LiCa calibration workflow.
+        Dual Mid360 mounting (2026-05-12):
+        Two Mid360 LiDARs bolted to the gimbal_pitch plate, mirrored across
+        the X axis (opposite roll, no yaw offset). Naming is neutral:
+          primary_mid360   - IMU feeds Point-LIO, topic /livox/lidar_primary
+          secondary_mid360 - IMU diagnostic only, topic /livox/lidar_secondary
+        See src/sentry_nav/sentry_dual_mid360/docs/ARCHITECTURE.md.
 
-        front_lidar_pose / back_lidar_pose are 6-DoF extrinsics relative to
-        gimbal_pitch (x y z roll pitch yaw, radians). Re-run
+        primary_lidar_pose / secondary_lidar_pose are 6-DoF extrinsics relative
+        to gimbal_pitch (x y z roll pitch yaw, radians). Re-run
         calibrate_dual_mid360.sh (bootstrap + write-xmacro flags) after any
-        mechanical adjustment so back_lidar_pose matches the observed clouds.
+        mechanical adjustment so secondary_lidar_pose matches observed clouds.
     -->
     <xmacro_block
         name="wheeled_biped_model"
@@ -32,8 +29,8 @@
         chassis_length="0.45"
         chassis_width="0.45"
         chassis_z="0.120"
-        front_lidar_pose="0 0.102 0.3 -0.733 0.0 0.0"
-        back_lidar_pose="0 -0.102 0.3 0.733 0.0 0.0"
+        primary_lidar_pose="0 0.102 0.3 -0.733 0.0 0.0"
+        secondary_lidar_pose="0 -0.102 0.3 0.733 0.0 0.0"
         use_sim_sensors="False"
         use_real_sensors="True"
         use_casters="False"

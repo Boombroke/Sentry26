@@ -5,7 +5,7 @@
 > 硬件不同步的排查路径。只有需要诊断或部署同步链路时才需要通读。
 
 > **Maintainer**: Boombroke <boombroke@icloud.com>
-> **Scope**: 验证 `front_mid360` 与 `back_mid360` 两台 Livox Mid360 的 header.stamp 是否源自同一个硬件时钟源。
+> **Scope**: 验证 `primary_mid360` 与 `secondary_mid360` 两台 Livox Mid360 的 header.stamp 是否源自同一个硬件时钟源。
 > **Why it matters**: Point-LIO 以 `msg->header.stamp` 作为权威时间。pointcloud_merger 的 ApproximateTime 同步器默认 `slop=10ms`；若两路时间戳由各自设备的独立时钟各自分配，两台 Mid360 的 header.stamp 会线性漂移，数小时后超出 slop，匹配率断崖式下降，融合结果退化为单雷达。
 > **禁止**: 不要假设"已经拉了黄线主从"就等于硬件同步，必须实测。若硬件未同步，**必须修硬件**（PTP / PPS+GPRMC），**严禁**在 merger / Point-LIO 里做软件补偿。
 
@@ -114,8 +114,8 @@ grep -E "time.?sync|ptp|gPTP|gprmc|pps|sync.?source" /tmp/driver_boot.log
 拿到两路 CustomMsg 后，观察相邻帧 stamp 差：
 
 ```bash
-ros2 topic echo --once /livox/lidar_front --no-arr | grep -E "sec:|nanosec:"
-ros2 topic echo --once /livox/lidar_back  --no-arr | grep -E "sec:|nanosec:"
+ros2 topic echo --once /livox/lidar_primary --no-arr | grep -E "sec:|nanosec:"
+ros2 topic echo --once /livox/lidar_secondary  --no-arr | grep -E "sec:|nanosec:"
 ```
 
 人工比较两个 `sec.nanosec`，差值应 < 1ms（硬件同步）。一次采样不具备统计意义，进入 Step 4。
@@ -126,8 +126,8 @@ ros2 topic echo --once /livox/lidar_back  --no-arr | grep -E "sec:|nanosec:"
 ros2 run sentry_dual_mid360 verify_dual_mid360_sync.py \
     --sample-count 100 \
     --sync-tolerance-ms 1.0 \
-    --front-topic /livox/lidar_front \
-    --back-topic  /livox/lidar_back
+    --front-topic /livox/lidar_primary \
+    --back-topic  /livox/lidar_secondary
 ```
 
 脚本在 §4 详述。核心判据：中位数差 < 1ms 且 60s 内漂移 < 0.5ms 才能认定是真硬件同步；任一项超标，说明两雷达在各自走各自的时钟。
@@ -156,7 +156,7 @@ python3 src/sentry_nav/sentry_dual_mid360/scripts/calib/verify_dual_mid360_sync.
 # 实车：接到真实话题跑 100 对样本
 source install/setup.bash
 ros2 run sentry_dual_mid360 verify_dual_mid360_sync.py \
-    --front-topic /livox/lidar_front --back-topic /livox/lidar_back \
+    --front-topic /livox/lidar_primary --back-topic /livox/lidar_secondary \
     --sample-count 100
 ```
 

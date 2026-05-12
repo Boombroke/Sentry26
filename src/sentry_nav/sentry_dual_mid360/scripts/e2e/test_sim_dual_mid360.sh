@@ -33,7 +33,7 @@
 #   1  smoke FAILED with a concrete runtime issue (topics missing, launch
 #      crashed, goal never ACCEPTED, etc.)
 #   2  BLOCKED — the environment or simulator configuration cannot support
-#      the requested mode (e.g. ros_gz_bridge.yaml lacks back_mid360 entries
+#      the requested mode (e.g. ros_gz_bridge.yaml lacks secondary_mid360 entries
 #      in dual mode, or Gazebo is not installed). Evidence file explains
 #      exactly what is missing and how to unblock.
 #   3  usage / argument error.
@@ -77,19 +77,19 @@ BRIDGE_YAML_REL="src/simulator/rmu_gazebo_simulator/rmu_gazebo_simulator/config/
 # Topics we sanity-check during runtime smoke. Each is prefixed with the
 # namespace at runtime.
 # NOTE: in single (use_dual_mid360:=False) mode, the T13 launch integration
-# sets Point-LIO common.lid_topic=livox/lidar_front (no-merger front-lidar-
-# direct), so we must check /livox/lidar_front here — NOT /livox/lidar. Dual
+# sets Point-LIO common.lid_topic=livox/lidar_primary (no-merger front-lidar-
+# direct), so we must check /livox/lidar_primary here — NOT /livox/lidar. Dual
 # mode still consumes the merger output on /livox/lidar.
 DUAL_TOPICS=(
-    "livox/lidar_front"
-    "livox/lidar_back"
+    "livox/lidar_primary"
+    "livox/lidar_secondary"
     "livox/lidar"
     "aft_mapped_to_init"
     "registered_scan"
     "odometry"
 )
 SINGLE_TOPICS=(
-    "livox/lidar_front"
+    "livox/lidar_primary"
     "aft_mapped_to_init"
     "registered_scan"
     "odometry"
@@ -99,10 +99,10 @@ SINGLE_TOPICS=(
 TF_PAIRS=(
     "map:odom"
     "odom:base_footprint"
-    "gimbal_pitch:front_mid360"
+    "gimbal_pitch:primary_mid360"
 )
 TF_PAIRS_DUAL_EXTRA=(
-    "gimbal_pitch:back_mid360"
+    "gimbal_pitch:secondary_mid360"
 )
 
 # =============================================================================
@@ -404,8 +404,8 @@ source_ws_setup() {
 PRE_ROS2_BIN=""
 PRE_GZ_BIN=""
 PRE_MISSING_PKGS=()
-PRE_BRIDGE_HAS_STABLE_FRONT=false     # /<ns>/livox/lidar_front present
-PRE_BRIDGE_HAS_STABLE_BACK=false      # /<ns>/livox/lidar_back present
+PRE_BRIDGE_HAS_STABLE_FRONT=false     # /<ns>/livox/lidar_primary present
+PRE_BRIDGE_HAS_STABLE_BACK=false      # /<ns>/livox/lidar_secondary present
 PRE_BRIDGE_FRONT_TYPE=""              # ros message type for front stable topic (if any)
 PRE_BRIDGE_BACK_TYPE=""               # ros message type for back stable topic (if any)
 PRE_BRIDGE_HAS_LEGACY_LIDAR=false     # /<ns>/livox/lidar (single-lidar era) present
@@ -416,8 +416,8 @@ PRE_BLOCKED_REASONS=()
 
 # Parse ros_gz_bridge.yaml and populate the PRE_BRIDGE_* variables.
 # We look for the three topic names the rest of the stack relies on:
-#   /<robot_name>/livox/lidar_front  — merger front input (expected CustomMsg)
-#   /<robot_name>/livox/lidar_back   — merger back  input (expected CustomMsg)
+#   /<robot_name>/livox/lidar_primary  — merger front input (expected CustomMsg)
+#   /<robot_name>/livox/lidar_secondary   — merger back  input (expected CustomMsg)
 #   /<robot_name>/livox/lidar        — legacy single-lidar topic (observed PointCloud2)
 # and record their ros_type_name so we can flag PointCloud2-vs-CustomMsg mismatches.
 parse_bridge_yaml() {
@@ -436,9 +436,9 @@ for entry in data:
 out = {"front_type": "", "back_type": "", "legacy_type": ""}
 for ros, typ in rows:
     base = ros.replace("/<robot_name>", "")
-    if base == "/livox/lidar_front":
+    if base == "/livox/lidar_primary":
         out["front_type"] = typ
-    elif base == "/livox/lidar_back":
+    elif base == "/livox/lidar_secondary":
         out["back_type"] = typ
     elif base == "/livox/lidar":
         out["legacy_type"] = typ
@@ -491,8 +491,8 @@ run_preflight() {
 
     # 5. ros_gz_bridge.yaml: semantic check against the STABLE topic names the
     #    rest of the stack depends on. Simple sensor-name grep is not enough
-    #    because T13 bound Point-LIO (single mode) to /livox/lidar_front and
-    #    the merger (dual mode) to /livox/lidar_front + /livox/lidar_back.
+    #    because T13 bound Point-LIO (single mode) to /livox/lidar_primary and
+    #    the merger (dual mode) to /livox/lidar_primary + /livox/lidar_secondary.
     local bridge_yaml="${WS_ROOT}/${BRIDGE_YAML_REL}"
     if [ -f "$bridge_yaml" ]; then
         log_ok "bridge yaml found: ${bridge_yaml}"
@@ -509,11 +509,11 @@ run_preflight() {
             [ -n "$PRE_BRIDGE_LEGACY_TYPE" ] && PRE_BRIDGE_HAS_LEGACY_LIDAR=true
         else
             log_warn "python3/yaml unavailable; falling back to coarse grep on bridge yaml"
-            if grep -q "livox/lidar_front" "$bridge_yaml"; then
+            if grep -q "livox/lidar_primary" "$bridge_yaml"; then
                 PRE_BRIDGE_HAS_STABLE_FRONT=true
                 PRE_BRIDGE_FRONT_TYPE="unknown"
             fi
-            if grep -q "livox/lidar_back" "$bridge_yaml"; then
+            if grep -q "livox/lidar_secondary" "$bridge_yaml"; then
                 PRE_BRIDGE_HAS_STABLE_BACK=true
                 PRE_BRIDGE_BACK_TYPE="unknown"
             fi
@@ -524,14 +524,14 @@ run_preflight() {
         fi
 
         if $PRE_BRIDGE_HAS_STABLE_FRONT; then
-            log_ok "bridge yaml exposes stable /<ns>/livox/lidar_front (${PRE_BRIDGE_FRONT_TYPE})"
+            log_ok "bridge yaml exposes stable /<ns>/livox/lidar_primary (${PRE_BRIDGE_FRONT_TYPE})"
         else
-            log_warn "bridge yaml does NOT expose /<ns>/livox/lidar_front"
+            log_warn "bridge yaml does NOT expose /<ns>/livox/lidar_primary"
         fi
         if $PRE_BRIDGE_HAS_STABLE_BACK; then
-            log_ok "bridge yaml exposes stable /<ns>/livox/lidar_back (${PRE_BRIDGE_BACK_TYPE})"
+            log_ok "bridge yaml exposes stable /<ns>/livox/lidar_secondary (${PRE_BRIDGE_BACK_TYPE})"
         else
-            log_warn "bridge yaml does NOT expose /<ns>/livox/lidar_back"
+            log_warn "bridge yaml does NOT expose /<ns>/livox/lidar_secondary"
         fi
         if $PRE_BRIDGE_HAS_LEGACY_LIDAR; then
             log_warn "bridge yaml still exposes legacy /<ns>/livox/lidar (${PRE_BRIDGE_LEGACY_TYPE})"
@@ -582,25 +582,25 @@ run_preflight() {
     fi
 
     # 7. Mode-specific verdicts.
-    #    Single mode: T13 false branch uses /livox/lidar_front directly.
-    #    Dual mode:   merger wants /livox/lidar_front + /livox/lidar_back,
+    #    Single mode: T13 false branch uses /livox/lidar_primary directly.
+    #    Dual mode:   merger wants /livox/lidar_primary + /livox/lidar_secondary,
     #                 both as livox_ros_driver2/msg/CustomMsg.
     if [ "$MODE" = "single" ] || [ "$MODE" = "both" ]; then
         if ! $PRE_BRIDGE_HAS_STABLE_FRONT; then
             PRE_BLOCKED_REASONS+=(
-                "single mode requires stable /<ns>/livox/lidar_front in ros_gz_bridge.yaml (T13 false branch sets Point-LIO common.lid_topic=livox/lidar_front)"
+                "single mode requires stable /<ns>/livox/lidar_primary in ros_gz_bridge.yaml (T13 false branch sets Point-LIO common.lid_topic=livox/lidar_primary)"
             )
         fi
     fi
     if [ "$MODE" = "dual" ] || [ "$MODE" = "both" ]; then
         if ! $PRE_BRIDGE_HAS_STABLE_FRONT; then
             PRE_BLOCKED_REASONS+=(
-                "dual mode requires stable /<ns>/livox/lidar_front bridged as livox_ros_driver2/msg/CustomMsg (merger front input)"
+                "dual mode requires stable /<ns>/livox/lidar_primary bridged as livox_ros_driver2/msg/CustomMsg (merger front input)"
             )
         fi
         if ! $PRE_BRIDGE_HAS_STABLE_BACK; then
             PRE_BLOCKED_REASONS+=(
-                "dual mode requires stable /<ns>/livox/lidar_back bridged as livox_ros_driver2/msg/CustomMsg (merger back input)"
+                "dual mode requires stable /<ns>/livox/lidar_secondary bridged as livox_ros_driver2/msg/CustomMsg (merger back input)"
             )
         fi
         if $PRE_MSG_TYPE_MISMATCH; then
@@ -623,7 +623,7 @@ run_preflight() {
 
     # Legacy-only bridge: the current committed ros_gz_bridge.yaml exposes
     # only /<ns>/livox/lidar as sensor_msgs/msg/PointCloud2. That satisfies
-    # neither T13 single-mode (which needs /<ns>/livox/lidar_front) nor the
+    # neither T13 single-mode (which needs /<ns>/livox/lidar_primary) nor the
     # dual merger (which needs CustomMsg). Surface this explicitly so the
     # operator sees the exact state and doesn't mistake a legacy bridge for
     # a usable one.
@@ -631,7 +631,7 @@ run_preflight() {
        && ! $PRE_BRIDGE_HAS_STABLE_FRONT \
        && ! $PRE_BRIDGE_HAS_STABLE_BACK; then
         PRE_BLOCKED_REASONS+=(
-            "legacy-only bridge: ros_gz_bridge.yaml exposes only /<ns>/livox/lidar (${PRE_BRIDGE_LEGACY_TYPE:-PointCloud2}) — cannot feed pointcloud_merger (needs CustomMsg front+back) and cannot satisfy T13 false-branch Point-LIO on /<ns>/livox/lidar_front"
+            "legacy-only bridge: ros_gz_bridge.yaml exposes only /<ns>/livox/lidar (${PRE_BRIDGE_LEGACY_TYPE:-PointCloud2}) — cannot feed pointcloud_merger (needs CustomMsg front+back) and cannot satisfy T13 false-branch Point-LIO on /<ns>/livox/lidar_primary"
         )
     fi
 }
@@ -683,8 +683,8 @@ write_preflight_evidence() {
         echo ""
         echo "| stable ROS topic (post-\`<robot_name>\` substitution) | bridged | ros_type_name |"
         echo "|---|---|---|"
-        echo "| \`/<ns>/livox/lidar_front\` | $($PRE_BRIDGE_HAS_STABLE_FRONT && echo YES || echo NO) | ${PRE_BRIDGE_FRONT_TYPE:-(none)} |"
-        echo "| \`/<ns>/livox/lidar_back\`  | $($PRE_BRIDGE_HAS_STABLE_BACK  && echo YES || echo NO) | ${PRE_BRIDGE_BACK_TYPE:-(none)} |"
+        echo "| \`/<ns>/livox/lidar_primary\` | $($PRE_BRIDGE_HAS_STABLE_FRONT && echo YES || echo NO) | ${PRE_BRIDGE_FRONT_TYPE:-(none)} |"
+        echo "| \`/<ns>/livox/lidar_secondary\`  | $($PRE_BRIDGE_HAS_STABLE_BACK  && echo YES || echo NO) | ${PRE_BRIDGE_BACK_TYPE:-(none)} |"
         echo "| \`/<ns>/livox/lidar\` (legacy) | $($PRE_BRIDGE_HAS_LEGACY_LIDAR && echo YES || echo NO) | ${PRE_BRIDGE_LEGACY_TYPE:-(none)} |"
         echo ""
         echo "| mismatch check | value |"
@@ -694,10 +694,10 @@ write_preflight_evidence() {
         echo "| PointCloud2 ↔ CustomMsg mismatch | $($PRE_MSG_TYPE_MISMATCH && echo YES || echo NO) |"
         echo ""
         echo "NOTE: T13 bound the single (use_dual_mid360:=False) fallback to"
-        echo "Point-LIO \`common.lid_topic=livox/lidar_front\`, so single mode also"
-        echo "depends on a stable \`/<ns>/livox/lidar_front\` bridge entry — the"
+        echo "Point-LIO \`common.lid_topic=livox/lidar_primary\`, so single mode also"
+        echo "depends on a stable \`/<ns>/livox/lidar_primary\` bridge entry — the"
         echo "legacy \`/<ns>/livox/lidar\` alone is NOT enough. Dual mode additionally"
-        echo "needs \`/<ns>/livox/lidar_back\` AND both entries must be"
+        echo "needs \`/<ns>/livox/lidar_secondary\` AND both entries must be"
         echo "\`livox_ros_driver2/msg/CustomMsg\` so the merger (CustomMsg in,"
         echo "CustomMsg out) can consume them. Updating ros_gz_bridge.yaml (and"
         echo "the simulator CustomMsg path) is OUT OF T15 SCOPE — it will be"
@@ -768,7 +768,7 @@ write_blocker_evidence() {
         echo "BLOCKED means the current environment / simulator configuration"
         echo "cannot support the requested mode at all — e.g. Gazebo is not"
         echo "installed, ros_gz_bridge.yaml does not expose stable"
-        echo "\`/<ns>/livox/lidar_front\` / \`/<ns>/livox/lidar_back\` topics, or"
+        echo "\`/<ns>/livox/lidar_primary\` / \`/<ns>/livox/lidar_secondary\` topics, or"
         echo "those entries declare \`sensor_msgs/msg/PointCloud2\` while the"
         echo "merger (and T13 false branch Point-LIO) need"
         echo "\`livox_ros_driver2/msg/CustomMsg\`. Inventing topic Hz / Nav Goal"
@@ -780,9 +780,9 @@ write_blocker_evidence() {
         echo "  \`colcon build --symlink-install\` in the worktree."
         echo "- Missing \`gz\` binary: install Gazebo Harmonic following the"
         echo "  project QUICKSTART (Ubuntu 24.04 + gz-sim 8)."
-        echo "- Missing stable \`/<ns>/livox/lidar_front\` and/or"
-        echo "  \`/<ns>/livox/lidar_back\` bridge entries: single mode (T13 false"
-        echo "  branch) reads \`/<ns>/livox/lidar_front\`, and the dual merger reads"
+        echo "- Missing stable \`/<ns>/livox/lidar_primary\` and/or"
+        echo "  \`/<ns>/livox/lidar_secondary\` bridge entries: single mode (T13 false"
+        echo "  branch) reads \`/<ns>/livox/lidar_primary\`, and the dual merger reads"
         echo "  both. The bridge entries must also declare"
         echo "  \`livox_ros_driver2/msg/CustomMsg\`, not \`sensor_msgs/msg/PointCloud2\`,"
         echo "  because the merger subscribes to CustomMsg (per"
@@ -799,13 +799,13 @@ write_blocker_evidence() {
         echo "sufficient on their own — see PointCloud2↔CustomMsg note above):"
         echo ""
         echo '    ```yaml'
-        echo "    - ros_topic_name: \"/<robot_name>/livox/lidar_front\""
-        echo "      gz_topic_name: \"/world/default/model/<robot_name>/link/front_mid360/sensor/front_mid360_lidar/scan/points\""
+        echo "    - ros_topic_name: \"/<robot_name>/livox/lidar_primary\""
+        echo "      gz_topic_name: \"/world/default/model/<robot_name>/link/primary_mid360/sensor/primary_mid360_lidar/scan/points\""
         echo "      ros_type_name: \"sensor_msgs/msg/PointCloud2\""
         echo "      gz_type_name: \"ignition.msgs.PointCloudPacked\""
         echo "      direction: \"GZ_TO_ROS\""
-        echo "    - ros_topic_name: \"/<robot_name>/livox/lidar_back\""
-        echo "      gz_topic_name: \"/world/default/model/<robot_name>/link/back_mid360/sensor/back_mid360_lidar/scan/points\""
+        echo "    - ros_topic_name: \"/<robot_name>/livox/lidar_secondary\""
+        echo "      gz_topic_name: \"/world/default/model/<robot_name>/link/secondary_mid360/sensor/secondary_mid360_lidar/scan/points\""
         echo "      ros_type_name: \"sensor_msgs/msg/PointCloud2\""
         echo "      gz_type_name: \"ignition.msgs.PointCloudPacked\""
         echo "      direction: \"GZ_TO_ROS\""
@@ -856,8 +856,8 @@ do_dry_run() {
         echo ""
         echo "| check | value |"
         echo "|---|---|"
-        echo "| stable /<ns>/livox/lidar_front bridged | $($PRE_BRIDGE_HAS_STABLE_FRONT && echo YES || echo NO) (${PRE_BRIDGE_FRONT_TYPE:-none}) |"
-        echo "| stable /<ns>/livox/lidar_back  bridged | $($PRE_BRIDGE_HAS_STABLE_BACK  && echo YES || echo NO) (${PRE_BRIDGE_BACK_TYPE:-none}) |"
+        echo "| stable /<ns>/livox/lidar_primary bridged | $($PRE_BRIDGE_HAS_STABLE_FRONT && echo YES || echo NO) (${PRE_BRIDGE_FRONT_TYPE:-none}) |"
+        echo "| stable /<ns>/livox/lidar_secondary  bridged | $($PRE_BRIDGE_HAS_STABLE_BACK  && echo YES || echo NO) (${PRE_BRIDGE_BACK_TYPE:-none}) |"
         echo "| legacy /<ns>/livox/lidar bridged | $($PRE_BRIDGE_HAS_LEGACY_LIDAR && echo YES || echo NO) (${PRE_BRIDGE_LEGACY_TYPE:-none}) |"
         echo "| PointCloud2 ↔ CustomMsg mismatch | $($PRE_MSG_TYPE_MISMATCH && echo YES || echo NO) |"
         echo ""

@@ -4,13 +4,13 @@
 #
 # Captures raw LiDAR point clouds and TF data needed by Multi_LiCa (T11).
 # NOTE: Multi_LiCa does NOT consume Livox CustomMsg directly; T11 must convert
-#       /livox/lidar_front and /livox/lidar_back (CustomMsg) to PointCloud2/PCD
+#       /livox/lidar_primary and /livox/lidar_secondary (CustomMsg) to PointCloud2/PCD
 #       before feeding them to the calibration tool.
 #
 # Recorded topics:
 #   REQUIRED (preflight aborts if missing):
-#     /livox/lidar_front   — front Mid360 raw CustomMsg (IP: 192.168.1.144)
-#     /livox/lidar_back    — back  Mid360 raw CustomMsg (IP: 192.168.1.145)
+#     /livox/lidar_primary   — front Mid360 raw CustomMsg (IP: 192.168.1.144)
+#     /livox/lidar_secondary    — back  Mid360 raw CustomMsg (IP: 192.168.1.145)
 #   OPTIONAL (recorded when present, skipped with a warning when not):
 #     /tf                  — dynamic transforms
 #     /tf_static           — static transforms
@@ -48,8 +48,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # REQUIRED_TOPICS must all be published; missing any aborts preflight.
 REQUIRED_TOPICS=(
-    "/livox/lidar_front"
-    "/livox/lidar_back"
+    "/livox/lidar_primary"
+    "/livox/lidar_secondary"
 )
 # OPTIONAL_TOPICS are recorded when present; missing ones emit a WARN but
 # do not abort. Multi_LiCa reads the initial guess from xmacro directly,
@@ -61,8 +61,8 @@ OPTIONAL_TOPICS=(
 # TOPICS_TO_RECORD is populated by check_topics() with only the required +
 # available-optional subset. Used for both `ros2 bag record` and metadata.
 TOPICS_TO_RECORD=()
-FRONT_IP="192.168.1.144"
-BACK_IP="192.168.1.145"
+PRIMARY_IP="192.168.1.144"
+SECONDARY_IP="192.168.1.145"
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -96,8 +96,8 @@ OPTIONS:
 
 RECORDED TOPICS:
   REQUIRED (preflight aborts if missing):
-    /livox/lidar_front    Front Mid360 raw CustomMsg  (real IP: $FRONT_IP)
-    /livox/lidar_back     Back  Mid360 raw CustomMsg  (real IP: $BACK_IP)
+    /livox/lidar_primary    Front Mid360 raw CustomMsg  (real IP: $PRIMARY_IP)
+    /livox/lidar_secondary     Back  Mid360 raw CustomMsg  (real IP: $SECONDARY_IP)
   OPTIONAL (recorded when present, skipped with WARN otherwise):
     /tf                   Dynamic transforms
     /tf_static            Static transforms
@@ -115,7 +115,7 @@ OPERATOR INSTRUCTIONS (real mode):
   1. Place robot on flat, open ground with clear 360-degree LiDAR view.
   2. Robot must be COMPLETELY STATIONARY during the entire recording.
   3. Ensure both Mid360 units are powered and publishing before running.
-  4. Verify topics are live: ros2 topic hz /livox/lidar_front /livox/lidar_back
+  4. Verify topics are live: ros2 topic hz /livox/lidar_primary /livox/lidar_secondary
   5. Run this script; do NOT move the robot until recording completes.
 
 OPERATOR INSTRUCTIONS (sim mode):
@@ -126,7 +126,7 @@ OPERATOR INSTRUCTIONS (sim mode):
 
 NOTES:
   - Multi_LiCa (T11) requires PointCloud2 or PCD input, NOT Livox CustomMsg.
-    T11 must convert /livox/lidar_front and /livox/lidar_back before calibration.
+    T11 must convert /livox/lidar_primary and /livox/lidar_secondary before calibration.
   - Do NOT record Point-LIO outputs (/cloud_registered, /aft_mapped_to_init, etc.).
   - Do NOT move the robot or command the chassis during recording.
   - Rosbag2 .db3/.mcap files are large; do NOT commit them to git.
@@ -211,8 +211,8 @@ check_topics() {
         log_error ""
         if [ "$ENV" = "real" ]; then
             log_error "Real mode: ensure both Mid360 units are powered and livox_ros_driver2 is running."
-            log_error "  Front Mid360 IP: $FRONT_IP"
-            log_error "  Back  Mid360 IP: $BACK_IP"
+            log_error "  Front Mid360 IP: $PRIMARY_IP"
+            log_error "  Back  Mid360 IP: $SECONDARY_IP"
             log_error "  Quickest bring-up: ros2 launch sentry_dual_mid360 dual_mid360_driver_launch.py"
         else
             log_error "Sim mode: ensure Gazebo is running, unpaused, and the navigation stack is up."
@@ -262,12 +262,12 @@ else
 fi)
 
 hardware_assumptions:
-  front_mid360_ip: $FRONT_IP
-  back_mid360_ip: $BACK_IP
+  primary_mid360_ip: $PRIMARY_IP
+  secondary_mid360_ip: $SECONDARY_IP
 
 notes:
   - Multi_LiCa (T11) requires PointCloud2/PCD, NOT Livox CustomMsg.
-  - T11 must convert /livox/lidar_front and /livox/lidar_back before calibration.
+  - T11 must convert /livox/lidar_primary and /livox/lidar_secondary before calibration.
   - Robot must be stationary during recording.
   - Do NOT commit .db3/.mcap bag files to git.
 
@@ -280,7 +280,7 @@ cat <<'REAL'
   - Place robot on flat, open ground with clear 360-degree LiDAR view.
   - Robot must be COMPLETELY STATIONARY during the entire recording.
   - Ensure both Mid360 units are powered and publishing before running.
-  - Verify: ros2 topic hz /livox/lidar_front /livox/lidar_back
+  - Verify: ros2 topic hz /livox/lidar_primary /livox/lidar_secondary
 REAL
 else
 cat <<'SIM'
@@ -460,8 +460,8 @@ main() {
         log_warn "============================================================"
         log_warn "REAL MODE: Ensure robot is STATIONARY on flat, open ground."
         log_warn "Do NOT move the robot during recording."
-        log_warn "Front Mid360 IP: $FRONT_IP"
-        log_warn "Back  Mid360 IP: $BACK_IP"
+        log_warn "Front Mid360 IP: $PRIMARY_IP"
+        log_warn "Back  Mid360 IP: $SECONDARY_IP"
         log_warn "============================================================"
         log_info "Starting in 3 seconds... (Ctrl-C to abort)"
         sleep 3

@@ -11,7 +11,7 @@
 
 ```
 src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro
-                                                └── back_lidar_pose="..."
+                                                └── secondary_lidar_pose="..."
 ```
 
 系统启动后 Point-LIO、Nav2、pointcloud_merger 都从这个 xmacro 拿 TF。
@@ -39,8 +39,8 @@ src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro
 ros2 launch sentry_dual_mid360 dual_mid360_driver_launch.py
 ```
 
-留着这个终端，**不要 Ctrl-C**。起成功后 `/livox/lidar_front`、
-`/livox/lidar_back` 两个话题都在发 10 Hz 的 CustomMsg。
+留着这个终端，**不要 Ctrl-C**。起成功后 `/livox/lidar_primary`、
+`/livox/lidar_secondary` 两个话题都在发 10 Hz 的 CustomMsg。
 
 > 注意：这个 launch **只起雷达驱动**，不起 nav2/slam/merger。全实车系统用
 > `rm_navigation_reality_launch.py`，但那个路径在录标定 bag 时会跟下游
@@ -64,8 +64,8 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/calib/calibrate_dual_mid360.sh --
 
 ```bash
 python3 src/sentry_nav/sentry_dual_mid360/scripts/calib/verify_dual_mid360_sync.py \
-    --front-topic /livox/lidar_front \
-    --back-topic  /livox/lidar_back \
+    --front-topic /livox/lidar_primary \
+    --back-topic  /livox/lidar_secondary \
     --sample-count 600 --timeout-s 120
 ```
 
@@ -87,7 +87,7 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/calib/record_calib_bag.sh \
 ```
 
 脚本会：
-- 自检 `/livox/lidar_front` 和 `/livox/lidar_back` 是否在发（缺一个就直接
+- 自检 `/livox/lidar_primary` 和 `/livox/lidar_secondary` 是否在发（缺一个就直接
   abort，不会录空包）
 - 自动跳过当前没人发的 `/tf`、`/tf_static`（仅启驱动模式下这俩不会有，
   Multi_LiCa 也用不上）
@@ -122,8 +122,8 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/calib/calibrate_dual_mid360.sh \
     --bootstrap --write-xmacro
 ```
 
-`--bootstrap` 告诉脚本：当前 xmacro 里的 `front_lidar_pose` /
-`back_lidar_pose` 是占位估计，别拿它们跟测量结果比差值。只要
+`--bootstrap` 告诉脚本：当前 xmacro 里的 `primary_lidar_pose` /
+`secondary_lidar_pose` 是占位估计，别拿它们跟测量结果比差值。只要
 Multi_LiCa 自己的点云配准质量够（`fitness ≥ 0.99`、`RMSE ≤ 10cm`），
 就判 PASS 并回写。
 
@@ -149,7 +149,7 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/calib/calibrate_dual_mid360.sh \
 cat logs/evidence/calib-report.md                  # 人看的总结
 cat logs/evidence/task-11-precision-check.txt     # 机读的判据明细
 cat logs/evidence/task-11-xmacro-update.txt        # 改了什么 / 为什么没改
-grep back_lidar_pose src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro
+grep secondary_lidar_pose src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro
 ```
 
 判决码：
@@ -169,11 +169,11 @@ colcon build --symlink-install --packages-select sentry_robot_description sentry
 source install/setup.bash
 ```
 
-下次起实车 launch 就会用新的 `back_lidar_pose`。
+下次起实车 launch 就会用新的 `secondary_lidar_pose`。
 
 ## 想先在 3D 里看看 xmacro 是否合理
 
-标定回写 xmacro（或者机械手动改 `front_lidar_pose` / `back_lidar_pose`）之后，
+标定回写 xmacro（或者机械手动改 `primary_lidar_pose` / `secondary_lidar_pose`）之后，
 可以不起实车就在 Gazebo 里预览一下传感器挂载是否合理：
 
 ```bash
@@ -198,7 +198,7 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh
 
 （`merger` 和 `rviz` 默认会一起起；无屏 / ssh 环境加 `--no-rviz` 跳过。）
 
-为什么不直接看 `/livox/lidar_front` / `_back` / `/livox/lidar`：它们是
+为什么不直接看 `/livox/lidar_primary` / `_back` / `/livox/lidar`：它们是
 `livox_ros_driver2/CustomMsg`，rviz 不能 render（Add 列表里灰色不能选）。
 脚本起的 `pointcloud_merger` 会同时发 `/livox/lidar_pc2`
 （`sensor_msgs/PointCloud2` 镜像），rviz 就能直接看。
@@ -208,7 +208,7 @@ bash src/sentry_nav/sentry_dual_mid360/scripts/tools/lidar_only_debug.sh
 （同时发 CustomMsg 和 PC2 副本）+ `rviz2`。Ctrl-C 一次把所有子进程一起收尾。
 
 rviz 里：
-- **Fixed Frame**: 手打 `front_mid360`（直接编辑 Global Options 第一行）
+- **Fixed Frame**: 手打 `primary_mid360`（直接编辑 Global Options 第一行）
 - `Add → PointCloud2 → /livox/lidar_pc2`（**merger 输出的 PC2 镜像**）
 - **必须改**：该 PointCloud2 面板展开 `Topic → Reliability Policy → Best Effort`
   （默认 Reliable 和 merger 的 Best Effort publisher QoS 不兼容，会 silently
@@ -231,7 +231,7 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py
   终端还活着，用 `ros2 topic hz` 隔几秒看一眼（注意要 source install/setup.bash，
   不然 CustomMsg 类型支持缺失会报"message type invalid"）
 - **`verdict: FAIL`，`rotation_error_deg` 接近 180°**：90% 是 xmacro 里
-  `front_lidar_pose` 的 yaw 方向跟实装不一致。检查物理朝向，或加 `--bootstrap`
+  `primary_lidar_pose` 的 yaw 方向跟实装不一致。检查物理朝向，或加 `--bootstrap`
   先跑通再说
 - **`BLOCKED: multi_lidar_calibrator is not discoverable`**：Multi_LiCa ROS
   包没 build。按 `--check-deps` 提示的 remove COLCON_IGNORE → colcon build →
@@ -245,11 +245,11 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py
 
 脚本会同时产出两种数值：
 
-- **相对外参** `T_back→front`（`relative_back_in_front_xyz_rpy_rad`）:
-  纯点云测的，不依赖 xmacro 里任何值。以后机械定版了 `front_lidar_pose`，
-  拿这个相对值一次矩阵乘就能推出新 `back_lidar_pose`，**不用重录 bag / 重标**。
-- **绝对 pose** `back_lidar_pose`（相对 `gimbal_pitch`）: `front_base @ T_back→front`。
-  这个值绑定在当前 xmacro 的 `front_lidar_pose` 上，front 改了它就得重算。
+- **相对外参** `T_secondary→primary`（`relative_secondary_in_primary_xyz_rpy_rad`）:
+  纯点云测的，不依赖 xmacro 里任何值。以后机械定版了 `primary_lidar_pose`，
+  拿这个相对值一次矩阵乘就能推出新 `secondary_lidar_pose`，**不用重录 bag / 重标**。
+- **绝对 pose** `secondary_lidar_pose`（相对 `gimbal_pitch`）: `primary_base @ T_secondary→primary`。
+  这个值绑定在当前 xmacro 的 `primary_lidar_pose` 上，front 改了它就得重算。
 
-所以**只要 front_lidar_pose 还没定版，你拿到的 back_lidar_pose 就是暂时的**——
+所以**只要 primary_lidar_pose 还没定版，你拿到的 secondary_lidar_pose 就是暂时的**——
 真正稳定的是 relative 那组数字。

@@ -148,8 +148,8 @@ ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmuc_20
 | `rviz_config_file` | string | `rviz/nav2_default_view.rviz` | RViz 配置文件路径 |
 
 ### 仿真专有节点
-- **sentry_dual_mid360 sim bridge (`use_dual_mid360:=True`，默认)**: `sim_custommsg_bridge_launch.py` 启动两份 `sentry_dual_mid360::SimPointCloudToCustomMsgNode`，分别把 Gazebo 桥出的 `livox/lidar_front_points` / `livox/lidar_back_points`（`sensor_msgs/PointCloud2`）转换成 `livox/lidar_front` / `livox/lidar_back` Livox `CustomMsg`，由 `MergerNode` 合并给 Point-LIO，与实车共用同一条 CustomMsg 链路。
-- **ign_sim_pointcloud_tool (`use_dual_mid360:=False` 回退)**: 订阅前 Mid360 的 `PointCloudPacked`（base YAML `pcd_topic: livox/lidar_front_points`），发布 `velodyne_points`（`sensor_msgs/PointCloud2`）给 Point-LIO 单雷达 Velodyne 回退链路使用。仅仿真模式启动。
+- **sentry_dual_mid360 sim bridge (`use_dual_mid360:=True`，默认)**: `sim_custommsg_bridge_launch.py` 启动两份 `sentry_dual_mid360::SimPointCloudToCustomMsgNode`，分别把 Gazebo 桥出的 `livox/lidar_primary_points` / `livox/lidar_secondary_points`（`sensor_msgs/PointCloud2`）转换成 `livox/lidar_primary` / `livox/lidar_secondary` Livox `CustomMsg`，由 `MergerNode` 合并给 Point-LIO，与实车共用同一条 CustomMsg 链路。
+- **ign_sim_pointcloud_tool (`use_dual_mid360:=False` 回退)**: 订阅前 Mid360 的 `PointCloudPacked`（base YAML `pcd_topic: livox/lidar_primary_points`），发布 `velodyne_points`（`sensor_msgs/PointCloud2`）给 Point-LIO 单雷达 Velodyne 回退链路使用。仅仿真模式启动。
 
 ---
 
@@ -626,7 +626,7 @@ ros2 launch sentry_nav_bringup rm_multi_navigation_simulation_launch.py \
 |:---|:---|:---|
 | `xfer_format` | `4` | 数据格式: 0=PointCloud2, 1=CustomMsg, 4=AllMsg(推荐) |
 | `publish_freq` | `30.0` | 发布频率 (Hz)。可选: 5, 10, 20, 30, 50 |
-| `frame_id` | `front_mid360` | TF 坐标系名称 |
+| `frame_id` | `primary_mid360` | TF 坐标系名称 |
 | `multi_topic` | `0` | 0=共享话题, 1=每个 LiDAR 独立话题 |
 
 ---
@@ -783,7 +783,7 @@ ros2 launch sentry_nav_bringup rm_multi_navigation_simulation_launch.py \
 
 ### 场景 4: Point-LIO 里程计发散
 
-- **首先检查传感器安装外参**（`gimbal_pitch → front_mid360` 的 TF / 模型定义）是否与实物一致，不要先改 `gravity`
+- **首先检查传感器安装外参**（`gimbal_pitch → primary_mid360` 的 TF / 模型定义）是否与实物一致，不要先改 `gravity`
 - `gravity` 的范数应保持约 `9.81m/s²`；实车重力标定只用静态 IMU 的 `-mean_acc` 方向更新它，不能把 LiDAR 安装角手算塞进去
 - 确认 `lidar_type` 和 `timestamp_unit` 设置正确
 - 检查 IMU 数据质量，调整 `satu_acc` / `satu_gyro`

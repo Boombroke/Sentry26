@@ -37,8 +37,8 @@ src/sentry_robot_description/
 TF 链固定为：
 
 ```text
-map -> odom -> base_footprint -> chassis -> gimbal_yaw -> gimbal_pitch ┬─ front_mid360 → front_mid360_imu
-                                                                      └─ back_mid360  → back_mid360_imu
+map -> odom -> base_footprint -> chassis -> gimbal_yaw -> gimbal_pitch ┬─ primary_mid360 → front_mid360_imu
+                                                                      └─ secondary_mid360  → back_mid360_imu
 ```
 
 语义约束：
@@ -46,8 +46,8 @@ map -> odom -> base_footprint -> chassis -> gimbal_yaw -> gimbal_pitch ┬─ fr
 - `base_footprint` 是导航使用的 2D 基座
 - `chassis` 与 `base_footprint` 共享 yaw
 - 云台 frame 名固定为 `gimbal_yaw -> gimbal_pitch`
-- 前后双 Mid360 和工业相机都挂在 `gimbal_pitch`
-- LiDAR 斜装、倒装、下俯都只能写在 `gimbal_pitch -> front_mid360` / `gimbal_pitch -> back_mid360`
+- 两颗 Mid360（`primary_mid360` / `secondary_mid360`，X 轴镜像安装）和工业相机都挂在 `gimbal_pitch`
+- LiDAR 斜装、倒装、下俯都只能写在 `gimbal_pitch -> primary_mid360` / `gimbal_pitch -> secondary_mid360`
 - `front_mid360_imu` / `back_mid360_imu` 是 Layer B（Mid360 出厂 IMU 相对 LiDAR 的位姿），定义在 `src/sentry_nav/sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro`，跨包 xmacro include 注入
 - 不能把 LiDAR 安装角写进 Point-LIO 的 `gravity`
 
@@ -93,7 +93,7 @@ map -> odom -> base_footprint -> chassis -> gimbal_yaw -> gimbal_pitch ┬─ fr
 这里应该只保留实车真实语义：
 
 - 实车 chassis 尺寸
-- 实车 LiDAR 外参（当前默认前后双 Mid360 均 30° 下俯）
+- 实车 LiDAR 外参（当前默认两颗 Mid360 绕 X 轴镜像安装，详见"实车入口默认值"）
 - 实车相机外参
 - 实车固定云台 TF
 - TF / visual / collision
@@ -137,10 +137,10 @@ Gazebo 入口。
 
 | 需求 | 改哪个文件 | 典型参数 |
 |---|---|---|
-| 实车前 LiDAR 斜装、倒装、实测平移变化 | `wheeled_biped_real.sdf.xmacro` | `front_lidar_pose` |
-| 实车后 LiDAR 斜装、倒装、实测平移变化 | `wheeled_biped_real.sdf.xmacro` | `back_lidar_pose` |
+| 实车前 LiDAR 斜装、倒装、实测平移变化 | `wheeled_biped_real.sdf.xmacro` | `primary_lidar_pose` |
+| 实车后 LiDAR 斜装、倒装、实测平移变化 | `wheeled_biped_real.sdf.xmacro` | `secondary_lidar_pose` |
 | 实车云台改成固定安装 | `wheeled_biped_real.sdf.xmacro` | `use_fixed_gimbal=True`（默认已开启） |
-| 仿真里想调下俯角、仿真 chassis 尺寸 | `wheeled_biped_sim.sdf.xmacro` | `front_lidar_pose`、`back_lidar_pose`、`chassis_length/width/z` |
+| 仿真里想调下俯角、仿真 chassis 尺寸 | `wheeled_biped_sim.sdf.xmacro` | `primary_lidar_pose`、`secondary_lidar_pose`、`chassis_length/width/z` |
 | Mid360 出厂 IMU 相对 LiDAR 的外参（Layer B） | `src/sentry_nav/sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro` | IMU factory pose |
 | 公共轮距、轮径、云台高度变化 | `wheeled_biped_core.sdf.xmacro` | 公共 joint / 几何参数 |
 
@@ -159,17 +159,17 @@ Gazebo 入口。
 - `chassis_length = 0.648`
 - `chassis_width = 0.650`
 - `chassis_z = 0.120`
-- `front_lidar_pose = 0 0.102 0.3 -0.733 0.0 0.0`
-- `back_lidar_pose  = 0 -0.102 0.3 0.733 0.0 0.0`
+- `primary_lidar_pose = 0 0.102 0.3 -0.733 0.0 0.0`
+- `secondary_lidar_pose  = 0 -0.102 0.3 0.733 0.0 0.0`
 - `use_fixed_gimbal = True`
 
 说明：
 
 - 两颗 Mid360 挂在 `gimbal_pitch` 上绕 X 轴镜像安装（roll = ±0.733 rad ≈ ±42°，无 yaw offset，不是前后 180° 反装）。`front/back` 只是历史 frame 标识符
 - 两组 pose 只差 y 分量（±0.102 m）和 roll 符号；pitch/yaw 都是 0
-- `front_mid360` 的 IMU 进入 Point-LIO，`back_mid360` 的 IMU 仅作诊断（`/livox/imu_back`），不进 LIO
+- `primary_mid360` 的 IMU 进入 Point-LIO，`secondary_mid360` 的 IMU 仅作诊断（`/livox/imu_secondary`），不进 LIO
 - Mid360 出厂 IMU 相对 LiDAR 的位姿 (Layer B) 定义在 `src/sentry_nav/sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro`，两颗 Mid360 复用同一份 factory pose
-- `back_lidar_pose` 机械调整后必须用 `src/sentry_nav/sentry_dual_mid360/scripts/calib/calibrate_dual_mid360.sh --bootstrap --write-xmacro` 重新标定写回
+- `secondary_lidar_pose` 机械调整后必须用 `src/sentry_nav/sentry_dual_mid360/scripts/calib/calibrate_dual_mid360.sh --bootstrap --write-xmacro` 重新标定写回
 - 实车 `gimbal_yaw_joint / gimbal_pitch_joint` 为 fixed，不再依赖串口 joint state 驱动 TF
 
 ### 仿真入口默认值
@@ -179,7 +179,7 @@ Gazebo 入口。
 - `chassis_length = 0.4212`
 - `chassis_width = 0.4225`
 - `chassis_z = 0.078`
-- `front_lidar_pose = -0.05 0 0.05 0.0 0.523598775598299 3.141592653589793`
+- `primary_lidar_pose = -0.05 0 0.05 0.0 0.523598775598299 3.141592653589793`
 - `use_fixed_gimbal = False`
 
 说明：
@@ -212,7 +212,7 @@ chassis -> gimbal_pitch_joint [type="fixed"]
 
 - `robot_state_publisher` 只需发布一次静态 TF，不依赖 `joint_state_publisher` 持续驱动
 - `serial/gimbal_joint_state` 话题仍可保留给调试/可视化，但不再作为 TF 来源
-- `odom_bridge` 每帧通过 `lookupTransform` 查询 `front_mid360 → base_footprint`，静态 TF 永远不会超时
+- `odom_bridge` 每帧通过 `lookupTransform` 查询 `primary_mid360 → base_footprint`，静态 TF 永远不会超时
 
 ### 仿真为什么用 revolute
 
@@ -220,15 +220,15 @@ chassis -> gimbal_pitch_joint [type="fixed"]
 
 ### 改雷达外参不需要改这个参数
 
-`use_fixed_gimbal` 只控制关节类型（fixed/revolute），与 `front_lidar_pose`（雷达安装角）完全无关。改雷达外参只改 `front_lidar_pose`，不动 `use_fixed_gimbal`。
+`use_fixed_gimbal` 只控制关节类型（fixed/revolute），与 `primary_lidar_pose`（雷达安装角）完全无关。改雷达外参只改 `primary_lidar_pose`，不动 `use_fixed_gimbal`。
 
 ### 翻车检测与 use_fixed_gimbal 的关系
 
 `odom_bridge` 的翻车检测（`/robot_flipped` 话题）读取的是 `tf_odom_to_robot_base_raw` 的 roll/pitch，即底盘本体在 odom 系的真实倾斜角。
 
-无论 `use_fixed_gimbal` 是 `True` 还是 `False`，`getTransform(lidar_frame → robot_base_frame)` 都会从 TF 树查询完整变换链，雷达安装角（`front_lidar_pose`）的影响在变换链中被精确抵消。因此：
+无论 `use_fixed_gimbal` 是 `True` 还是 `False`，`getTransform(lidar_frame → robot_base_frame)` 都会从 TF 树查询完整变换链，雷达安装角（`primary_lidar_pose`）的影响在变换链中被精确抵消。因此：
 
-- 改 `front_lidar_pose`（雷达外参）→ 不影响翻车检测结果
+- 改 `primary_lidar_pose`（雷达外参）→ 不影响翻车检测结果
 - 改 `use_fixed_gimbal`（关节类型）→ 不影响翻车检测结果
 - 翻车检测阈值由 `odom_bridge` 的 `flip_roll_threshold` / `flip_pitch_threshold` 参数控制（默认 30°）
 
@@ -240,7 +240,7 @@ chassis -> gimbal_pitch_joint [type="fixed"]
 
 必须区分：
 
-- LiDAR 安装角：改这里的 `front_lidar_pose`
+- LiDAR 安装角：改这里的 `primary_lidar_pose`
 - Point-LIO `gravity / gravity_init`：改导航参数或用工具箱标定
 
 不要把 LiDAR 安装角手算进 `gravity`。  
@@ -248,7 +248,7 @@ chassis -> gimbal_pitch_joint [type="fixed"]
 
 ### 改雷达外参需不需要重标 gravity
 
-| 操作 | 需要改 front_lidar_pose | 需要重标 gravity |
+| 操作 | 需要改 primary_lidar_pose | 需要重标 gravity |
 |---|---|---|
 | 只改 xmacro 数字（修正测量误差） | ✅ | ❌ |
 | 物理重新安装雷达（改了角度） | ✅ | ⚠️ 建议重标，`imu_en=True` 时影响小 |
@@ -257,7 +257,7 @@ chassis -> gimbal_pitch_joint [type="fixed"]
 
 ## 外参与 DOF 怎么理解
 
-`front_lidar_pose` / `back_lidar_pose` 当前使用：
+`primary_lidar_pose` / `secondary_lidar_pose` 当前使用：
 
 ```text
 x y z roll pitch yaw
@@ -272,8 +272,8 @@ x y z roll pitch yaw
 
 在当前模型里：
 
-- `front_lidar_pose` 永远表示 `gimbal_pitch -> front_mid360`
-- `back_lidar_pose` 永远表示 `gimbal_pitch -> back_mid360`
+- `primary_lidar_pose` 永远表示 `gimbal_pitch -> primary_mid360`
+- `secondary_lidar_pose` 永远表示 `gimbal_pitch -> secondary_mid360`
 - 也就是"雷达相对云台安装板"的外参
 - 不要把它理解成 `map`、`odom` 或 `base_footprint` 下的绝对姿态
 
@@ -285,15 +285,15 @@ x y z roll pitch yaw
 base_footprint -> chassis         fixed
 chassis -> gimbal_yaw             fixed
 gimbal_yaw -> gimbal_pitch        fixed
-gimbal_pitch -> front_mid360      fixed (由 front_lidar_pose 定义)
-gimbal_pitch -> back_mid360       fixed (由 back_lidar_pose 定义)
+gimbal_pitch -> primary_mid360      fixed (由 primary_lidar_pose 定义)
+gimbal_pitch -> secondary_mid360       fixed (由 secondary_lidar_pose 定义)
 ```
 
 所以当前实车有效语义是：
 
 - 底盘和云台一起运动，是同一个刚体链
 - 前后 Mid360 只有"安装外参"这一个固定姿态差
-- 改前/后 LiDAR 安装角，只改 `front_lidar_pose` / `back_lidar_pose`
+- 改前/后 LiDAR 安装角，只改 `primary_lidar_pose` / `secondary_lidar_pose`
 - 不要去改 `gravity` 表达 LiDAR 安装角
 
 当前仿真默认：
@@ -302,8 +302,8 @@ gimbal_pitch -> back_mid360       fixed (由 back_lidar_pose 定义)
 base_footprint -> chassis         fixed
 chassis -> gimbal_yaw             revolute
 gimbal_yaw -> gimbal_pitch        revolute
-gimbal_pitch -> front_mid360      fixed
-gimbal_pitch -> back_mid360       fixed
+gimbal_pitch -> primary_mid360      fixed
+gimbal_pitch -> secondary_mid360       fixed
 ```
 
 所以仿真保留了云台动态 DOF，实车默认没有。
@@ -325,10 +325,10 @@ gimbal_pitch -> back_mid360       fixed
 
 当前实车双 Mid360 的安装是绕 X 轴镜像（roll 反号），两组 pose 分别为：
 
-- `front_lidar_pose = 0 0.102 0.3 -0.733 0.0 0.0`（roll ≈ -42°）
-- `back_lidar_pose  = 0 -0.102 0.3 0.733 0.0 0.0`（roll ≈ +42°）
+- `primary_lidar_pose = 0 0.102 0.3 -0.733 0.0 0.0`（roll ≈ -42°）
+- `secondary_lidar_pose  = 0 -0.102 0.3 0.733 0.0 0.0`（roll ≈ +42°）
 
-`front_lidar_pose` / `back_lidar_pose` 使用 `x y z roll pitch yaw`，均为弧度。
+`primary_lidar_pose` / `secondary_lidar_pose` 使用 `x y z roll pitch yaw`，均为弧度。
 
 ## 角度换算（弧度）
 
@@ -364,7 +364,7 @@ python3 -c "import math; print(math.degrees(0.5235987755982988))"
 
 ## 常见安装场景怎么写
 
-以下都只讨论 `front_lidar_pose` / `back_lidar_pose` 的 `roll pitch yaw` 三个角。
+以下都只讨论 `primary_lidar_pose` / `secondary_lidar_pose` 的 `roll pitch yaw` 三个角。
 
 ### 1. 正装，只是下俯 30°
 
@@ -395,7 +395,7 @@ python3 -c "import math; print(math.degrees(0.5235987755982988))"
 具体写法要看你是绕哪根机械轴翻过去的，但原则是：
 
 - 倒置属于**安装姿态**
-- 仍然只改 `front_lidar_pose` / `back_lidar_pose`
+- 仍然只改 `primary_lidar_pose` / `secondary_lidar_pose`
 - 不改 `gravity`
 
 常见例子：
@@ -403,7 +403,7 @@ python3 -c "import math; print(math.degrees(0.5235987755982988))"
 - 若雷达是"上下翻转"装上去，通常先试 `roll = pi`
 - 若雷达是"前后反装"装上去，通常先试 `yaw = pi`
 
-历史上 back_lidar_pose 曾使用 `yaw = 3.141592653589793`（即 180° 反装）做前后盲区互补，但**当前实车没有用这种布局**。现在 back 的 roll 取 front 的相反数、yaw 为 0，是绕 X 轴的镜像安装。这两种姿态不可混用。
+历史上 secondary_lidar_pose 曾使用 `yaw = 3.141592653589793`（即 180° 反装）做前后盲区互补，但**当前实车没有用这种布局**。现在 back 的 roll 取 front 的相反数、yaw 为 0，是绕 X 轴的镜像安装。这两种姿态不可混用。
 
 ### 5. 倒置后再下俯 30°
 
@@ -413,7 +413,7 @@ python3 -c "import math; print(math.degrees(0.5235987755982988))"
 
 1. 先确定基础倒置是绕哪根轴翻的
 2. 再在那个基础姿态上叠加俯仰角
-3. 用 RViz / TF 树看 `front_mid360` / `back_mid360` 坐标轴是否符合实物
+3. 用 RViz / TF 树看 `primary_mid360` / `secondary_mid360` 坐标轴是否符合实物
 
 如果不确定，宁可分两步验证：
 
@@ -425,7 +425,7 @@ python3 -c "import math; print(math.degrees(0.5235987755982988))"
 
 - 把角度直接写进 SDF，忘了要用弧度
 - 把 LiDAR 安装角写进 Point-LIO `gravity`
-- 把 `front_lidar_pose` 误当成世界坐标系姿态
+- 把 `primary_lidar_pose` 误当成世界坐标系姿态
 - 底盘/云台已经固定，却还去改 `gimbal_yaw_joint` 或 `gimbal_pitch_joint` 的动态关节语义
 - 倒装时一次同时改多个轴，最后分不清是谁起作用
 
@@ -434,7 +434,7 @@ python3 -c "import math; print(math.degrees(0.5235987755982988))"
 1. 先只改一个轴
 2. 用弧度写值
 3. 启动 `robot_state_publisher`
-4. 在 RViz 检查 `front_mid360` 的坐标轴方向
+4. 在 RViz 检查 `primary_mid360` 的坐标轴方向
 5. 确认对了再继续叠加下一个角
 
 ## Launch 用法

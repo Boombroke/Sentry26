@@ -118,7 +118,7 @@ if(BUILD_TESTING)
 endif()
 
 # Expose share/sentry_dual_mid360 to IGN_GAZEBO_RESOURCE_PATH so that
-# model://urdf/back_mid360.sdf.xmacro and model://urdf/mid360_imu_tf.sdf.xmacro
+# model://urdf/secondary_mid360.sdf.xmacro and model://urdf/mid360_imu_tf.sdf.xmacro
 # can be resolved by xmacro4sdf when rendering wheeled_biped_real.sdf.xmacro.
 # This follows the same pattern as sentry_robot_description/env-hooks/gazebo.dsv.in.
 ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/env-hooks/xmacro_path.dsv.in")

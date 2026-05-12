@@ -8,7 +8,7 @@
 
 ## 1. 背景与适用范围
 
-Sentry26 在 2026 赛季把定位雷达从单 Mid360 升级到**挂在 `gimbal_pitch` 上的双 Mid360**（X 轴镜像安装，不是前后 180° 反装；历史名字 `front/back` 保留不变）。两颗 Mid360 通过 `pointcloud_merger` 外部前融合成单路 `/livox/lidar`（`livox_ros_driver2/msg/CustomMsg`，frame=`front_mid360`）喂给 Point-LIO，Point-LIO 源码零改动。
+Sentry26 在 2026 赛季把定位雷达从单 Mid360 升级到**挂在 `gimbal_pitch` 上的双 Mid360**（X 轴镜像安装，不是前后 180° 反装；历史名字 `front/back` 保留不变）。两颗 Mid360 通过 `pointcloud_merger` 外部前融合成单路 `/livox/lidar`（`livox_ros_driver2/msg/CustomMsg`，frame=`primary_mid360`）喂给 Point-LIO，Point-LIO 源码零改动。
 
 对 `small_gicp_relocalization` 而言，**运行时输入发生了语义变化**：
 
@@ -91,7 +91,7 @@ python3 src/sentry_nav/sentry_dual_mid360/scripts/codegen/verify_pointlio_overri
 
 ### 3.3 前置任务门控
 
-- **T11 外参 accepted**：`calibrate_dual_mid360.sh --check-deps` PASS，且 `wheeled_biped_real.sdf.xmacro` 的 `back_lidar_pose` 已按 Multi_LiCa 结果写回（或确认 CAD 默认可用，MH8 规则）。
+- **T11 外参 accepted**：`calibrate_dual_mid360.sh --check-deps` PASS，且 `wheeled_biped_real.sdf.xmacro` 的 `secondary_lidar_pose` 已按 Multi_LiCa 结果写回（或确认 CAD 默认可用，MH8 规则）。
 - **Override 新鲜**：`verify_pointlio_overrides_fresh.py` 必须 PASS；否则 Point-LIO 的 `extrinsic_T/R` 和 xmacro 不同步，建图出来的 PCD 带着错误外参，重建也没用。
 - **Merger 可用**：`colcon build --packages-select sentry_dual_mid360 --symlink-install`；`ros2 launch sentry_dual_mid360 pointcloud_merger_launch.py --print` 能成功解析。
 - **实车硬件**：双 Mid360 分别 ping 通 192.168.1.144 / 192.168.1.145；BMI088 IMU 在线；串口、轮足驱动正常。
@@ -167,10 +167,10 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py \
 
 ```bash
 # 两路 Livox CustomMsg 都在（~10 Hz）
-ros2 topic hz /livox/lidar_front
-ros2 topic hz /livox/lidar_back
+ros2 topic hz /livox/lidar_primary
+ros2 topic hz /livox/lidar_secondary
 
-# merger 合并输出在（~10 Hz），frame_id=front_mid360
+# merger 合并输出在（~10 Hz），frame_id=primary_mid360
 ros2 topic hz /livox/lidar
 ros2 topic echo /livox/lidar --field header.frame_id | head -5
 
@@ -340,10 +340,10 @@ ros2 action send_goal -f /navigate_to_pose \
 直接跳过第 4 节备份（没什么可备份的），从第 3 节检查清单继续，然后做第 5 节实车慢速建图。本指南的迁移前提是"旧 PCD 存在且引用于 YAML 中"；空目录场景是"首次生成"，流程从第 5 节开始即可。
 
 **Q4. 标定（T11）还没完成，能先重建 PCD 吗？**
-不能。Point-LIO 的 `extrinsic_T / extrinsic_R` 由 `pointlio_dual_overrides.yaml` 注入，而该 YAML 由 xmacro 单源 codegen；如果 `back_lidar_pose` 还是 CAD 默认而没经 Multi_LiCa 精调，后雷达点在 `front_mid360` 系里的位置会有误差。带错误外参建图，PCD 就是错的。正确顺序是 **T11 → verify override fresh → 重建 PCD**。
+不能。Point-LIO 的 `extrinsic_T / extrinsic_R` 由 `pointlio_dual_overrides.yaml` 注入，而该 YAML 由 xmacro 单源 codegen；如果 `secondary_lidar_pose` 还是 CAD 默认而没经 Multi_LiCa 精调，后雷达点在 `primary_mid360` 系里的位置会有误差。带错误外参建图，PCD 就是错的。正确顺序是 **T11 → verify override fresh → 重建 PCD**。
 
 **Q5. 新 PCD 比旧 PCD 大很多 / 小很多，正常吗？**
-双 Mid360 下后向也有点，点数通常会比单雷达多 40–80%。如果点数**比旧 PCD 还少**，说明 merger 或 Point-LIO 没在正常跑；回到第 5.1 节的健康检查，特别是 `ros2 topic hz /livox/lidar_back` 和 `/livox/lidar`。如果点数**远大于 100 万**，说明绕场太久或下采样没生效，建议把慢走时长控制在 5 分钟左右再重建。
+双 Mid360 下后向也有点，点数通常会比单雷达多 40–80%。如果点数**比旧 PCD 还少**，说明 merger 或 Point-LIO 没在正常跑；回到第 5.1 节的健康检查，特别是 `ros2 topic hz /livox/lidar_secondary` 和 `/livox/lidar`。如果点数**远大于 100 万**，说明绕场太久或下采样没生效，建议把慢走时长控制在 5 分钟左右再重建。
 
 **Q6. GICP 日志里出现零星 `Emergency relocalization`，但频率很低，可以接受吗？**
 短时的 Emergency 触发（例如过门、穿过视野几乎空的大厅时）属于预期范围，只要恢复后 `inlier_ratio` 与 `fitness_error` 立刻回到正常区间就可以。**持续**的 Emergency（每分钟多于一次、或 Emergency 后没有成功收敛）说明 PCD 结构与真实场景有系统性偏差，需要重新建图。

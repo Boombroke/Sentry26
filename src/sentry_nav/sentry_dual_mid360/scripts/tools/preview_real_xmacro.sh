@@ -3,7 +3,7 @@
 #
 # Quick 3D preview of wheeled_biped_real.sdf.xmacro in Gazebo Harmonic.
 # Use this to eyeball sensor placement (front/back Mid360 poses, gimbal frame)
-# after editing front_lidar_pose / back_lidar_pose in xmacro — no nav2 / slam /
+# after editing primary_lidar_pose / secondary_lidar_pose in xmacro — no nav2 / slam /
 # Point-LIO / rviz required.
 #
 # What it does:
@@ -69,7 +69,7 @@ if ! command -v gz >/dev/null 2>&1; then
 fi
 
 # model:// resolution: Gazebo walks GZ_SIM_RESOURCE_PATH. Without sourcing the
-# workspace install/ overlay it has no way to find mid360 / back_mid360 meshes.
+# workspace install/ overlay it has no way to find mid360 / secondary_mid360 meshes.
 if [ -z "${GZ_SIM_RESOURCE_PATH:-}" ]; then
     echo "[WARN] GZ_SIM_RESOURCE_PATH is empty; model:// URIs may fail to resolve."
     echo "[WARN] source install/setup.bash (or export GZ_SIM_RESOURCE_PATH) and retry."

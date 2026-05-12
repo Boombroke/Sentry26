@@ -74,8 +74,8 @@ REQUIRED_PACKAGES=(
     "point_lio"
 )
 
-DEFAULT_FRONT_IP="192.168.1.144"
-DEFAULT_BACK_IP="192.168.1.145"
+DEFAULT_PRIMARY_IP="192.168.1.144"
+DEFAULT_SECONDARY_IP="192.168.1.145"
 DEFAULT_FAKE_BAG_PATH="/tmp/static_fake_bag"
 
 SYNC_VERIFIER_NAME="verify_dual_mid360_sync.py"
@@ -90,8 +90,8 @@ MODE_PREFLIGHT=false
 MODE_SKIP_HARDWARE=false
 MODE_FAKE_BAG=false
 
-FRONT_IP="${DEFAULT_FRONT_IP}"
-BACK_IP="${DEFAULT_BACK_IP}"
+PRIMARY_IP="${DEFAULT_PRIMARY_IP}"
+SECONDARY_IP="${DEFAULT_SECONDARY_IP}"
 DURATION=60
 BAG_PATH=""
 FAKE_BAG_PATH="${DEFAULT_FAKE_BAG_PATH}"
@@ -152,8 +152,8 @@ OPTIONS:
                                     (enables --skip-hardware semantics).
     --fake-bag-path PATH            Override path checked by --fake-bag.
                                     Default: ${DEFAULT_FAKE_BAG_PATH}.
-    --front-ip IP                   Front Mid360 IP. Default: ${DEFAULT_FRONT_IP}.
-    --back-ip IP                    Back  Mid360 IP. Default: ${DEFAULT_BACK_IP}.
+    --primary-ip IP                   Front Mid360 IP. Default: ${DEFAULT_PRIMARY_IP}.
+    --secondary-ip IP                    Back  Mid360 IP. Default: ${DEFAULT_SECONDARY_IP}.
     --namespace NS                  Navigation namespace override.
                                     Default: "" (unnamespaced).
     --world WORLD                   Override rm_navigation_reality_launch world.
@@ -244,14 +244,14 @@ parse_args() {
                 FAKE_BAG_PATH="$2"
                 shift 2
                 ;;
-            --front-ip)
-                [ $# -ge 2 ] || { log_error "--front-ip requires an argument"; exit 3; }
-                FRONT_IP="$2"
+            --primary-ip)
+                [ $# -ge 2 ] || { log_error "--primary-ip requires an argument"; exit 3; }
+                PRIMARY_IP="$2"
                 shift 2
                 ;;
-            --back-ip)
-                [ $# -ge 2 ] || { log_error "--back-ip requires an argument"; exit 3; }
-                BACK_IP="$2"
+            --secondary-ip)
+                [ $# -ge 2 ] || { log_error "--secondary-ip requires an argument"; exit 3; }
+                SECONDARY_IP="$2"
                 shift 2
                 ;;
             --namespace)
@@ -503,24 +503,24 @@ run_preflight() {
     fi
 
     if $MODE_REAL; then
-        log_info "pinging front Mid360 @ ${FRONT_IP} (2s timeout)"
-        if check_ping "$FRONT_IP"; then
+        log_info "pinging front Mid360 @ ${PRIMARY_IP} (2s timeout)"
+        if check_ping "$PRIMARY_IP"; then
             PRE_FRONT_REACHABLE=true
-            log_ok "front Mid360 reachable: ${FRONT_IP}"
+            log_ok "front Mid360 reachable: ${PRIMARY_IP}"
         else
             PRE_FRONT_REACHABLE=false
-            log_fail "front Mid360 NOT reachable: ${FRONT_IP}"
-            PRE_BLOCKED_REASONS+=("front Mid360 (${FRONT_IP}) not reachable via ICMP")
+            log_fail "front Mid360 NOT reachable: ${PRIMARY_IP}"
+            PRE_BLOCKED_REASONS+=("front Mid360 (${PRIMARY_IP}) not reachable via ICMP")
         fi
 
-        log_info "pinging back Mid360 @ ${BACK_IP} (2s timeout)"
-        if check_ping "$BACK_IP"; then
+        log_info "pinging back Mid360 @ ${SECONDARY_IP} (2s timeout)"
+        if check_ping "$SECONDARY_IP"; then
             PRE_BACK_REACHABLE=true
-            log_ok "back Mid360 reachable: ${BACK_IP}"
+            log_ok "back Mid360 reachable: ${SECONDARY_IP}"
         else
             PRE_BACK_REACHABLE=false
-            log_fail "back Mid360 NOT reachable: ${BACK_IP}"
-            PRE_BLOCKED_REASONS+=("back Mid360 (${BACK_IP}) not reachable via ICMP")
+            log_fail "back Mid360 NOT reachable: ${SECONDARY_IP}"
+            PRE_BLOCKED_REASONS+=("back Mid360 (${SECONDARY_IP}) not reachable via ICMP")
         fi
     else
         log_info "skipping hardware ping (non-real mode)"
@@ -573,8 +573,8 @@ write_preflight_evidence() {
         echo "| MODE_FAKE_BAG | ${MODE_FAKE_BAG} |"
         echo "| BAG_PATH | ${BAG_PATH:-(none)} |"
         echo "| FAKE_BAG_PATH | ${FAKE_BAG_PATH} |"
-        echo "| front_ip | ${FRONT_IP} |"
-        echo "| back_ip | ${BACK_IP} |"
+        echo "| front_ip | ${PRIMARY_IP} |"
+        echo "| back_ip | ${SECONDARY_IP} |"
         echo "| duration_s | ${DURATION} |"
         echo "| odometry_topic | ${ODOMETRY_TOPIC} |"
         echo "| max_drift_cm_per_min | ${MAX_DRIFT_CM_PER_MIN} |"
@@ -611,8 +611,8 @@ write_preflight_evidence() {
         echo ""
         echo "| sensor | ip | reachable |"
         echo "|---|---|---|"
-        echo "| front Mid360 | ${FRONT_IP} | $($PRE_FRONT_REACHABLE && echo YES || echo NO) |"
-        echo "| back  Mid360 | ${BACK_IP} | $($PRE_BACK_REACHABLE && echo YES || echo NO) |"
+        echo "| front Mid360 | ${PRIMARY_IP} | $($PRE_FRONT_REACHABLE && echo YES || echo NO) |"
+        echo "| back  Mid360 | ${SECONDARY_IP} | $($PRE_BACK_REACHABLE && echo YES || echo NO) |"
         echo ""
         echo "## Verdict"
         echo ""
@@ -629,7 +629,7 @@ write_preflight_evidence() {
         echo "## Intended real-hardware command sequence (reference)"
         echo ""
         echo '```bash'
-        echo "# 1. Both Mid360 powered (front ${FRONT_IP}, back ${BACK_IP})."
+        echo "# 1. Both Mid360 powered (front ${PRIMARY_IP}, back ${SECONDARY_IP})."
         echo "# 2. Robot stationary on flat ground. No chassis/gimbal motion."
         echo "# 3. Source ROS2 workspace."
         echo "source ${WS_ROOT}/install/setup.bash"
@@ -640,7 +640,7 @@ write_preflight_evidence() {
         echo "  use_robot_state_pub:=True${NAMESPACE:+ \\}${NAMESPACE:+ namespace:=${NAMESPACE}}${WORLD:+ \\}${WORLD:+ world:=${WORLD}}"
         echo "# 5. Verify sync then record /odometry:"
         echo "python3 ${SCRIPT_DIR}/${SYNC_VERIFIER_NAME} \\"
-        echo "  --front-topic /livox/lidar_front --back-topic /livox/lidar_back \\"
+        echo "  --primary-topic /livox/lidar_primary --secondary-topic /livox/lidar_secondary \\"
         echo "  --sample-count ${SYNC_SAMPLE_COUNT} --timeout-s ${SYNC_TIMEOUT_S} \\"
         echo "  --sync-tolerance-ms ${SYNC_TOLERANCE_MS}"
         echo "ros2 bag record -o /tmp/task16_bag --duration ${DURATION} ${ODOMETRY_TOPIC}"
@@ -685,7 +685,7 @@ write_blocker_evidence() {
         echo "  \`bash src/scripts/setup_env.sh\`."
         echo "- **Unreachable Mid360 IPs**: confirm PoE/power, network"
         echo "  configuration (\`192.168.1.0/24\`), and that front ="
-        echo "  ${FRONT_IP}, back = ${BACK_IP} in"
+        echo "  ${PRIMARY_IP}, back = ${SECONDARY_IP} in"
         echo "  \`sentry_dual_mid360/config/mid360_user_config_dual.json\`."
         echo "- **Missing bag for --skip-hardware / --fake-bag**: produce one"
         echo "  while the robot is stationary:"
@@ -728,8 +728,8 @@ write_summary() {
         echo "| mode_skip_hardware | ${MODE_SKIP_HARDWARE} |"
         echo "| mode_fake_bag | ${MODE_FAKE_BAG} |"
         echo "| duration_s | ${DURATION} |"
-        echo "| front_ip | ${FRONT_IP} |"
-        echo "| back_ip | ${BACK_IP} |"
+        echo "| front_ip | ${PRIMARY_IP} |"
+        echo "| back_ip | ${SECONDARY_IP} |"
         echo "| bag_path_used | ${bag_used:-(none)} |"
         echo "| odometry_topic | ${ODOMETRY_TOPIC} |"
         echo "| max_drift_cm_per_min | ${MAX_DRIFT_CM_PER_MIN} |"
@@ -790,7 +790,7 @@ do_dry_run() {
         echo "| DURATION | ${DURATION}s |"
         echo "| BAG_PATH | ${BAG_PATH:-(none)} |"
         echo "| FAKE_BAG_PATH | ${FAKE_BAG_PATH} |"
-        echo "| FRONT_IP / BACK_IP | ${FRONT_IP} / ${BACK_IP} |"
+        echo "| PRIMARY_IP / SECONDARY_IP | ${PRIMARY_IP} / ${SECONDARY_IP} |"
         echo "| odometry_topic | ${ODOMETRY_TOPIC} |"
         echo "| max_drift_cm_per_min | ${MAX_DRIFT_CM_PER_MIN} |"
         echo ""
@@ -820,7 +820,7 @@ do_dry_run() {
         echo ""
         echo '```bash'
         echo "python3 ${SCRIPT_DIR}/${SYNC_VERIFIER_NAME} \\"
-        echo "  --front-topic /livox/lidar_front --back-topic /livox/lidar_back \\"
+        echo "  --primary-topic /livox/lidar_primary --secondary-topic /livox/lidar_secondary \\"
         echo "  --sample-count ${SYNC_SAMPLE_COUNT} --timeout-s ${SYNC_TIMEOUT_S}"
         echo ""
         echo "python3 ${SCRIPT_DIR}/${DRIFT_ANALYZER_NAME} \\"
@@ -846,8 +846,8 @@ run_sync_verifier() {
     {
         echo "=== ${SYNC_VERIFIER_NAME} invocation $(date -u +"%Y-%m-%dT%H:%M:%SZ") ==="
         python3 "$PRE_SYNC_SCRIPT_PATH" \
-            --front-topic /livox/lidar_front \
-            --back-topic /livox/lidar_back \
+            --primary-topic /livox/lidar_primary \
+            --secondary-topic /livox/lidar_secondary \
             --sample-count "$SYNC_SAMPLE_COUNT" \
             --timeout-s "$SYNC_TIMEOUT_S" \
             --sync-tolerance-ms "$SYNC_TOLERANCE_MS" 2>&1

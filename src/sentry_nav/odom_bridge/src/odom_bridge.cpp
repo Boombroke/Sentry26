@@ -78,7 +78,7 @@ OdomBridgeNode::OdomBridgeNode(const rclcpp::NodeOptions & options)
   this->declare_parameter<std::string>("registered_scan_topic", "cloud_registered");
   this->declare_parameter<std::string>("odom_frame", "odom");
   this->declare_parameter<std::string>("base_frame", "base_footprint");
-  this->declare_parameter<std::string>("lidar_frame", "front_mid360");
+  this->declare_parameter<std::string>("lidar_frame", "primary_mid360");
   this->declare_parameter<std::string>("robot_base_frame", "base_footprint");
   this->declare_parameter<double>("min_twist_dt", min_twist_dt_);
   this->declare_parameter<double>("max_twist_dt", max_twist_dt_);

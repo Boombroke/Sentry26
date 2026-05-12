@@ -38,9 +38,10 @@ SimPointCloudToCustomMsgNode::SimPointCloudToCustomMsgNode(const rclcpp::NodeOpt
   , drop_nonfinite_count_(0)
   , monotonic_nudge_count_(0)
 {
-  input_topic_ = this->declare_parameter<std::string>("input_topic", "livox/lidar_front_points");
-  output_topic_ = this->declare_parameter<std::string>("output_topic", "livox/lidar_front");
-  frame_id_ = this->declare_parameter<std::string>("frame_id", "front_mid360");
+  input_topic_ =
+    this->declare_parameter<std::string>("input_topic", "livox/lidar_primary_points");
+  output_topic_ = this->declare_parameter<std::string>("output_topic", "livox/lidar_primary");
+  frame_id_ = this->declare_parameter<std::string>("frame_id", "primary_mid360");
   lidar_id_ = this->declare_parameter<int>("lidar_id", lidar_id_);
   line_count_ = this->declare_parameter<int>("line_count", line_count_);
   scan_period_s_ = this->declare_parameter<double>("scan_period_s", scan_period_s_);

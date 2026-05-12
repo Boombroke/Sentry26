@@ -167,7 +167,7 @@ def generate_launch_description():
         description=(
             "When True (default), layers livox_driver_dual_override.yaml onto the "
             "Livox driver (xfer_format=1 / multi_topic=1 / 10Hz), applies "
-            "JSON-derived per-device remaps for the front/back Mid360 topics, "
+            "JSON-derived per-device remaps for the primary/secondary Mid360 topics, "
             "starts pointcloud_merger via the bringup chain, and loads "
             "pointlio_dual_overrides.yaml for Point-LIO. When False, the Livox "
             "driver uses only the base params_file single-lidar configuration; no "
@@ -204,20 +204,20 @@ def generate_launch_description():
     # livox_ros_driver2 names topics by device IP (dots replaced with underscores):
     #   livox/lidar_<ip>  livox/imu_<ip>
     # IPs are read from mid360_user_config_dual.json at launch-generation time.
-    # lidar_configs[0] = front Mid360, lidar_configs[1] = back Mid360 (T2 order).
+    # lidar_configs[0] = primary Mid360, lidar_configs[1] = secondary Mid360.
     # Both source and target are relative so the Livox Node's `namespace=namespace`
-    # resolves both sides consistently: empty namespace -> `/livox/lidar_front`,
-    # non-empty namespace -> `/<ns>/livox/lidar_front`, which aligns with the
+    # resolves both sides consistently: empty namespace -> `/livox/lidar_primary`,
+    # non-empty namespace -> `/<ns>/livox/lidar_primary`, which aligns with the
     # relative topics in pointcloud_merger_params.yaml. The single-lidar
     # fallback keeps MH16 equivalence: base nav2_params.yaml, no dual
     # override/remaps, Point-LIO's base `livox/lidar` topic.
-    front_ip_sfx, back_ip_sfx = _load_dual_mid360_ip_suffixes()
+    primary_ip_sfx, secondary_ip_sfx = _load_dual_mid360_ip_suffixes()
 
     livox_dual_remappings = [
-        (f"livox/lidar_{front_ip_sfx}", "livox/lidar_front"),
-        (f"livox/imu_{front_ip_sfx}",   "livox/imu"),
-        (f"livox/lidar_{back_ip_sfx}",  "livox/lidar_back"),
-        (f"livox/imu_{back_ip_sfx}",    "livox/imu_back"),
+        (f"livox/lidar_{primary_ip_sfx}",   "livox/lidar_primary"),
+        (f"livox/imu_{primary_ip_sfx}",     "livox/imu"),
+        (f"livox/lidar_{secondary_ip_sfx}", "livox/lidar_secondary"),
+        (f"livox/imu_{secondary_ip_sfx}",   "livox/imu_secondary"),
     ]
 
     # Dual-Mid360 Livox driver override YAML (from sentry_dual_mid360 package).

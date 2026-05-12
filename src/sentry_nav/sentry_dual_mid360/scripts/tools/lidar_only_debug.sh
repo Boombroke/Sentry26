@@ -123,7 +123,7 @@ cat <<EOF
 $(if [ "$WITH_MERGER" = "yes" ]; then
 cat <<'HINT'
 In rviz:
-  Fixed Frame: front_mid360      (手打到 Global Options > Fixed Frame)
+  Fixed Frame: primary_mid360      (手打到 Global Options > Fixed Frame)
   Add -> PointCloud2  -> Topic: /livox/lidar_pc2
       merger 输出的 sensor_msgs/PointCloud2 镜像，intensity=reflectivity
       Topic > Reliability Policy: Best Effort   (!!重要!!)
@@ -137,7 +137,7 @@ In rviz:
 
 判断标定好坏:
   - 墙体是薄的一层、立柱单根、地面单平面 = 外参对
-  - 双层墙 / 错位柱 / V 字形折角 = xmacro 里 front/back_lidar_pose 还偏
+  - 双层墙 / 错位柱 / V 字形折角 = xmacro 里 front/secondary_lidar_pose 还偏
 
 想要 Point-LIO 的 /cloud_registered 或整车级验证: 请直接走
   ros2 launch sentry_nav_bringup rm_sentry_launch.py

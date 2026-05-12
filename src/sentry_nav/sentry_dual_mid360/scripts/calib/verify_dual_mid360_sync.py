@@ -299,8 +299,8 @@ def _mock_samples(expected: str, count: int) -> List[PairedSample]:
 # =============================================================================
 
 def _collect_ros_samples(
-    front_topic: str,
-    back_topic: str,
+    primary_topic: str,
+    secondary_topic: str,
     sample_count: int,
     sync_tolerance_ms: float,
     timeout_s: float,
@@ -322,8 +322,8 @@ def _collect_ros_samples(
         def __init__(self) -> None:
             super().__init__("verify_dual_mid360_sync_probe")
             self._start_wall_s: Optional[float] = None
-            self._sub_front = Subscriber(self, CustomMsg, front_topic)
-            self._sub_back = Subscriber(self, CustomMsg, back_topic)
+            self._sub_front = Subscriber(self, CustomMsg, primary_topic)
+            self._sub_back = Subscriber(self, CustomMsg, secondary_topic)
             self._sync = ApproximateTimeSynchronizer(
                 [self._sub_front, self._sub_back],
                 queue_size=20,
@@ -422,9 +422,9 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
-    parser.add_argument("--front-topic", default="/livox/lidar_front",
+    parser.add_argument("--primary-topic", default="/livox/lidar_primary",
                         help="front Mid360 CustomMsg topic")
-    parser.add_argument("--back-topic", default="/livox/lidar_back",
+    parser.add_argument("--secondary-topic", default="/livox/lidar_secondary",
                         help="back Mid360 CustomMsg topic")
     parser.add_argument("--sample-count", type=int, default=100,
                         help="number of paired samples to collect")
@@ -480,8 +480,8 @@ def _run(args: argparse.Namespace) -> int:
     else:
         try:
             samples = _collect_ros_samples(
-                front_topic=args.front_topic,
-                back_topic=args.back_topic,
+                primary_topic=args.primary_topic,
+                secondary_topic=args.secondary_topic,
                 sample_count=args.sample_count,
                 sync_tolerance_ms=args.sync_tolerance_ms,
                 timeout_s=args.timeout_s,

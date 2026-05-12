@@ -21,7 +21,7 @@
 
 ## 一、Point-LIO 里程计参数
 
-> **双 Mid360 模式下 `extrinsic_T / extrinsic_R / mapping.gravity / gravity_init` 不是手调参数**。这些字段由 `src/sentry_nav/sentry_dual_mid360/scripts/codegen/generate_pointlio_overrides.py` 在 `colcon build --packages-select sentry_dual_mid360` 时从 xmacro 单源派生到 `install/sentry_dual_mid360/share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml`；生成 YAML 是 build 产物，**不在源码 `config/` 提交、禁止手编辑**。机械师改 Mid360 安装位置后只改 xmacro（`wheeled_biped_real.sdf.xmacro` 的 `front_lidar_pose` / `back_lidar_pose` 与 `sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro` 的 IMU factory pose），重跑一次 build 即同步更新。想知道当前安装外参与 override 是否一致，跑 `python3 src/sentry_nav/sentry_dual_mid360/scripts/codegen/verify_pointlio_overrides_fresh.py`；不一致就重新 build，不要手改 YAML。`nav2_params.yaml` 中的 Point-LIO `mapping` section 仅在 `use_dual_mid360:=False` 的单雷达回退路径下生效，不要把双雷达 codegen 结果抄回去。
+> **双 Mid360 模式下 `extrinsic_T / extrinsic_R / mapping.gravity / gravity_init` 不是手调参数**。这些字段由 `src/sentry_nav/sentry_dual_mid360/scripts/codegen/generate_pointlio_overrides.py` 在 `colcon build --packages-select sentry_dual_mid360` 时从 xmacro 单源派生到 `install/sentry_dual_mid360/share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml`；生成 YAML 是 build 产物，**不在源码 `config/` 提交、禁止手编辑**。机械师改 Mid360 安装位置后只改 xmacro（`wheeled_biped_real.sdf.xmacro` 的 `primary_lidar_pose` / `secondary_lidar_pose` 与 `sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro` 的 IMU factory pose），重跑一次 build 即同步更新。想知道当前安装外参与 override 是否一致，跑 `python3 src/sentry_nav/sentry_dual_mid360/scripts/codegen/verify_pointlio_overrides_fresh.py`；不一致就重新 build，不要手改 YAML。`nav2_params.yaml` 中的 Point-LIO `mapping` section 仅在 `use_dual_mid360:=False` 的单雷达回退路径下生效，不要把双雷达 codegen 结果抄回去。
 
 ### 1. point_filter_num（点云抽稀比例）
 
@@ -187,7 +187,7 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 - 过小 → 自身点云泄漏，轨迹上出现虚假障碍物
 - 过大 → 丢失近距离真实障碍物
 
-> 先确认 `gimbal_pitch → front_mid360` 的传感器安装外参与实际一致，再调 `blind`。`blind` 只能压自身点，不能补传感器 FOV 盲区；也不要再用 `mapping.gravity` 去表达安装角。
+> 先确认 `gimbal_pitch → primary_mid360` 的传感器安装外参与实际一致，再调 `blind`。`blind` 只能压自身点，不能补传感器 FOV 盲区；也不要再用 `mapping.gravity` 去表达安装角。
 
 **调优方法**：
 ```bash
@@ -271,7 +271,7 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 
 ## 四-B、双 Mid360 前融合（pointcloud_merger）
 
-双 Mid360 升级后，Point-LIO 的上游多了一层外部 `sentry_dual_mid360::MergerNode`。它在 Point-LIO 之前把两路 `livox_ros_driver2/msg/CustomMsg` 融合成单路 `/livox/lidar`（`frame_id=front_mid360`），Point-LIO 当单雷达消费，源码零改动。**顶层开关 `use_dual_mid360` 默认 `True`**；传 `False` 时 merger 不启动、生成的 Point-LIO override YAML 不加载、dual Livox override 与 per-device remap 均不应用，Livox driver 走基础 `configured_params`，Point-LIO 保持基础 YAML 的 `common.lid_topic: livox/lidar`，退回升级前单 Mid360 链路。
+双 Mid360 升级后，Point-LIO 的上游多了一层外部 `sentry_dual_mid360::MergerNode`。它在 Point-LIO 之前把两路 `livox_ros_driver2/msg/CustomMsg` 融合成单路 `/livox/lidar`（`frame_id=primary_mid360`），Point-LIO 当单雷达消费，源码零改动。**顶层开关 `use_dual_mid360` 默认 `True`**；传 `False` 时 merger 不启动、生成的 Point-LIO override YAML 不加载、dual Livox override 与 per-device remap 均不应用，Livox driver 走基础 `configured_params`，Point-LIO 保持基础 YAML 的 `common.lid_topic: livox/lidar`，退回升级前单 Mid360 链路。
 
 参数文件位置：`src/sentry_nav/sentry_dual_mid360/config/pointcloud_merger_params.yaml`（根键 `pointcloud_merger`）。所有参数建议只在实车或标定台架上根据观测调整，不要拍脑袋改。
 
@@ -291,8 +291,8 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 python3 src/sentry_nav/sentry_dual_mid360/scripts/calib/verify_dual_mid360_sync.py --duration 60
 
 # 2. 观察 merger 吞吐率
-ros2 topic hz /livox/lidar_front
-ros2 topic hz /livox/lidar_back
+ros2 topic hz /livox/lidar_primary
+ros2 topic hz /livox/lidar_secondary
 ros2 topic hz /livox/lidar
 ```
 
@@ -307,7 +307,7 @@ ros2 topic hz /livox/lidar
 
 **调优范围**：0.2 ~ 0.6
 
-**影响**：Merger 在**原生坐标系**（front / back 各自）做 min-distance 裁剪，再把 back 点云刚体变换到 `front_mid360` 系。必须在原生系做几何裁剪，不能等合并后再按欧氏距离过滤，否则会裁掉邻侧雷达的有效低矮点。
+**影响**：Merger 在**原生坐标系**（front / back 各自）做 min-distance 裁剪，再把 back 点云刚体变换到 `primary_mid360` 系。必须在原生系做几何裁剪，不能等合并后再按欧氏距离过滤，否则会裁掉邻侧雷达的有效低矮点。
 
 **调优方法**：
 ```bash

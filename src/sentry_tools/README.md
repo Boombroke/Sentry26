@@ -185,7 +185,7 @@ ros2 launch serial_driver serial_driver.launch.py device_name:=/dev/pts/4
 | 串口设备 | `/dev/ttyACM*`, `/dev/ttyUSB*` | ✅ 存在 / ❌ 无设备 |
 | 关键节点 | serial_driver, controller_server, planner_server, bt_navigator, behavior_server, odom_bridge 等 | ✅ 运行中 / ❌ 未检测到 |
 | Topic 状态 | gimbal_joint_state, cmd_vel, odometry, obstacle_scan, terrain_map, referee/* | ✅ 有发布者 / ⚠️ 频率低 / ❌ 无发布者 |
-| TF 链路 | map→odom→base_footprint→chassis→gimbal_yaw→gimbal_pitch→front_mid360（6 层差速轮足 TF） | ✅ 正常 / ❌ 断开 |
+| TF 链路 | map→odom→base_footprint→chassis→gimbal_yaw→gimbal_pitch→primary_mid360（6 层差速轮足 TF） | ✅ 正常 / ❌ 断开 |
 
 **底部汇总**：`总览: 12/15 正常  ⚠️ 1 警告  ❌ 2 异常`
 
@@ -258,7 +258,7 @@ ros2 launch serial_driver serial_driver.launch.py device_name:=/dev/pts/4
 
 采集 Livox mid360 内置 BMI088 IMU 的静态加速度数据，计算 Point-LIO 所需的 `gravity` 参数向量。**需要 ROS 环境**（通过 `ros2 topic echo` 采集数据）。
 
-**背景：** Point-LIO 启动时先统计静止阶段的 `mean_acc`，再用它和 `gravity` 做重力对齐，确定第一帧姿态。工具箱输出的 `gravity` 使用 `-mean_acc` 的方向，范数固定为 `9.81m/s²`；`acc_norm` 只用于检查 IMU 原始加速度单位（Livox 为 g，仿真通常为 m/s²），不决定写入的 `gravity` 范数。LiDAR 斜装/倒装的几何关系仍然必须写在 `gimbal_pitch → front_mid360` TF 外参中，不能用 `gravity` 代替。
+**背景：** Point-LIO 启动时先统计静止阶段的 `mean_acc`，再用它和 `gravity` 做重力对齐，确定第一帧姿态。工具箱输出的 `gravity` 使用 `-mean_acc` 的方向，范数固定为 `9.81m/s²`；`acc_norm` 只用于检查 IMU 原始加速度单位（Livox 为 g，仿真通常为 m/s²），不决定写入的 `gravity` 范数。LiDAR 斜装/倒装的几何关系仍然必须写在 `gimbal_pitch → primary_mid360` TF 外参中，不能用 `gravity` 代替。
 
 **一键标定（推荐）：**
 

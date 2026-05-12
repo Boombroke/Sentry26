@@ -7,7 +7,7 @@
     Macro: mid360_imu_tf_macro
     Params:
       lidar_link - name of the parent Mid360 link
-                   (e.g. "front_mid360" or "back_mid360")
+                   (e.g. "primary_mid360" or "secondary_mid360")
 
     The IMU anchor link is named "${lidar_link}_imu".
     Factory extrinsic (Mid360 datasheet, body frame → IMU frame):

@@ -10,7 +10,7 @@
 
 Starts ONLY `livox_ros_driver2_node` configured for the dual-Mid360 topology
 (CustomMsg, multi_topic=1, 10 Hz) with per-device topic remaps to
-`/livox/lidar_front`, `/livox/lidar_back` (plus matching IMU topics).
+`/livox/lidar_primary`, `/livox/lidar_secondary` (plus matching IMU topics).
 
 Purpose: give standalone scripts (T10 calibration bag recording, T7 sync
 verification, driver-only debugging) a way to bring the dual Mid360 driver
@@ -64,17 +64,17 @@ def generate_launch_description():
         description="ROS namespace to apply to the Livox driver node.",
     )
 
-    front_ip_sfx, back_ip_sfx = _load_dual_mid360_ip_suffixes()
+    primary_ip_sfx, secondary_ip_sfx = _load_dual_mid360_ip_suffixes()
 
     # Per-device topic remaps mirror rm_navigation_reality_launch.py so that
-    # downstream consumers expecting /livox/lidar_front, /livox/lidar_back,
-    # /livox/imu, /livox/imu_back see identical topics whether the driver was
-    # brought up standalone or as part of the full reality bringup.
+    # downstream consumers expecting /livox/lidar_primary, /livox/lidar_secondary,
+    # /livox/imu, /livox/imu_secondary see identical topics whether the driver
+    # was brought up standalone or as part of the full reality bringup.
     livox_dual_remappings = [
-        (f"livox/lidar_{front_ip_sfx}", "livox/lidar_front"),
-        (f"livox/imu_{front_ip_sfx}",   "livox/imu"),
-        (f"livox/lidar_{back_ip_sfx}",  "livox/lidar_back"),
-        (f"livox/imu_{back_ip_sfx}",    "livox/imu_back"),
+        (f"livox/lidar_{primary_ip_sfx}",   "livox/lidar_primary"),
+        (f"livox/imu_{primary_ip_sfx}",     "livox/imu"),
+        (f"livox/lidar_{secondary_ip_sfx}", "livox/lidar_secondary"),
+        (f"livox/imu_{secondary_ip_sfx}",   "livox/imu_secondary"),
     ]
 
     livox_dual_override_file = PathJoinSubstitution(

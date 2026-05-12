@@ -52,14 +52,14 @@ def parse_pose_numbers(raw: str, label: str) -> list[float]:
     return values
 
 
-def parse_front_lidar_pose(real_xmacro: Path) -> list[float]:
+def parse_primary_lidar_pose(real_xmacro: Path) -> list[float]:
     text = read_required(real_xmacro, "real xmacro")
-    matches = re.findall(r'\bfront_lidar_pose\s*=\s*"([^"]+)"', text)
+    matches = re.findall(r'\bprimary_lidar_pose\s*=\s*"([^"]+)"', text)
     if len(matches) != 1:
         raise InputError(
-            f"expected exactly one front_lidar_pose attribute in {real_xmacro}, found {len(matches)}"
+            f"expected exactly one primary_lidar_pose attribute in {real_xmacro}, found {len(matches)}"
         )
-    return parse_pose_numbers(matches[0], "front_lidar_pose")
+    return parse_pose_numbers(matches[0], "primary_lidar_pose")
 
 
 def parse_imu_pose(imu_macro: Path) -> list[float]:
@@ -134,19 +134,19 @@ def matrix_yaml(values: list[float]) -> str:
     )
 
 
-def build_yaml(front_lidar_pose: list[float], imu_pose: list[float]) -> str:
-    _, _, _, front_roll, front_pitch, front_yaw = front_lidar_pose
+def build_yaml(primary_lidar_pose: list[float], imu_pose: list[float]) -> str:
+    _, _, _, primary_roll, primary_pitch, primary_yaw = primary_lidar_pose
     imu_x, imu_y, imu_z, imu_roll, imu_pitch, imu_yaw = imu_pose
 
-    front_rotation = rotation_matrix(front_roll, front_pitch, front_yaw)
+    primary_rotation = rotation_matrix(primary_roll, primary_pitch, primary_yaw)
     imu_rotation = rotation_matrix(imu_roll, imu_pitch, imu_yaw)
-    gravity = transpose_times_vector(front_rotation, GRAVITY_GIMBAL)
+    gravity = transpose_times_vector(primary_rotation, GRAVITY_GIMBAL)
     extrinsic_t = [imu_x, imu_y, imu_z]
     extrinsic_r = flatten(imu_rotation)
 
     return (
         f"{WARNING}\n"
-        "# Source xmacro inputs: wheeled_biped_real.sdf.xmacro front_lidar_pose; mid360_imu_tf.sdf.xmacro IMU pose.\n"
+        "# Source xmacro inputs: wheeled_biped_real.sdf.xmacro primary_lidar_pose; mid360_imu_tf.sdf.xmacro IMU pose.\n"
         "# Regenerate by rebuilding sentry_dual_mid360; do not hand-edit this artifact.\n"
         "point_lio:\n"
         "  ros__parameters:\n"
@@ -176,9 +176,9 @@ def write_atomic(path: Path, text: str) -> None:
 def main() -> int:
     args = parse_args()
     try:
-        front_lidar_pose = parse_front_lidar_pose(args.real_xmacro)
+        primary_lidar_pose = parse_primary_lidar_pose(args.real_xmacro)
         imu_pose = parse_imu_pose(args.imu_macro)
-        write_atomic(args.output, build_yaml(front_lidar_pose, imu_pose))
+        write_atomic(args.output, build_yaml(primary_lidar_pose, imu_pose))
     except InputError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

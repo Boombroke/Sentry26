@@ -185,23 +185,23 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
 - 仿真 Gazebo 入口：`src/sentry_robot_description/resource/xmacro/wheeled_biped_sim.sdf.xmacro`
 - 共享拓扑核心：`src/sentry_robot_description/resource/xmacro/wheeled_biped_core.sdf.xmacro`
 
-LiDAR 斜装、倒装或实测平移只改 `wheeled_biped_real.sdf.xmacro` 里的 `front_lidar_pose` / `back_lidar_pose`（Layer A，雷达在机器人上的安装位姿）；Mid360 出厂 IMU 相对 LiDAR 的位姿（Layer B）写在 `src/sentry_nav/sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro`。不要用 Point-LIO `gravity` 表达安装角。仿真为了扫到近场低矮底座保留 30° 下俯角，这个角只存在于 `wheeled_biped_sim.sdf.xmacro`。
+LiDAR 斜装、倒装或实测平移只改 `wheeled_biped_real.sdf.xmacro` 里的 `primary_lidar_pose` / `secondary_lidar_pose`（Layer A，雷达在机器人上的安装位姿）；Mid360 出厂 IMU 相对 LiDAR 的位姿（Layer B）写在 `src/sentry_nav/sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro`。不要用 Point-LIO `gravity` 表达安装角。仿真为了扫到近场低矮底座保留 30° 下俯角，这个角只存在于 `wheeled_biped_sim.sdf.xmacro`。
 
 当前实车默认值（两颗 Mid360 绕 X 轴镜像安装，**不是 yaw=π 前后反装**；名字里 `front/back` 仅是历史标识符）：
 
-- `front_lidar_pose = 0 0.102 0.3 -0.733 0.0 0.0`
-- `back_lidar_pose  = 0 -0.102 0.3 0.733 0.0 0.0`
+- `primary_lidar_pose = 0 0.102 0.3 -0.733 0.0 0.0`
+- `secondary_lidar_pose  = 0 -0.102 0.3 0.733 0.0 0.0`
 - 两组 pose 只差 y 分量和 roll 符号；roll = ±0.733 rad ≈ ±42°
-- `back_lidar_pose` 机械调整后必须用 `scripts/calib/calibrate_dual_mid360.sh --bootstrap --write-xmacro` 重新标定写回
+- `secondary_lidar_pose` 机械调整后必须用 `scripts/calib/calibrate_dual_mid360.sh --bootstrap --write-xmacro` 重新标定写回
 - 实车 `chassis -> gimbal_yaw -> gimbal_pitch` 现在是静态 TF，不再默认消费 `serial/gimbal_joint_state` 驱动 robot_state_publisher
 - 双 Mid360 派生资产（merger、driver override、Point-LIO override codegen、后雷达 TF fragment、IMU TF fragment 等）集中在 `src/sentry_nav/sentry_dual_mid360/`；`use_dual_mid360` launch argument 默认 `True`，`ros2 launch sentry_nav_bringup rm_sentry_launch.py use_dual_mid360:=False` 可回退单雷达链路
-- `back_lidar_pose` 除手量外，可以通过点云配准自动标定：先看 [`sentry_dual_mid360/docs/CALIBRATION_QUICKSTART.md`](../sentry_nav/sentry_dual_mid360/docs/CALIBRATION_QUICKSTART.md)，首次（xmacro 是占位值）跑 `calibrate_dual_mid360.sh --bootstrap --write-xmacro`，之后（xmacro 已近真值）跑严格模式做微调；`front_lidar_pose` 仍属机械测量项，不在标定管线内
+- `secondary_lidar_pose` 除手量外，可以通过点云配准自动标定：先看 [`sentry_dual_mid360/docs/CALIBRATION_QUICKSTART.md`](../sentry_nav/sentry_dual_mid360/docs/CALIBRATION_QUICKSTART.md)，首次（xmacro 是占位值）跑 `calibrate_dual_mid360.sh --bootstrap --write-xmacro`，之后（xmacro 已近真值）跑严格模式做微调；`primary_lidar_pose` 仍属机械测量项，不在标定管线内
 
 外参修改前建议先看 `src/sentry_robot_description/README.md` 里的"外参与 DOF 怎么理解 / 角度换算 / 常见安装场景怎么写"三节，里面已经明确了：
 
-- `front_lidar_pose` / `back_lidar_pose` 用的是 `x y z roll pitch yaw`
+- `primary_lidar_pose` / `secondary_lidar_pose` 用的是 `x y z roll pitch yaw`
 - 角度必须先转弧度
-- 当前实车固定云台时只改 `gimbal_pitch -> front_mid360` / `gimbal_pitch -> back_mid360` 外参
+- 当前实车固定云台时只改 `gimbal_pitch -> primary_mid360` / `gimbal_pitch -> secondary_mid360` 外参
 - 镜像/倒装/任何安装姿态都只走 TF 外参，不走 Point-LIO `gravity`
 
 ## 5. 行为树决策
