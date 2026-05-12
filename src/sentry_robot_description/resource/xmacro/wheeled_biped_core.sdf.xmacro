@@ -67,14 +67,24 @@
         </link>
     </xmacro_define_block>
 
-    <!-- Visual-only leg link between chassis bottom and each driving wheel.
-         Purpose: make the wheel-leg geometry obvious in rviz. Placeholder single
-         cylinder; swap for the real four-bar suspension mesh when that asset
-         arrives. Keep collision OFF so these links never interact with the
-         ground in physics, and keep inertial near-zero so KDL tolerates them. -->
+    <!-- Visual-only leg link between chassis bottom edge and each driving wheel.
+         Single inclined cylinder that connects the outer bottom edge of the
+         chassis (y=±chassis_width/2, z=0 in chassis frame) to the wheel center
+         (y=±0.325, z=-0.22). Serves as a placeholder for the real four-bar
+         suspension; swap the cylinder for a proper mesh when CAD is ready.
+
+         Geometry:
+           top end    P1 = (0, ±0.225, 0)     chassis outer bottom edge
+           bottom end P2 = (0, ±0.325, -0.22) wheel center
+           length     L  = hypot(0.10, 0.22)  ≈ 0.2417 m
+           tilt angle θ  = atan2(0.10, 0.22)  ≈ 0.4266 rad ≈ 24.4° about X
+
+         The cylinder is default Z-aligned; we rotate about X so its long axis
+         points from P1 to P2. Keep collision OFF and inertial tiny so physics
+         is unaffected (Gazebo profile disables this block anyway). -->
     <xmacro_define_block name="wheeled_biped_leg_visuals">
         <joint name="left_leg_joint" type="fixed">
-            <pose relative_to="chassis">0 0.325 -0.11 0 0 0</pose>
+            <pose relative_to="chassis">0 0.275 -0.11 0.4266275 0 0</pose>
             <parent>chassis</parent>
             <child>left_leg</child>
         </joint>
@@ -95,7 +105,7 @@
                 <geometry>
                     <cylinder>
                         <radius>0.025</radius>
-                        <length>0.22</length>
+                        <length>0.2417</length>
                     </cylinder>
                 </geometry>
                 <material>
@@ -106,7 +116,7 @@
         </link>
 
         <joint name="right_leg_joint" type="fixed">
-            <pose relative_to="chassis">0 -0.325 -0.11 0 0 0</pose>
+            <pose relative_to="chassis">0 -0.275 -0.11 -0.4266275 0 0</pose>
             <parent>chassis</parent>
             <child>right_leg</child>
         </joint>
@@ -127,7 +137,7 @@
                 <geometry>
                     <cylinder>
                         <radius>0.025</radius>
-                        <length>0.22</length>
+                        <length>0.2417</length>
                     </cylinder>
                 </geometry>
                 <material>
