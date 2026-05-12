@@ -67,6 +67,64 @@
         </link>
     </xmacro_define_block>
 
+    <!-- Wheel joint variants. Fixed used by real robot (rviz-only, no joint
+         state feedback needed), revolute used by Gazebo (DiffDrive plugin
+         drives the wheels). Cylinder visual is Z-aligned by default; rpy
+         -pi/2 around X rotates it so the wheel axis lies along Y, matching a
+         standard diff-drive layout. -->
+    <xmacro_define_block name="wheeled_biped_left_wheel_fixed">
+        <joint name="left_wheel_joint" type="fixed">
+            <pose relative_to="chassis">0 0.325 -0.22 -1.5708 0 0</pose>
+            <parent>chassis</parent>
+            <child>left_wheel</child>
+        </joint>
+    </xmacro_define_block>
+    <xmacro_define_block name="wheeled_biped_left_wheel_revolute">
+        <joint name="left_wheel_joint" type="revolute">
+            <pose relative_to="chassis">0 0.325 -0.22 -1.5708 0 0</pose>
+            <parent>chassis</parent>
+            <child>left_wheel</child>
+            <axis>
+                <xyz>0 0 1</xyz>
+                <limit>
+                    <effort>30</effort>
+                    <velocity>80</velocity>
+                    <lower>-1.79769e+308</lower>
+                    <upper>1.79769e+308</upper>
+                </limit>
+                <dynamics>
+                    <damping>0.05</damping>
+                </dynamics>
+            </axis>
+        </joint>
+    </xmacro_define_block>
+    <xmacro_define_block name="wheeled_biped_right_wheel_fixed">
+        <joint name="right_wheel_joint" type="fixed">
+            <pose relative_to="chassis">0 -0.325 -0.22 -1.5708 0 0</pose>
+            <parent>chassis</parent>
+            <child>right_wheel</child>
+        </joint>
+    </xmacro_define_block>
+    <xmacro_define_block name="wheeled_biped_right_wheel_revolute">
+        <joint name="right_wheel_joint" type="revolute">
+            <pose relative_to="chassis">0 -0.325 -0.22 -1.5708 0 0</pose>
+            <parent>chassis</parent>
+            <child>right_wheel</child>
+            <axis>
+                <xyz>0 0 1</xyz>
+                <limit>
+                    <effort>30</effort>
+                    <velocity>80</velocity>
+                    <lower>-1.79769e+308</lower>
+                    <upper>1.79769e+308</upper>
+                </limit>
+                <dynamics>
+                    <damping>0.05</damping>
+                </dynamics>
+            </axis>
+        </joint>
+    </xmacro_define_block>
+
     <!-- Visual-only leg link between chassis bottom edge and each driving wheel.
          Single inclined cylinder that connects the outer bottom edge of the
          chassis (y=±chassis_width/2, z=0 in chassis frame) to the wheel center
@@ -349,7 +407,7 @@
         use_fixed_gimbal=True keeps chassis -> gimbal_yaw -> gimbal_pitch as static TF.
         The real robot currently uses this mode; Gazebo keeps revolute joints.
     -->
-    <xmacro_define_block name="wheeled_biped_model" params="model_name chassis_length chassis_width chassis_z primary_lidar_pose secondary_lidar_pose use_sim_sensors use_real_sensors use_casters use_gazebo_plugins use_fixed_gimbal use_leg_visuals">
+    <xmacro_define_block name="wheeled_biped_model" params="model_name chassis_length chassis_width chassis_z primary_lidar_pose secondary_lidar_pose use_sim_sensors use_real_sensors use_casters use_gazebo_plugins use_fixed_gimbal use_leg_visuals use_fixed_wheels">
         <model name="${model_name}" canonical_link="chassis" placement_frame="base_footprint">
             <pose>0 0 0 0 0 0</pose>
 
@@ -409,23 +467,12 @@
                 <xmacro_block condition="${use_sim_sensors}" name="wheeled_biped_chassis_imu" />
             </link>
 
-            <joint name="left_wheel_joint" type="revolute">
-                <pose relative_to="chassis">0 0.325 -0.22 -1.5708 0 0</pose>
-                <parent>chassis</parent>
-                <child>left_wheel</child>
-                <axis>
-                    <xyz>0 0 1</xyz>
-                    <limit>
-                        <effort>30</effort>
-                        <velocity>80</velocity>
-                        <lower>-1.79769e+308</lower>
-                        <upper>1.79769e+308</upper>
-                    </limit>
-                    <dynamics>
-                        <damping>0.05</damping>
-                    </dynamics>
-                </axis>
-            </joint>
+            <!-- Left wheel joint: type toggled by use_fixed_wheels. Fixed on
+                 real robot so rviz has TF without joint_state_publisher (joint
+                 angle is not reported back from the chassis anyway). Revolute
+                 in Gazebo so the DiffDrive plugin can drive the wheels. -->
+            <xmacro_block condition="${use_fixed_wheels}" name="wheeled_biped_left_wheel_fixed" />
+            <xmacro_block condition="${use_fixed_wheels == 'False'}" name="wheeled_biped_left_wheel_revolute" />
             <link name="left_wheel">
                 <pose relative_to="left_wheel_joint">0 0 0 0 0 0</pose>
                 <inertial>
@@ -476,23 +523,8 @@
                 </collision>
             </link>
 
-            <joint name="right_wheel_joint" type="revolute">
-                <pose relative_to="chassis">0 -0.325 -0.22 -1.5708 0 0</pose>
-                <parent>chassis</parent>
-                <child>right_wheel</child>
-                <axis>
-                    <xyz>0 0 1</xyz>
-                    <limit>
-                        <effort>30</effort>
-                        <velocity>80</velocity>
-                        <lower>-1.79769e+308</lower>
-                        <upper>1.79769e+308</upper>
-                    </limit>
-                    <dynamics>
-                        <damping>0.05</damping>
-                    </dynamics>
-                </axis>
-            </joint>
+            <xmacro_block condition="${use_fixed_wheels}" name="wheeled_biped_right_wheel_fixed" />
+            <xmacro_block condition="${use_fixed_wheels == 'False'}" name="wheeled_biped_right_wheel_revolute" />
             <link name="right_wheel">
                 <pose relative_to="right_wheel_joint">0 0 0 0 0 0</pose>
                 <inertial>

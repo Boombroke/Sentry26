@@ -21,5 +21,6 @@
         use_gazebo_plugins="False"
         use_fixed_gimbal="True"
         use_leg_visuals="True"
+        use_fixed_wheels="True"
     />
 </sdf>

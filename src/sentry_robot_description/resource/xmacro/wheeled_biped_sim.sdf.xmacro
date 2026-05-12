@@ -31,5 +31,6 @@
         use_gazebo_plugins="True"
         use_fixed_gimbal="False"
         use_leg_visuals="False"
+        use_fixed_wheels="False"
     />
 </sdf>
