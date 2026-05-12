@@ -40,7 +40,7 @@
 - `registered_scan_topic` (string, 默认: `cloud_registered`)
 - `odom_frame` (string, 默认: `odom`)
 - `base_frame` (string, 默认: `base_footprint`)
-- `lidar_frame` (string, 默认: `front_mid360`)
+- `lidar_frame` (string, 默认: `primary_mid360`)
 - `robot_base_frame` (string, 默认: `base_footprint`)
 - `min_twist_dt` (double, 默认: `0.001`)：小于该间隔的重复时间戳不计算速度
 - `max_twist_dt` (double, 默认: `0.1`)：大于该间隔的 LIO 空窗不跨帧差分，避免速度爆点

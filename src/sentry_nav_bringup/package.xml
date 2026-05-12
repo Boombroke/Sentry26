@@ -26,6 +26,7 @@
   <exec_depend>odom_bridge</exec_depend>
   <exec_depend>terrain_analysis</exec_depend>
   <exec_depend>terrain_analysis_ext</exec_depend>
+  <exec_depend>nav2_mppi_controller</exec_depend>
   <exec_depend>nav2_regulated_pure_pursuit_controller</exec_depend>
   <exec_depend>nav2_rotation_shim_controller</exec_depend>
   <exec_depend>small_gicp_relocalization</exec_depend>

@@ -16,7 +16,7 @@ bash src/scripts/setup_env.sh
 1. **安装 ROS2 Jazzy**: 添加官方 APT 源，安装 `ros-jazzy-desktop` 和 `ros-dev-tools`
 2. **安装 Gazebo Harmonic**: 通过 `ros-jazzy-ros-gz` 安装
 3. **安装系统依赖**: Eigen3、OpenMP、PCL、Nav2、SLAM Toolbox、serial-driver 等
-4. **安装差速控制器 apt 包**: `ros-jazzy-nav2-regulated-pure-pursuit-controller`、`ros-jazzy-nav2-rotation-shim-controller`
+4. **安装 Nav2 局部控制器 apt 包**: 当前运行链路为 `ros-jazzy-nav2-mppi-controller`（仿真 Phase A / 实车 Phase R-A 首版均使用的 MPPI DiffDrive）；`ros-jazzy-nav2-regulated-pure-pursuit-controller`、`ros-jazzy-nav2-rotation-shim-controller` 仅作为旧 RPP + RotationShim YAML 的回滚依赖可选安装
 5. **编译安装 small_gicp v1.0.0**: 从 GitHub 克隆并编译（需要 C++17）
 6. **初始化 rosdep**
 7. **同步源码包到工作空间**: 会逐项补齐后续新增包（例如 `sentry_motion_manager`）
@@ -56,7 +56,13 @@ pip3 install xmacro --break-system-packages
 
 ### 2.3 安装 Nav2 差速控制器
 
+当前仿真（Phase A）与实车（Phase R-A 首版）均使用 `nav2_mppi_controller` 作为唯一局部控制器。RPP / RotationShim 保留仅用于旧配置回滚演练，不是当前运行链路。
+
 ```bash
+# 当前运行链路依赖（必装）：
+sudo apt install -y ros-jazzy-nav2-mppi-controller
+
+# 可选：旧配置回滚所需（仅当需要把 YAML 回退到 RotationShim + RPP + REEDS_SHEPP 时才需要）：
 sudo apt install -y ros-jazzy-nav2-regulated-pure-pursuit-controller \
                     ros-jazzy-nav2-rotation-shim-controller
 ```
@@ -129,7 +135,7 @@ ros2 action send_goal /red_standard_robot1/navigate_to_pose \
   "{pose: {header: {frame_id: map}, pose: {position: {x: 2.0, y: 0.0}, orientation: {w: 1.0}}}}"
 ```
 
-差速车会**先原地旋转到目标方向**（RotationShim 触发），然后直线前进（RPP 跟随）。`SUCCEEDED` 意味着到达 xy_goal_tolerance 内。
+差速车会朝目标方向移动（MPPI DiffDrive 采样最优轨迹）。`SUCCEEDED` 意味着到达 xy_goal_tolerance 内。
 
 ### 3.5 可用仿真世界
 
@@ -158,10 +164,12 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
 - rm_serial_driver 串口通信
 - Point-LIO 激光惯性里程计
 - small_gicp_relocalization 全局重定位
-- Nav2 栈（RPP + RotationShim + velocity_smoother）
+- Nav2 栈（仿真和实车均为 MPPI DiffDrive 单控制器；实车 Phase R-A 首版为前向优先 `vx_min=0.0`、Planner `DUBIN`、30Hz）+ velocity_smoother
 - sentry_motion_manager 底盘速度仲裁（`cmd_vel_nav` → 最终 `/cmd_vel`）
 - robot_state_publisher + LiDAR 驱动
 - sentry_behavior 行为树
+
+> **实车 MPPI 首版注意事项（Phase R-A）**：YAML 已落地，但全场/上场 Nav Goal smoke 回归验证**尚未完成**，依赖后续台架和实测 Task。首版禁用倒车采样、`wz_max=3.0 / az_max=5.0` 受 velocity_smoother 上限约束；如果 CPU 顶不住 30Hz，**只允许降 MPPI `batch_size`**（`2000 → 1500 → 1000`），禁止动控制频率，禁止动 `robot_radius=0.318`。回滚旧 `RotateShim + RPP + REEDS_SHEPP` 配置通过 git 恢复。
 
 ### 4.2 跨团队协作（实车）
 
@@ -177,20 +185,24 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py world:=<map_name> slam:=False
 - 仿真 Gazebo 入口：`src/sentry_robot_description/resource/xmacro/wheeled_biped_sim.sdf.xmacro`
 - 共享拓扑核心：`src/sentry_robot_description/resource/xmacro/wheeled_biped_core.sdf.xmacro`
 
-LiDAR 斜装、倒装或实测平移只改 `wheeled_biped_real.sdf.xmacro` 里的 `front_lidar_pose`，不要用 Point-LIO `gravity` 表达安装角。仿真为了扫到近场低矮底座保留 30° 下俯角，这个角只存在于 `wheeled_biped_sim.sdf.xmacro`。
+LiDAR 斜装、倒装或实测平移只改 `wheeled_biped_real.sdf.xmacro` 里的 `primary_lidar_pose` / `secondary_lidar_pose`（Layer A，雷达在机器人上的安装位姿）；Mid360 出厂 IMU 相对 LiDAR 的位姿（Layer B）写在 `src/sentry_nav/sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro`。不要用 Point-LIO `gravity` 表达安装角。仿真为了扫到近场低矮底座保留 30° 下俯角，这个角只存在于 `wheeled_biped_sim.sdf.xmacro`。
 
-当前实车默认值：
+当前实车默认值（两颗 Mid360 绕 X 轴镜像安装，**不是 yaw=π 前后反装**；名字里 `front/back` 仅是历史标识符）：
 
-- `front_lidar_pose = -0.05 0 0.05 0.0 0.2617993877991494 3.141592653589793`
-- `pitch > 0` 表示下俯，因此这里表示 Mid360 相对 `gimbal_pitch` 下俯 15°
+- `primary_lidar_pose = 0 0.102 0.3 -0.733 0.0 0.0`
+- `secondary_lidar_pose  = 0 -0.102 0.3 0.733 0.0 0.0`
+- 两组 pose 只差 y 分量和 roll 符号；roll = ±0.733 rad ≈ ±42°
+- `secondary_lidar_pose` 机械调整后必须用 `scripts/calib/calibrate_dual_mid360.sh --bootstrap --write-xmacro` 重新标定写回
 - 实车 `chassis -> gimbal_yaw -> gimbal_pitch` 现在是静态 TF，不再默认消费 `serial/gimbal_joint_state` 驱动 robot_state_publisher
+- 双 Mid360 派生资产（merger、driver override、Point-LIO override codegen、后雷达 TF fragment、IMU TF fragment 等）集中在 `src/sentry_nav/sentry_dual_mid360/`；`use_dual_mid360` launch argument 默认 `True`，`ros2 launch sentry_nav_bringup rm_sentry_launch.py use_dual_mid360:=False` 可回退单雷达链路
+- `secondary_lidar_pose` 除手量外，可以通过点云配准自动标定：先看 [`sentry_dual_mid360/docs/CALIBRATION_QUICKSTART.md`](../sentry_nav/sentry_dual_mid360/docs/CALIBRATION_QUICKSTART.md)，首次（xmacro 是占位值）跑 `calibrate_dual_mid360.sh --bootstrap --write-xmacro`，之后（xmacro 已近真值）跑严格模式做微调；`primary_lidar_pose` 仍属机械测量项，不在标定管线内
 
-外参修改前建议先看 `src/sentry_robot_description/README.md` 里的“外参与 DOF 怎么理解 / 角度为什么是 0.261799 / 常见安装场景怎么写”三节，里面已经明确了：
+外参修改前建议先看 `src/sentry_robot_description/README.md` 里的"外参与 DOF 怎么理解 / 角度换算 / 常见安装场景怎么写"三节，里面已经明确了：
 
-- `front_lidar_pose` 用的是 `x y z roll pitch yaw`
+- `primary_lidar_pose` / `secondary_lidar_pose` 用的是 `x y z roll pitch yaw`
 - 角度必须先转弧度
-- 当前实车固定云台时只改 `gimbal_pitch -> front_mid360` 外参
-- 倒装/反装也仍然只走 TF 外参，不走 Point-LIO `gravity`
+- 当前实车固定云台时只改 `gimbal_pitch -> primary_mid360` / `gimbal_pitch -> secondary_mid360` 外参
+- 镜像/倒装/任何安装姿态都只走 TF 外参，不走 Point-LIO `gravity`
 
 ## 5. 行为树决策
 
@@ -242,16 +254,19 @@ diff logs/*-baseline/launch.log logs/*-tuned/launch.log | head
 
 ## 8. 常见问题
 
-- **编译错误**：确认 `small_gicp` v1.0.0 已安装并位于系统路径；rosdep 已安装 `ros-jazzy-nav2-regulated-pure-pursuit-controller` 和 `ros-jazzy-nav2-rotation-shim-controller`。
+- **编译错误**：确认 `small_gicp` v1.0.0 已安装并位于系统路径；rosdep 已安装 `ros-jazzy-nav2-mppi-controller`（当前运行链路的唯一控制器依赖）。`ros-jazzy-nav2-regulated-pure-pursuit-controller` 和 `ros-jazzy-nav2-rotation-shim-controller` 只在需要回滚旧 RPP/RotationShim 配置时才装。
 
 - **仿真 Gazebo Play 按钮无响应**：Wayland 已知问题，用 `QT_QPA_PLATFORM=xcb` 或命令行 unpause（见 3.2）。
 
 - **Point-LIO 报 `imu loop back, clear deque`**：仿真启动时序问题。先起 Gazebo 并 unpause，等仿真时钟稳定（~10s，观察 `/red_standard_robot1/livox/imu` 有 ~150Hz 输出）再起导航栈。IMU 初始化完成后会自动恢复。
 
 - **Nav Goal accepted 但机器人不动**：
-  - 检查 RPP 的 `use_collision_detection`：SLAM 模式下若 costmap 大面积 unknown 会误报碰撞，本项目已在 `nav2_params.yaml` 中关闭（建图完成后可重开）。
-  - 检查 `/<ns>/cmd_vel_nav` 是否有 Nav2 平滑输出，以及 `/<ns>/motion_manager/state` 中 `output_enabled=true`。
+  - 检查 `/<ns>/cmd_vel_controller`（MPPI 原始输出）是否按 `controller_frequency` 稳定发布；无输出通常意味着 MPPI 未 activate 或 costmap 未就绪。
+  - 检查 `/<ns>/cmd_vel_nav`（velocity_smoother 输出）与 `/<ns>/cmd_vel`（motion_manager 最终输出）频率与 `linear.y`；实车 30Hz / 仿真 20Hz，`linear.y` 应恒 0。
+  - 检查 `/<ns>/motion_manager/state` 中 `output_enabled=true`，否则最终 `/cmd_vel` 持续零速。
+  - 检查 `/<ns>/local_costmap/costmap` 是否按 `update_frequency` 刷新；rosout 若反复报 `Costmap timed out waiting for update` 说明 Point-LIO/TF 没喂到 costmap。
   - 检查 `/<ns>/cmd_vel` topic 是否单类型（`TwistStamped`，无混合）：`ros2 topic info /red_standard_robot1/cmd_vel`。
+  - 查 `controller_server` rosout 是否出现 MPPI `Failed to find a path` / critic 超时等日志；SLAM 模式下若 local costmap 大面积 unknown 导致 MPPI 代价异常，诊断重点是 local costmap 是否按 `update_frequency` 正常刷新、`allow_unknown` / `static_layer` / `IntensityVoxelLayer` 是否按预期工作，以及 MPPI 的 `CostCritic` / `ConstraintCritic` 权重是否过高使 unknown 代价主导采样。旧 `navigation_launch.py` 按模式切换 RPP `use_collision_detection` 的逻辑仅在回滚到 RotationShim + RPP 配置时才生效，不是当前 MPPI 链路的调参入口。
 
 - **启动时报 `package 'sentry_motion_manager' not found`**：说明当前 workspace 没有同步或编译底盘运动管理器包。若源码中已有 `src/sentry_motion_manager/`，执行：
   ```bash

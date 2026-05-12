@@ -46,7 +46,8 @@
           + 手动 unpause: gz service -s /world/default/control ...
           + 等待 ~10s 让 /clock 稳定、传感器流启动
   终端 2: rm_navigation_simulation_launch.py
-          ├── ign_sim_pointcloud_tool (仿真专用点云格式转换)
+          ├── [use_dual_mid360=True]  → sentry_dual_mid360 sim_custommsg_bridge (PC2 → CustomMsg)
+          ├── [use_dual_mid360=False] → ign_sim_pointcloud_tool (PC2 → velodyne_points 回退)
           ├── bringup_launch.py
           │   ├── [slam=True]  → slam_launch.py
           │   ├── [slam=False] → localization_launch.py
@@ -82,7 +83,7 @@ Nav2 bt_navigator (导航 BT)
     │  决定 "怎么去"
     │  ComputePathToPose → FollowPath
     v
-RotationShimController + RegulatedPurePursuitController (局部控制，差速)
+局部控制器（仿真和实车均为 MPPI DiffDrive）
 ```
 
 - **游戏策略层** (`sentry_behavior/behavior_trees/`): BTCPP_format="4"，根据裁判系统、视觉识别等信息决定巡逻路线和战术切换。
@@ -147,7 +148,8 @@ ros2 launch sentry_nav_bringup rm_navigation_simulation_launch.py world:=rmuc_20
 | `rviz_config_file` | string | `rviz/nav2_default_view.rviz` | RViz 配置文件路径 |
 
 ### 仿真专有节点
-- **ign_sim_pointcloud_tool**: 将 Gazebo 的 `PointCloudPacked` 格式转换为标准 `PointCloud2`（`velodyne_points` 话题），供 Point-LIO 处理。仅仿真模式启动。
+- **sentry_dual_mid360 sim bridge (`use_dual_mid360:=True`，默认)**: `sim_custommsg_bridge_launch.py` 启动两份 `sentry_dual_mid360::SimPointCloudToCustomMsgNode`，分别把 Gazebo 桥出的 `livox/lidar_primary_points` / `livox/lidar_secondary_points`（`sensor_msgs/PointCloud2`）转换成 `livox/lidar_primary` / `livox/lidar_secondary` Livox `CustomMsg`，由 `MergerNode` 合并给 Point-LIO，与实车共用同一条 CustomMsg 链路。
+- **ign_sim_pointcloud_tool (`use_dual_mid360:=False` 回退)**: 订阅前 Mid360 的 `PointCloudPacked`（base YAML `pcd_topic: livox/lidar_primary_points`），发布 `velodyne_points`（`sensor_msgs/PointCloud2`）给 Point-LIO 单雷达 Velodyne 回退链路使用。仅仿真模式启动。
 
 ---
 
@@ -250,6 +252,8 @@ ros2 run nav2_map_server map_saver_cli -f ~/my_map
 - `my_map.yaml`: 地图元数据（分辨率、原点等）
 
 > **提示**：Point-LIO 在 SLAM 模式下会自动保存 PCD 文件。当前流程期望保存结果已经是与 `registered_scan` 一致的 odom/map 系点云，可作为后续导航模式的先验点云使用。旧 `lidar_odom` 系 PCD 不再兼容，必须重新建图生成。PCD 文件保存路径取决于 Point-LIO 的配置。
+
+> **双 Mid360 升级 PCD 迁移**：从单 Mid360 升级到双 Mid360（`use_dual_mid360:=True`）后，单雷达时代生成的先验 PCD **不兼容**且不能通过任何方式自动转换/复用——单雷达 PCD 只覆盖前向半球，双雷达实时 `registered_scan` 含后半球点会产生大规模 outlier，GICP `inlier_ratio` / `fitness_error` 必然劣化。升级后必须走实车慢速建图重建 PCD：`ros2 launch sentry_nav_bringup rm_sentry_launch.py slam:=True use_dual_mid360:=True` → `ros2 run nav2_map_server map_saver_cli -f ~/Documents/Sentry26_maps/<name>_dual` → 停栈让 Point-LIO 落盘 → 替换 `prior_pcd_file` 后用 `ros2 launch sentry_nav_bringup rm_sentry_launch.py slam:=False world:=<name>_dual use_dual_mid360:=True` 验收 GICP。完整 SOP、旧资产备份/检查/验证/FAQ 详见包内 [`PCD_MIGRATION.md`](../sentry_nav/sentry_dual_mid360/docs/PCD_MIGRATION.md)。
 
 ### SLAM Toolbox 关键参数
 
@@ -438,53 +442,54 @@ ros2 launch sentry_nav_bringup rm_multi_navigation_simulation_launch.py \
 
 ### 8.1 全局规划器 - SmacPlannerHybrid
 
-差速轮足方案下仿真和实车均使用 SmacPlannerHybrid + DUBIN 运动模型，直接规划带朝向约束的弧形路径，再由 RotationShim + RPP 跟随。
+差速轮足方案下仿真和实车均使用 SmacPlannerHybrid，两端都采用 `motion_model_for_search: DUBIN`（只规划前进弧线）。两端 MPPI 局部控制器都把 `vx_min=0.0` 设为前向优先，Planner DUBIN 与此语义严格配对；不能回到 REEDS_SHEPP，否则会生成 MPPI 无法跟随的倒车/cusp 路径。规划输出为带朝向的平滑路径，仿真与实车均由 MPPI DiffDrive 跟随。
 
-| 参数 | 默认值 | 说明 |
-|:---|:---|:---|
-| `tolerance` | `0.5` | 目标附近搜索容差 (m) |
-| `allow_unknown` | `true` | 未知区域是否视为可通行 |
-| `motion_model_for_search` | `DUBIN` | 差速前进弧线搜索模型 |
-| `angle_quantization_bins` | `72` | 航向量化，5° 一档 |
-| `minimum_turning_radius` | `0.25` | 最小转弯半径 (m) |
-| `cost_penalty` | `2.0` | 靠近高代价区域的惩罚 |
-| `max_iterations` | `1000000` | 最大搜索迭代次数 |
-| `max_planning_time` | `1.5` | 单次规划最长耗时 (s) |
-| `smoother.max_iterations` | `1000` | 路径平滑迭代次数 |
-| `smoother.w_smooth` | `0.3` | 平滑权重 |
-| `smoother.w_data` | `0.2` | 数据保真权重 |
-
-> 当前代码已落在 SmacPlannerHybrid；若未来要切回 SmacPlanner2D，必须连同 RPP 跟随表现一起重新验证。
-
-### 8.2 局部控制器 - RotationShim + RegulatedPurePursuit
-
-Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"]`：
-
-**RotateShim**：
 | 参数 | 仿真 | 实车 | 说明 |
 |:---|:---|:---|:---|
-| `angular_dist_threshold` | `0.785` | `1.571` | 仿真更保守，45° 以上先原地旋转；实车目前保留 90° 起转 |
-| `forward_sampling_distance` | `0.5` | `0.5` | 路径方向采样距离 |
-| `rotate_to_heading_angular_vel` | `1.2` | `1.2` | 原地旋转角速度 (rad/s) |
-| `max_angular_accel` | `2.5` | `2.5` | 角加速度上限 |
-| `simulate_ahead_time` | `1.0` | `1.0` | 碰撞检查预测窗 |
-| `primary_controller` | `nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController` | 同左 | 委托的主控制器 |
+| `tolerance` | `0.5` | `0.5` | 目标附近搜索容差 (m) |
+| `allow_unknown` | `true` | `true` | 未知区域是否视为可通行 |
+| `motion_model_for_search` | `DUBIN` | `DUBIN` | 两端均前向优先，与 MPPI `vx_min=0` 配对 |
+| `reverse_penalty` | `2.1` | `2.1` | DUBIN 不会生成倒车原语，此值仅作保留占位 |
+| `angle_quantization_bins` | `72` | `72` | 航向量化，5° 一档 |
+| `minimum_turning_radius` | `0.25` | `0.25` | 最小转弯半径 (m) |
+| `cost_penalty` | `2.0` | `2.0` | 靠近高代价区域的惩罚 |
+| `max_iterations` | `1000000` | `1000000` | 最大搜索迭代次数 |
+| `max_planning_time` | `1.5` | `1.5` | 单次规划最长耗时 (s) |
+| `smoother.max_iterations` | `1000` | `1000` | 路径平滑迭代次数 |
+| `smoother.w_smooth` | `0.3` | `0.3` | 平滑权重 |
+| `smoother.w_data` | `0.2` | `0.2` | 数据保真权重 |
 
-**FollowPath (RPP)**：
+> 当前代码已落在 SmacPlannerHybrid；若未来要切回 SmacPlanner2D，必须连同下游 MPPI 控制器的跟随表现一起重新验证。
+
+### 8.2 局部控制器（仿真 Phase A + 实车 Phase R-A 首版，均为 MPPI DiffDrive）
+
+**当前状态**（2026 赛季）：
+- **仿真 `config/simulation/nav2_params.yaml`（Phase A 已落地）**：`controller_plugins: ["FollowPath"]`，`FollowPath = nav2_mppi_controller::MPPIController`，`motion_model: "DiffDrive"`，`wz_max=6.3`、`az_max=8.0`，控制/平滑链路 20Hz。详细调参见 [TUNING_GUIDE.md 六-B](TUNING_GUIDE.md)。
+- **实车 `config/reality/nav2_params.yaml`（Phase R-A 首版，YAML 已落地，上场回归依赖 Task 6）**：`controller_plugins: ["FollowPath"]`，`FollowPath = nav2_mppi_controller::MPPIController`，`motion_model: "DiffDrive"`，首版前向优先 `vx_min=0.0`，受 velocity_smoother 约束 `wz_max=3.0 / az_max=5.0`，控制/平滑链路 30Hz。详细调参见 [TUNING_GUIDE.md 六-B](TUNING_GUIDE.md)。
+
+**MPPI 关键参数（仿真 vs 实车，标出差异项）**：
+
 | 参数 | 仿真 | 实车 | 说明 |
 |:---|:---|:---|:---|
-| `desired_linear_vel` | `1.5` | `1.0` | 期望线速度 (m/s)，仿真优先稳住起步与贴障场景 |
-| `lookahead_dist` | `1.2` | `1.0` | 基础前瞻距离 |
-| `min_lookahead_dist` | `0.6` | `0.5` | velocity-scaled lookahead 下限 |
-| `max_lookahead_dist` | `1.5` | `1.2` | velocity-scaled lookahead 上限 |
-| `use_regulated_linear_velocity_scaling` | `true` | `true` | 启用曲率 + 接近减速 |
-| `regulated_linear_scaling_min_radius` | `0.5` | `0.5` | 触发曲率降速的半径 |
-| `regulated_linear_scaling_min_speed` | `0.3` | `0.3` | 曲率降速速度下限 |
-| `use_rotate_to_heading` | `false` | `false` | 哨兵底盘不要求终端对齐 yaw |
-| `rotate_to_heading_min_angle` | `0.785` | `0.785` | 终端旋转触发角度 |
-| `use_collision_detection` | `slam:=True` 时 `false`，`slam:=False` 时 `true` | 同左 | launch 根据模式自动切换前向碰撞预测 |
-| `allow_reversing` | `false` | `false` | 差速不倒车 |
-| `transform_tolerance` | `0.1` | `0.1` | TF 容差 |
+| `motion_model` | `DiffDrive` | `DiffDrive` | 固定差速模型 |
+| `time_steps` | `32` | `32` | 预测步数 |
+| `model_dt` | `0.05` | `0.05` | 单步时长 (s) |
+| `vx_max` | `1.5` | `1.5` | 前向速度上限，与 smoother `max_velocity[0]` 对齐 |
+| `vx_min` | `0.0` | `0.0` | 前向优先，禁止倒车采样，必须与 Planner DUBIN 配对 |
+| `vy_max` / `vy_std` | `0.0` / `0.0` | `0.0` / `0.0` | 差速底盘锁侧向 |
+| `wz_max` | `6.3` | **`3.0`** | 受实车 smoother `max_velocity[2]=3.0` 约束 |
+| `ax_max` | `1.5` | `1.5` | 线加速度上限 (m/s²) |
+| `az_max` | `8.0` | **`5.0`** | 受实车 smoother `max_accel[2]=5.0` 约束 |
+| `batch_size` | `2000` | `2000` | 采样批量，实车 CPU 顶不住时顺序降到 1500 → 1000 |
+| `iteration_count` | `1` | `1` | 单次迭代 |
+| `visualize` | `false` | `false` | 关闭轨迹可视化，省 CPU |
+| `regenerate_noises` | `false` | `false` | 复用噪声 |
+
+**Critic 列表（仿真和实车共用 Nav2 Jazzy 官方差速推荐集）**：`ConstraintCritic`, `CostCritic`, `GoalCritic`, `GoalAngleCritic`, `PathAlignCritic`, `PathFollowCritic`, `PathAngleCritic`, `PreferForwardCritic`。
+
+**Horizon 安全约束（硬规则）**：`time_steps × model_dt × vx_max < local_costmap_half_width`；当前仿真/实车均为 `32 × 0.05 × 1.5 = 2.4m < 2.5m`，裕量 0.1m。
+
+**频率约束（硬规则）**：`controller_frequency` 必须等于 `velocity_smoother.smoothing_frequency`（仿真 20Hz，实车 30Hz）。实车 CPU 顶不住时只允许降 `batch_size`，**禁止调整频率**。
 
 ### 8.3 代价地图 (Costmap2D)
 
@@ -497,12 +502,13 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `width` | `5.0` | `5.0` | 滚动窗口宽度 (m) |
 | `height` | `5.0` | `5.0` | 滚动窗口高度 (m) |
 | `resolution` | `0.05` | `0.05` | 分辨率 (m/像素) |
-| `robot_radius` | `0.46` | `0.46` | 0.648×0.650 轮足底盘外接圆半径 (m) |
+| `robot_radius` | `0.46` | `0.318` | Nav2 圆形 footprint 半径 (m)，以各环境配置为准 |
+| `inflation_radius` | `0.90` | `0.61` | 障碍膨胀半径，以各环境配置为准 |
+| `cost_scaling_factor` | `8.0` | `8.0` | 陡峭梯度，推路径远离贴边 |
 
 > 注：仿真模型中的 `chassis` 盒体已缩到实车的 65% 以减少 LiDAR 自遮挡，但 Nav2 的
-> `robot_radius` 仍保持 `0.46`，故规划和避障依旧按更保守的实车 footprint 执行。
-| `inflation_radius` | `0.90` | `0.90` | 车身 0.46 + 额外缓冲 0.44 (m) |
-| `cost_scaling_factor` | `8.0` | `8.0` | 陡峭梯度，推路径远离贴边 |
+> `robot_radius` 仍保持 `0.46`，故规划和避障依旧按更保守的 footprint 执行；实车当前配置
+> 使用 `robot_radius=0.318` 与 `inflation_radius=0.61`，不要把仿真值直接套到实车。
 
 **插件层顺序**：`static_layer` → `IntensityVoxelLayer` → `inflation_layer`
 
@@ -620,7 +626,7 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 |:---|:---|:---|
 | `xfer_format` | `4` | 数据格式: 0=PointCloud2, 1=CustomMsg, 4=AllMsg(推荐) |
 | `publish_freq` | `30.0` | 发布频率 (Hz)。可选: 5, 10, 20, 30, 50 |
-| `frame_id` | `front_mid360` | TF 坐标系名称 |
+| `frame_id` | `primary_mid360` | TF 坐标系名称 |
 | `multi_topic` | `0` | 0=共享话题, 1=每个 LiDAR 独立话题 |
 
 ---
@@ -640,28 +646,30 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | `useSorting` | `true` | `true` | 使用分位数地面估计（支持坡道识别）。**不可与 considerDrop 同时启用** |
 | `quantileZ` | `0.2` | `0.2` | Z 方向分位数（仅 useSorting=true 时生效） |
 | `considerDrop` | `false` | `false` | 考虑凹地形（绝对高度差） |
-| `clearDyObs` | `true` | `true` | 清除动态障碍物 |
-| `minDyObsDis` | `0.3` | `0.5` | 动态障碍物最小检测距离 (m) |
-| `vehicleHeight` | `0.5` | `0.55` | 机器人高度 (m)，仅处理低于此高度的点 |
+| `clearDyObs` | `false` | `false` | 不主动清除动态障碍物，保留在 costmap 中参与避障 |
+| `minDyObsDis` | `0.5` | `0.5` | 动态障碍物最小检测距离 (m)，仅在 clearDyObs=true 时生效 |
+| `vehicleHeight` | `0.70` | `0.70` | 机器人高度 (m)，仅处理低于此高度的点 |
 | `minRelZ` | `-1.5` | `-1.5` | 有效点最低相对高度 (m) |
-| `maxRelZ` | `0.5` | `0.5` | 有效点最高相对高度 (m) |
+| `maxRelZ` | `1.0` | `1.0` | 有效点最高相对高度 (m) |
 | `disRatioZ` | `0.2` | `0.2` | Z 范围随距离缩放因子（坡道补偿） |
-| `minBlockPointNum` | `10` | `10` | 每个体素块最少点数 |
+| `minBlockPointNum` | `5` | `5` | 每个体素块最少点数，较低值用于保留低矮/薄障碍物 |
 | `noDataObstacle` | `false` | `false` | 无数据区域视为障碍物 |
 
 ### 10.2 Terrain Analysis Ext (全局地形)
 
 订阅 `terrain_map`，发布 `terrain_map_ext` → 供**全局代价地图** IntensityVoxelLayer 使用。
 
-| 参数 | 默认值 | 说明 |
-|:---|:---|:---|
-| `scanVoxelSize` | `0.1` | 更粗的降采样（全局范围） |
-| `decayTime` | `0.2` | 更快衰减以保持全局地图新鲜度 |
-| `clearingDis` | `20.0` | 扩展清除距离 (m) |
-| `vehicleHeight` | `1.0` | 更高的过滤阈值 |
-| `localTerrainMapRadius` | `4.0` | 局部地形地图半径 (m) |
-| `ceilingFilteringThre` | `2.0` | 天花板过滤阈值 (m) |
-| `checkTerrainConn` | `false` | 检查地形连通性 |
+| 参数 | 仿真 | 实车 | 说明 |
+|:---|:---|:---|:---|
+| `scanVoxelSize` | `0.1` | `0.1` | 更粗的降采样（全局范围） |
+| `decayTime` | `1.0` | `1.0` | 点云衰减时间，兼顾动态响应和机身旋转覆盖 |
+| `clearingDis` | `10.0` | `10.0` | 扩展清除距离 (m) |
+| `vehicleHeight` | `0.8` | `0.8` | 更高的过滤阈值 |
+| `upperBoundZ` | `1.0` | `1.0` | 有效点最高相对高度 (m) |
+| `disRatioZ` | `0.2` | `0.2` | Z 范围随距离缩放因子（坡道补偿） |
+| `localTerrainMapRadius` | `4.0` | `4.0` | 局部地形地图半径 (m) |
+| `ceilingFilteringThre` | `0.8` | `0.8` | 天花板过滤阈值 (m) |
+| `checkTerrainConn` | `true` | `true` | 检查地形连通性，用于过滤天花板/高处结构 |
 
 ---
 
@@ -733,12 +741,16 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 | | `num_threads` | `4` | `8` | 实车算力更强 |
 | **Nav2** | `controller_frequency` | `20.0` | `30.0` | 实车需要更高控制频率 |
 | | `costmap update_frequency` | `10.0` | `30.0` | 实车实时性要求更高 |
-| | `planner plugin` | `SmacPlannerHybrid` | `SmacPlannerHybrid` | 差速方案仿真/实车统一 |
-| | `desired_linear_vel (RPP)` | `1.5` | `1.0` | 仿真优先稳起步，实车保守起步 |
-| | `robot_radius` | `0.46` | `0.46` | 与轮足底盘外接圆一致 |
-| | `inflation_radius` | `0.90` | `0.90` | 差速方案统一 |
-| **地形** | `vehicleHeight` | `0.5` | `0.55` | 实车高度不同 |
-| | `minDyObsDis` | `0.3` | `0.5` | 实车动态障碍检测距离更大 |
+| | `planner plugin` | `SmacPlannerHybrid` (DUBIN) | `SmacPlannerHybrid` (DUBIN) | 仿真和实车均前向优先，与 MPPI `vx_min=0` 语义配对 |
+| | `local controller plugin` | `nav2_mppi_controller::MPPIController (DiffDrive)` | `nav2_mppi_controller::MPPIController (DiffDrive)` | 仿真 Phase A / 实车 Phase R-A 首版同为 MPPI DiffDrive |
+| | `MPPI wz_max / az_max` | `6.3 / 8.0` | `3.0 / 5.0` | 实车受 velocity_smoother 上限约束 |
+| | `MPPI vx_min` | `0.0` | `0.0` | 两端均禁止倒车采样（首版前向优先） |
+| | `robot_radius` | `0.46` | `0.318` | 仿真保持保守 footprint；实车按 reality 配置 |
+| | `inflation_radius` | `0.90` | `0.61` | 仿真保留更大缓冲；实车按 reality 配置 |
+| **地形** | `clearDyObs` | `false` | `false` | 动态障碍必须保留在 costmap 中用于避障 |
+| | `vehicleHeight` | `0.70` | `0.70` | terrain_analysis 当前一致 |
+| | `terrain_ext.vehicleHeight` | `0.8` | `0.8` | terrain_analysis_ext 当前一致 |
+| | `minDyObsDis` | `0.5` | `0.5` | 仅在 clearDyObs=true 时生效；当前两端均关闭动态清除 |
 
 ---
 
@@ -748,9 +760,11 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 
 - 增大 `inflation_radius`（如 0.90 → 1.0）
 - 增大 `robot_radius`（确保覆盖实际外形）
-- 降低 `desired_linear_vel`（RPP 期望线速度），同步检查 velocity_smoother 的 `max_velocity[0]`
-- 检查 `costmap update_frequency` 是否足够高
-- 检查导航模式是否已由 launch 将 `use_collision_detection` 自动打开
+- 降低 MPPI `vx_max`（仿真/实车均为 1.5），同步检查 velocity_smoother 的 `max_velocity[0]`
+- 实车 CPU 顶不住 30Hz 时先降 MPPI `batch_size`（`2000 → 1500 → 1000`），禁止动控制频率
+- 检查 `costmap update_frequency` 是否足够高，`static_layer` + `IntensityVoxelLayer` 是否都在 local costmap plugin 列表里，且地形点云按 `update_frequency` 实际写入 costmap
+- 检查 MPPI 的 `CostCritic` / `ConstraintCritic` 权重是否过低（相对 `PathFollowCritic` / `PathAlignCritic`）——MPPI 现在直接从 local costmap 评估碰撞代价，不再使用 RPP 的 `use_collision_detection` 开关
+- 观测 `/cmd_vel_controller`（MPPI 原始）和 `/cmd_vel_nav`（velocity_smoother 平滑后）：`linear.y ≡ 0`，`|wz|` 不应超过 `wz_max`；贴墙时 MPPI 应给出减速或绕行指令而非维持原速
 
 ### 场景 2: 路径规划失败 / 找不到路径
 
@@ -769,7 +783,7 @@ Nav2 官方差速默认组合，`controller_plugins: ["RotateShim", "FollowPath"
 
 ### 场景 4: Point-LIO 里程计发散
 
-- **首先检查传感器安装外参**（`gimbal_pitch → front_mid360` 的 TF / 模型定义）是否与实物一致，不要先改 `gravity`
+- **首先检查传感器安装外参**（`gimbal_pitch → primary_mid360` 的 TF / 模型定义）是否与实物一致，不要先改 `gravity`
 - `gravity` 的范数应保持约 `9.81m/s²`；实车重力标定只用静态 IMU 的 `-mean_acc` 方向更新它，不能把 LiDAR 安装角手算塞进去
 - 确认 `lidar_type` 和 `timestamp_unit` 设置正确
 - 检查 IMU 数据质量，调整 `satu_acc` / `satu_gyro`

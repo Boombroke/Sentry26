@@ -34,6 +34,7 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     use_foxglove = LaunchConfiguration("use_foxglove")
     use_robot_state_pub = LaunchConfiguration("use_robot_state_pub")
+    use_dual_mid360 = LaunchConfiguration("use_dual_mid360")
 
     declare_namespace_cmd = DeclareLaunchArgument(
         "namespace",
@@ -71,6 +72,16 @@ def generate_launch_description():
         description="Whether to start robot_state_publisher in the real-robot one-shot launch",
     )
 
+    declare_use_dual_mid360_cmd = DeclareLaunchArgument(
+        "use_dual_mid360",
+        default_value="True",
+        description=(
+            "Forwarded to rm_navigation_reality_launch.py. Default True enables "
+            "dual-Mid360 merger + Point-LIO override. Set False for the no-merger "
+            "single-lidar-direct fallback."
+        ),
+    )
+
     navigation_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(launch_dir, "rm_navigation_reality_launch.py")
@@ -82,6 +93,7 @@ def generate_launch_description():
             "use_rviz": use_rviz,
             "use_foxglove": use_foxglove,
             "use_robot_state_pub": use_robot_state_pub,
+            "use_dual_mid360": use_dual_mid360,
         }.items(),
     )
 
@@ -105,6 +117,7 @@ def generate_launch_description():
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_foxglove_cmd)
     ld.add_action(declare_use_robot_state_pub_cmd)
+    ld.add_action(declare_use_dual_mid360_cmd)
 
     ld.add_action(navigation_cmd)
     ld.add_action(serial_driver_node)

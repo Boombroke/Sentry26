@@ -17,17 +17,29 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVariable
-from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.actions import (
+    DeclareLaunchArgument,
+    GroupAction,
+    IncludeLaunchDescription,
+    SetEnvironmentVariable,
+)
+from launch.conditions import IfCondition, UnlessCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import (
+    LaunchConfiguration,
+    PathJoinSubstitution,
+    PythonExpression,
+)
 from launch_ros.actions import LoadComposableNodes, Node
 from launch_ros.descriptions import ComposableNode, ParameterFile
+from launch_ros.substitutions import FindPackageShare
 from nav2_common.launch import RewrittenYaml
 
 
 def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory("sentry_nav_bringup")
+    dual_mid360_share = get_package_share_directory("sentry_dual_mid360")
 
     namespace = LaunchConfiguration("namespace")
     map_yaml_file = LaunchConfiguration("map")
@@ -40,6 +52,7 @@ def generate_launch_description():
     container_name_full = (namespace, "/", container_name)
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
+    use_dual_mid360 = LaunchConfiguration("use_dual_mid360")
 
     lifecycle_nodes = ["map_server"]
 
@@ -116,6 +129,42 @@ def generate_launch_description():
         "log_level", default_value="info", description="log level"
     )
 
+    declare_use_dual_mid360_cmd = DeclareLaunchArgument(
+        "use_dual_mid360",
+        default_value="True",
+        description=(
+            "When True (default), start pointcloud_merger before Point-LIO, load "
+            "sentry_dual_mid360/config/pointlio_dual_overrides.yaml (generated from "
+            "xmacro at build time) on top of base Point-LIO params, and point "
+            "Point-LIO at the merger output topic `livox/lidar`. When False, the "
+            "merger is disabled and Point-LIO keeps the base params_file topic "
+            "`livox/lidar` for single-lidar operation. Default "
+            "navigation uses slam:=False, so this must also be wired in "
+            "localization_launch.py, not only slam_launch.py."
+        ),
+    )
+
+    # Point-LIO override YAML generated at build time by sentry_dual_mid360 codegen
+    # from wheeled_biped_real.sdf.xmacro + mid360_imu_tf.sdf.xmacro. Only loaded in
+    # dual mode; single mode keeps base nav2_params.yaml Point-LIO section untouched.
+    pointlio_dual_overrides_file = PathJoinSubstitution(
+        [
+            FindPackageShare("sentry_dual_mid360"),
+            "config",
+            "pointlio_dual_overrides.yaml",
+        ]
+    )
+
+    # Explicit pointcloud_merger params file (plan T13 requires explicit pass-through
+    # rather than relying on pointcloud_merger_launch.py's built-in default).
+    pointcloud_merger_params_file = PathJoinSubstitution(
+        [
+            FindPackageShare("sentry_dual_mid360"),
+            "config",
+            "pointcloud_merger_params.yaml",
+        ]
+    )
+
     start_point_lio_node = Node(
         package="point_lio",
         executable="pointlio_mapping",
@@ -128,6 +177,39 @@ def generate_launch_description():
             {"prior_pcd.prior_pcd_map_path": prior_pcd_file},
         ],
         arguments=["--ros-args", "--log-level", log_level],
+        condition=UnlessCondition(use_dual_mid360),
+    )
+
+    start_point_lio_node_dual = Node(
+        package="point_lio",
+        executable="pointlio_mapping",
+        name="point_lio",
+        output="screen",
+        respawn=use_respawn,
+        respawn_delay=2.0,
+        parameters=[
+            configured_params,
+            pointlio_dual_overrides_file,
+            {"common.lid_topic": "livox/lidar"},
+            {"common.imu_topic": "livox/imu"},
+            {"preprocess.lidar_type": 1},
+            {"preprocess.scan_line": 4},
+            {"prior_pcd.prior_pcd_map_path": prior_pcd_file},
+        ],
+        arguments=["--ros-args", "--log-level", log_level],
+        condition=IfCondition(use_dual_mid360),
+    )
+
+    start_pointcloud_merger_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(dual_mid360_share, "launch", "pointcloud_merger_launch.py")
+        ),
+        condition=IfCondition(use_dual_mid360),
+        launch_arguments={
+            "namespace": namespace,
+            "use_sim_time": use_sim_time,
+            "params_file": pointcloud_merger_params_file,
+        }.items(),
     )
 
     load_nodes = GroupAction(
@@ -217,9 +299,12 @@ def generate_launch_description():
     ld.add_action(declare_container_name_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
+    ld.add_action(declare_use_dual_mid360_cmd)
 
     # Add the actions to launch all of the localiztion nodes
+    ld.add_action(start_pointcloud_merger_cmd)
     ld.add_action(start_point_lio_node)
+    ld.add_action(start_point_lio_node_dual)
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
 

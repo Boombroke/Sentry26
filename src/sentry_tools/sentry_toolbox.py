@@ -68,7 +68,7 @@ EXPECTED_TF = [
     ('base_footprint', 'chassis', '底盘挂载'),
     ('chassis', 'gimbal_yaw', '云台 yaw'),
     ('gimbal_yaw', 'gimbal_pitch', '云台 pitch'),
-    ('gimbal_pitch', 'front_mid360', 'LiDAR'),
+    ('gimbal_pitch', 'primary_mid360', 'LiDAR'),
 ]
 
 SCRIPTS_DIR = pathlib.Path(__file__).resolve().parent.parent / 'scripts'

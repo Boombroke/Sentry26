@@ -14,7 +14,7 @@ sentry_nav 是哨兵机器人自主导航系统的顶层元包。它通过依赖
 - **terrain_analysis**: 基础地形分析模块，用于实时检测环境中的障碍物。
 - **terrain_analysis_ext**: 地形分析扩展模块，提升了机器人在复杂坡道与障碍物环境下的通过性。
 
-> 局部控制器（RPP + RotationShim）由 Nav2 Jazzy apt 提供（`nav2_regulated_pure_pursuit_controller`、`nav2_rotation_shim_controller`），不在本元包内。
+> 局部控制器当前为 MPPI DiffDrive，由 Nav2 Jazzy apt 包 `nav2_mppi_controller` 提供，仿真 Phase A 与实车 Phase R-A 首版均使用。`nav2_regulated_pure_pursuit_controller`、`nav2_rotation_shim_controller`（旧 RPP + RotationShim 组合）仅作为回滚依赖保留，不是当前运行链路。所有控制器插件均由 Nav2 apt 提供，不在本元包内实现。
 
 ## 系统核心话题
 - **订阅**:

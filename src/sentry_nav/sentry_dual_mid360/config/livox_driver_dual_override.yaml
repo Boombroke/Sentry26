@@ -1,0 +1,26 @@
+# livox_driver_dual_override.yaml
+# Runtime parameter override for livox_ros_driver2 in dual-Mid360 mode.
+# Load this file alongside the driver node to override single-lidar defaults
+# that live in sentry_nav_bringup/config/reality/nav2_params.yaml.
+#
+# Key differences from single-lidar defaults:
+#   xfer_format: 1  (CustomMsg, required for multi_topic per-device routing)
+#   multi_topic: 1  (one topic per device, named by IP)
+#   publish_freq: 10.0  (halved to stay within CPU budget with two sensors)
+#   frame_id: mid360  (generic; per-device frame assignment done in launch/TF)
+#   user_config_path: points to dual-device JSON (T2 artifact)
+#
+# DO NOT raise publish_freq above 10.0 — dual-sensor CPU budget constraint.
+# DO NOT merge this file into nav2_params.yaml — single-lidar defaults are protected.
+
+livox_ros_driver2:
+  ros__parameters:
+    xfer_format: 1                    # 1 = LivoxCustomMsg (required for multi_topic routing)
+    multi_topic: 1                    # 1 = one topic per device (/livox/lidar_<ip>)
+    data_src: 0                       # 0 = live LiDAR hardware
+    publish_freq: 10.0                # Hz; max allowed for dual-sensor config
+    output_data_type: 0
+    frame_id: mid360                  # generic base; per-device TF set in xmacro/launch
+    user_config_path: $(find-pkg-share sentry_dual_mid360)/config/mid360_user_config_dual.json
+    cmdline_input_bd_code: livox0000000001
+    lvx_file_path: ""

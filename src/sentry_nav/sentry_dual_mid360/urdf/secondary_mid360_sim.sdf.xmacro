@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!--
+    secondary_mid360_sim.sdf.xmacro
+    Simulation-only fragment for the secondary Livox Mid360 gpu_lidar sensor.
+
+    Macro: secondary_mid360_sim_macro
+    Params:
+      parent               - parent link name (must be gimbal_pitch for sim robot)
+      secondary_lidar_pose - "x y z roll pitch yaw" of secondary_mid360 relative
+                             to parent, supplied by wheeled_biped_sim.sdf.xmacro.
+                             The physical layout is an X-axis mirror of primary
+                             (opposite roll, no yaw flip).
+                             See src/sentry_nav/sentry_dual_mid360/docs/ARCHITECTURE.md.
+      update_rate          - sensor update rate in Hz (mirror primary: 50)
+      samples              - horizontal scan samples (mirror primary: 1875)
+
+    This fragment delegates to the shared `livox` macro (defined in
+    model://mid360/model.sdf.xmacro) with prefix="secondary_", producing:
+      - secondary_livox_joint (fixed joint to parent)
+      - secondary_mid360      (link with inertia, visual, imu sensor, gpu_lidar sensor)
+
+    Keep this file Gazebo-sensor-only; real-robot TF is in secondary_mid360.sdf.xmacro.
+-->
+<sdf version="1.8">
+    <xmacro_define_block name="secondary_mid360_sim_macro" params="parent secondary_lidar_pose update_rate samples">
+        <xmacro_block name="livox" prefix="secondary_" parent="${parent}" pose="${secondary_lidar_pose}" update_rate="${update_rate}" samples="${samples}" />
+    </xmacro_define_block>
+</sdf>

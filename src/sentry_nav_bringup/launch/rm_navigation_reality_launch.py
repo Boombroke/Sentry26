@@ -13,17 +13,37 @@
 # limitations under the License.
 
 
+import json
 import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, TextSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterFile
+from launch_ros.substitutions import FindPackageShare
 from nav2_common.launch import RewrittenYaml
+
+
+def _livox_ip_suffix(ip: str) -> str:
+    return ip.replace(".", "_")
+
+
+def _load_dual_mid360_ip_suffixes():
+    dual_mid360_share = get_package_share_directory("sentry_dual_mid360")
+    json_path = os.path.join(dual_mid360_share, "config", "mid360_user_config_dual.json")
+    with open(json_path) as f:
+        cfg = json.load(f)
+    configs = cfg.get("lidar_configs", [])
+    if len(configs) < 2:
+        raise RuntimeError(
+            f"mid360_user_config_dual.json must have at least 2 lidar_configs entries "
+            f"(found {len(configs)}): {json_path}"
+        )
+    return _livox_ip_suffix(configs[0]["ip"]), _livox_ip_suffix(configs[1]["ip"])
 
 
 def generate_launch_description():
@@ -46,6 +66,7 @@ def generate_launch_description():
     use_robot_state_pub = LaunchConfiguration("use_robot_state_pub")
     use_rviz = LaunchConfiguration("use_rviz")
     use_foxglove = LaunchConfiguration("use_foxglove")
+    use_dual_mid360 = LaunchConfiguration("use_dual_mid360")
 
     # Declare the launch arguments
     declare_namespace_cmd = DeclareLaunchArgument(
@@ -140,6 +161,21 @@ def generate_launch_description():
         description="Whether to start foxglove_bridge for remote web visualization",
     )
 
+    declare_use_dual_mid360_cmd = DeclareLaunchArgument(
+        "use_dual_mid360",
+        default_value="True",
+        description=(
+            "When True (default), layers livox_driver_dual_override.yaml onto the "
+            "Livox driver (xfer_format=1 / multi_topic=1 / 10Hz), applies "
+            "JSON-derived per-device remaps for the primary/secondary Mid360 topics, "
+            "starts pointcloud_merger via the bringup chain, and loads "
+            "pointlio_dual_overrides.yaml for Point-LIO. When False, the Livox "
+            "driver uses only the base params_file single-lidar configuration; no "
+            "dual override, dual remaps, merger, or Point-LIO codegen override is "
+            "applied, so Point-LIO keeps the base YAML livox/lidar topic."
+        ),
+    )
+
     # Create our own temporary YAML files that include substitutions
 
     configured_params = ParameterFile(
@@ -164,6 +200,37 @@ def generate_launch_description():
         }.items(),
     )
 
+    # Per-device topic remappings for dual Mid360 (multi_topic=1).
+    # livox_ros_driver2 names topics by device IP (dots replaced with underscores):
+    #   livox/lidar_<ip>  livox/imu_<ip>
+    # IPs are read from mid360_user_config_dual.json at launch-generation time.
+    # lidar_configs[0] = primary Mid360, lidar_configs[1] = secondary Mid360.
+    # Both source and target are relative so the Livox Node's `namespace=namespace`
+    # resolves both sides consistently: empty namespace -> `/livox/lidar_primary`,
+    # non-empty namespace -> `/<ns>/livox/lidar_primary`, which aligns with the
+    # relative topics in pointcloud_merger_params.yaml. The single-lidar
+    # fallback keeps MH16 equivalence: base nav2_params.yaml, no dual
+    # override/remaps, Point-LIO's base `livox/lidar` topic.
+    primary_ip_sfx, secondary_ip_sfx = _load_dual_mid360_ip_suffixes()
+
+    livox_dual_remappings = [
+        (f"livox/lidar_{primary_ip_sfx}",   "livox/lidar_primary"),
+        (f"livox/imu_{primary_ip_sfx}",     "livox/imu"),
+        (f"livox/lidar_{secondary_ip_sfx}", "livox/lidar_secondary"),
+        (f"livox/imu_{secondary_ip_sfx}",   "livox/imu_secondary"),
+    ]
+
+    # Dual-Mid360 Livox driver override YAML (from sentry_dual_mid360 package).
+    # The YAML contains `$(find-pkg-share sentry_dual_mid360)/config/...` substitutions
+    # so it MUST be wrapped in ParameterFile(allow_substs=True) to expand correctly.
+    livox_dual_override_file = PathJoinSubstitution(
+        [
+            FindPackageShare("sentry_dual_mid360"),
+            "config",
+            "livox_driver_dual_override.yaml",
+        ]
+    )
+
     start_livox_ros_driver2_node = Node(
         package="livox_ros_driver2",
         executable="livox_ros_driver2_node",
@@ -171,6 +238,21 @@ def generate_launch_description():
         output="screen",
         namespace=namespace,
         parameters=[configured_params],
+        condition=UnlessCondition(use_dual_mid360),
+    )
+
+    start_livox_ros_driver2_node_dual = Node(
+        package="livox_ros_driver2",
+        executable="livox_ros_driver2_node",
+        name="livox_ros_driver2",
+        output="screen",
+        namespace=namespace,
+        parameters=[
+            configured_params,
+            ParameterFile(livox_dual_override_file, allow_substs=True),
+        ],
+        remappings=livox_dual_remappings,
+        condition=IfCondition(use_dual_mid360),
     )
 
     foxglove_bridge_cmd = Node(
@@ -211,6 +293,7 @@ def generate_launch_description():
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
+            "use_dual_mid360": use_dual_mid360,
         }.items(),
     )
 
@@ -240,10 +323,12 @@ def generate_launch_description():
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_foxglove_cmd)
     ld.add_action(declare_use_respawn_cmd)
+    ld.add_action(declare_use_dual_mid360_cmd)
 
     # Add the actions to launch all of the navigation nodes
     ld.add_action(start_robot_state_publisher_cmd)
     ld.add_action(start_livox_ros_driver2_node)
+    ld.add_action(start_livox_ros_driver2_node_dual)
     ld.add_action(bringup_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(foxglove_bridge_cmd)

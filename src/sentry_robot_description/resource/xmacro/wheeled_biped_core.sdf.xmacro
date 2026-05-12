@@ -67,6 +67,145 @@
         </link>
     </xmacro_define_block>
 
+    <!-- Wheel joint variants. Fixed used by real robot (rviz-only, no joint
+         state feedback needed), revolute used by Gazebo (DiffDrive plugin
+         drives the wheels). Cylinder visual is Z-aligned by default; rpy
+         -pi/2 around X rotates it so the wheel axis lies along Y, matching a
+         standard diff-drive layout. -->
+    <xmacro_define_block name="wheeled_biped_left_wheel_fixed">
+        <joint name="left_wheel_joint" type="fixed">
+            <pose relative_to="chassis">0 0.325 -0.22 -1.5708 0 0</pose>
+            <parent>chassis</parent>
+            <child>left_wheel</child>
+        </joint>
+    </xmacro_define_block>
+    <xmacro_define_block name="wheeled_biped_left_wheel_revolute">
+        <joint name="left_wheel_joint" type="revolute">
+            <pose relative_to="chassis">0 0.325 -0.22 -1.5708 0 0</pose>
+            <parent>chassis</parent>
+            <child>left_wheel</child>
+            <axis>
+                <xyz>0 0 1</xyz>
+                <limit>
+                    <effort>30</effort>
+                    <velocity>80</velocity>
+                    <lower>-1.79769e+308</lower>
+                    <upper>1.79769e+308</upper>
+                </limit>
+                <dynamics>
+                    <damping>0.05</damping>
+                </dynamics>
+            </axis>
+        </joint>
+    </xmacro_define_block>
+    <xmacro_define_block name="wheeled_biped_right_wheel_fixed">
+        <joint name="right_wheel_joint" type="fixed">
+            <pose relative_to="chassis">0 -0.325 -0.22 -1.5708 0 0</pose>
+            <parent>chassis</parent>
+            <child>right_wheel</child>
+        </joint>
+    </xmacro_define_block>
+    <xmacro_define_block name="wheeled_biped_right_wheel_revolute">
+        <joint name="right_wheel_joint" type="revolute">
+            <pose relative_to="chassis">0 -0.325 -0.22 -1.5708 0 0</pose>
+            <parent>chassis</parent>
+            <child>right_wheel</child>
+            <axis>
+                <xyz>0 0 1</xyz>
+                <limit>
+                    <effort>30</effort>
+                    <velocity>80</velocity>
+                    <lower>-1.79769e+308</lower>
+                    <upper>1.79769e+308</upper>
+                </limit>
+                <dynamics>
+                    <damping>0.05</damping>
+                </dynamics>
+            </axis>
+        </joint>
+    </xmacro_define_block>
+
+    <!-- Visual-only leg link between chassis bottom edge and each driving wheel.
+         Single inclined cylinder that connects the outer bottom edge of the
+         chassis (y=±chassis_width/2, z=0 in chassis frame) to the wheel center
+         (y=±0.325, z=-0.22). Serves as a placeholder for the real four-bar
+         suspension; swap the cylinder for a proper mesh when CAD is ready.
+
+         Geometry:
+           top end    P1 = (0, ±0.225, 0)     chassis outer bottom edge
+           bottom end P2 = (0, ±0.325, -0.22) wheel center
+           length     L  = hypot(0.10, 0.22)  ≈ 0.2417 m
+           tilt angle θ  = atan2(0.10, 0.22)  ≈ 0.4266 rad ≈ 24.4° about X
+
+         The cylinder is default Z-aligned; we rotate about X so its long axis
+         points from P1 to P2. Keep collision OFF and inertial tiny so physics
+         is unaffected (Gazebo profile disables this block anyway). -->
+    <xmacro_define_block name="wheeled_biped_leg_visuals">
+        <joint name="left_leg_joint" type="fixed">
+            <pose relative_to="chassis">0 0.275 -0.11 0.4266275 0 0</pose>
+            <parent>chassis</parent>
+            <child>left_leg</child>
+        </joint>
+        <link name="left_leg">
+            <pose relative_to="left_leg_joint">0 0 0 0 0 0</pose>
+            <inertial>
+                <mass>0.05</mass>
+                <inertia>
+                    <ixx>1e-5</ixx>
+                    <iyy>1e-5</iyy>
+                    <izz>1e-5</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
+                </inertia>
+            </inertial>
+            <visual name="visual">
+                <geometry>
+                    <cylinder>
+                        <radius>0.025</radius>
+                        <length>0.2417</length>
+                    </cylinder>
+                </geometry>
+                <material>
+                    <ambient>0.25 0.25 0.3 1</ambient>
+                    <diffuse>0.35 0.35 0.4 1</diffuse>
+                </material>
+            </visual>
+        </link>
+
+        <joint name="right_leg_joint" type="fixed">
+            <pose relative_to="chassis">0 -0.275 -0.11 -0.4266275 0 0</pose>
+            <parent>chassis</parent>
+            <child>right_leg</child>
+        </joint>
+        <link name="right_leg">
+            <pose relative_to="right_leg_joint">0 0 0 0 0 0</pose>
+            <inertial>
+                <mass>0.05</mass>
+                <inertia>
+                    <ixx>1e-5</ixx>
+                    <iyy>1e-5</iyy>
+                    <izz>1e-5</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
+                </inertia>
+            </inertial>
+            <visual name="visual">
+                <geometry>
+                    <cylinder>
+                        <radius>0.025</radius>
+                        <length>0.2417</length>
+                    </cylinder>
+                </geometry>
+                <material>
+                    <ambient>0.25 0.25 0.3 1</ambient>
+                    <diffuse>0.35 0.35 0.4 1</diffuse>
+                </material>
+            </visual>
+        </link>
+    </xmacro_define_block>
+
     <!-- Gazebo-only caster support. The real robot has an active wheel-leg balancer instead. -->
     <xmacro_define_block name="wheeled_biped_casters">
         <joint name="front_caster_joint" type="fixed">
@@ -268,7 +407,7 @@
         use_fixed_gimbal=True keeps chassis -> gimbal_yaw -> gimbal_pitch as static TF.
         The real robot currently uses this mode; Gazebo keeps revolute joints.
     -->
-    <xmacro_define_block name="wheeled_biped_model" params="model_name chassis_length chassis_width chassis_z front_lidar_pose use_sim_sensors use_real_sensors use_casters use_gazebo_plugins use_fixed_gimbal">
+    <xmacro_define_block name="wheeled_biped_model" params="model_name chassis_length chassis_width chassis_z primary_lidar_pose secondary_lidar_pose use_sim_sensors use_real_sensors use_casters use_gazebo_plugins use_fixed_gimbal use_leg_visuals use_fixed_wheels">
         <model name="${model_name}" canonical_link="chassis" placement_frame="base_footprint">
             <pose>0 0 0 0 0 0</pose>
 
@@ -328,23 +467,12 @@
                 <xmacro_block condition="${use_sim_sensors}" name="wheeled_biped_chassis_imu" />
             </link>
 
-            <joint name="left_wheel_joint" type="revolute">
-                <pose relative_to="chassis">0 0.325 -0.22 -1.5708 0 0</pose>
-                <parent>chassis</parent>
-                <child>left_wheel</child>
-                <axis>
-                    <xyz>0 0 1</xyz>
-                    <limit>
-                        <effort>30</effort>
-                        <velocity>80</velocity>
-                        <lower>-1.79769e+308</lower>
-                        <upper>1.79769e+308</upper>
-                    </limit>
-                    <dynamics>
-                        <damping>0.05</damping>
-                    </dynamics>
-                </axis>
-            </joint>
+            <!-- Left wheel joint: type toggled by use_fixed_wheels. Fixed on
+                 real robot so rviz has TF without joint_state_publisher (joint
+                 angle is not reported back from the chassis anyway). Revolute
+                 in Gazebo so the DiffDrive plugin can drive the wheels. -->
+            <xmacro_block condition="${use_fixed_wheels}" name="wheeled_biped_left_wheel_fixed" />
+            <xmacro_block condition="${use_fixed_wheels == 'False'}" name="wheeled_biped_left_wheel_revolute" />
             <link name="left_wheel">
                 <pose relative_to="left_wheel_joint">0 0 0 0 0 0</pose>
                 <inertial>
@@ -395,23 +523,8 @@
                 </collision>
             </link>
 
-            <joint name="right_wheel_joint" type="revolute">
-                <pose relative_to="chassis">0 -0.325 -0.22 -1.5708 0 0</pose>
-                <parent>chassis</parent>
-                <child>right_wheel</child>
-                <axis>
-                    <xyz>0 0 1</xyz>
-                    <limit>
-                        <effort>30</effort>
-                        <velocity>80</velocity>
-                        <lower>-1.79769e+308</lower>
-                        <upper>1.79769e+308</upper>
-                    </limit>
-                    <dynamics>
-                        <damping>0.05</damping>
-                    </dynamics>
-                </axis>
-            </joint>
+            <xmacro_block condition="${use_fixed_wheels}" name="wheeled_biped_right_wheel_fixed" />
+            <xmacro_block condition="${use_fixed_wheels == 'False'}" name="wheeled_biped_right_wheel_revolute" />
             <link name="right_wheel">
                 <pose relative_to="right_wheel_joint">0 0 0 0 0 0</pose>
                 <inertial>
@@ -461,6 +574,8 @@
                     </surface>
                 </collision>
             </link>
+
+            <xmacro_block condition="${use_leg_visuals}" name="wheeled_biped_leg_visuals" />
 
             <xmacro_block condition="${use_casters}" name="wheeled_biped_casters" />
 
@@ -540,13 +655,23 @@
                 </collision>
             </link>
 
-            <xmacro_block condition="${use_sim_sensors}" name="livox" prefix="front_" parent="gimbal_pitch" pose="${front_lidar_pose}" update_rate="50" samples="1875" />
-            <xmacro_block condition="${use_real_sensors}" name="wheeled_biped_livox_real" prefix="front_" parent="gimbal_pitch" pose="${front_lidar_pose}" />
+            <xmacro_block condition="${use_sim_sensors}" name="livox" prefix="primary_" parent="gimbal_pitch" pose="${primary_lidar_pose}" update_rate="10" samples="1500" />
+            <!-- Dual Mid360: secondary lidar gpu_lidar sensor (sim only); mirrors primary update_rate/samples -->
+            <xmacro_block condition="${use_sim_sensors}" name="secondary_mid360_sim_macro" parent="gimbal_pitch" secondary_lidar_pose="${secondary_lidar_pose}" update_rate="10" samples="1500" />
+            <!-- Dual Mid360: IMU TF anchors for both lidars (sim and real) -->
+            <xmacro_block condition="${use_sim_sensors}" name="mid360_imu_tf_macro" lidar_link="primary_mid360" />
+            <xmacro_block condition="${use_sim_sensors}" name="mid360_imu_tf_macro" lidar_link="secondary_mid360" />
+            <xmacro_block condition="${use_real_sensors}" name="wheeled_biped_livox_real" prefix="primary_" parent="gimbal_pitch" pose="${primary_lidar_pose}" />
 
             <xmacro_block condition="${use_sim_sensors}" name="industrial_camera" prefix="front_" parent="gimbal_pitch" pose="0.08 0 0.02 0 0 0" update_rate="30" horizontal_fov="1" width="1920" height="1080" />
             <xmacro_block condition="${use_real_sensors}" name="wheeled_biped_industrial_camera_real" prefix="front_" parent="gimbal_pitch" pose="0.08 0 0.02 0 0 0" />
 
             <xmacro_block condition="${use_gazebo_plugins}" name="wheeled_biped_gazebo_plugins" />
+
+            <!-- Dual Mid360: secondary lidar TF + IMU anchors for both lidars (real robot only) -->
+            <xmacro_block condition="${use_real_sensors}" name="secondary_mid360_macro" parent="gimbal_pitch" secondary_lidar_pose="${secondary_lidar_pose}" />
+            <xmacro_block condition="${use_real_sensors}" name="mid360_imu_tf_macro" lidar_link="primary_mid360" />
+            <xmacro_block condition="${use_real_sensors}" name="mid360_imu_tf_macro" lidar_link="secondary_mid360" />
         </model>
     </xmacro_define_block>
 </sdf>

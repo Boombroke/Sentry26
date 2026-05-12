@@ -19,7 +19,7 @@
 | output command | 50 Hz | 对下游 `/cmd_vel` 发布平滑、稳定的 TwistStamped；低于底盘闭环、高于 Nav2 控制输出 |
 | state publish | 10 Hz | 发布轻量状态摘要，供调试和上层行为树观察 |
 | diagnostics | 2 Hz | 发布基础诊断，避免诊断流量影响控制链路 |
-| Nav2 controller | 20-30 Hz | 现有 Nav2 RPP/RotationShim 控制频率范围 |
+| Nav2 controller | 20–30 Hz | 当前运行链路为 MPPI DiffDrive：仿真 20Hz、实车 30Hz。RPP/RotationShim 仅作为回滚历史配置参考，不是当前控制器。 |
 | chassis loop | 200 Hz+ | 下位机闭环频率，运动管理器不替代底盘控制器 |
 
 ## 话题契约

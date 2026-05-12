@@ -6,6 +6,13 @@
 
 sentry_nav_bringup 是哨兵机器人导航系统的核心启动配置包。它整合了所有 launch 脚本、Nav2 参数配置、地图数据、点云文件、RViz 配置文件以及行为树 XML 定义。
 
+## 局部控制器阶段化迁移
+
+- **仿真 `config/simulation/nav2_params.yaml`（Phase A 已落地）**：`controller_plugins: ["FollowPath"]`，`FollowPath` 为 `nav2_mppi_controller::MPPIController`，`motion_model: "DiffDrive"`，锁 `vy_max=0 / vy_std=0`，今日 `vx_min=0`（不倒车）。Horizon 约束 `time_steps × model_dt × vx_max < local_costmap_half_width`，当前 `32 × 0.05 × 1.5 = 2.4m < 2.5m`。控制器频率 `controller_frequency` 与 `velocity_smoother.smoothing_frequency` 必须保持相等（当前仿真 20Hz）。
+- **实车 `config/reality/nav2_params.yaml`（Phase R-A 首版已落地，全场验证待 Task 6）**：`controller_plugins: ["FollowPath"]`，`FollowPath` 为 `nav2_mppi_controller::MPPIController`，`motion_model: "DiffDrive"`，`vy_max=0 / vy_std=0 / vx_min=0`（首版前向优先），`wz_max=3.0 / az_max=5.0`（受 `velocity_smoother.max_velocity[2]=3.0 / max_accel[2]=5.0` 约束，不能直接套用仿真 6.3/8.0）。Planner `motion_model_for_search: "DUBIN"` 与 `vx_min=0` 语义对齐，避免生成无法跟随的倒车/cusp 路径。Horizon 同上：`32 × 0.05 × 1.5 = 2.4m < 2.5m`。控制器频率 `controller_frequency` 与 `velocity_smoother.smoothing_frequency` 必须保持相等（当前实车 30Hz）。全场/上场 Nav Goal smoke 依赖 Task 6 台架和实测落地。
+- **运行时无 RPP 回退**：仿真和实车都没有 MPPI → RPP 的 runtime fallback，回退只能通过 git/config 重新部署旧的 RPP/RotationShim 配置；实车回滚时记得同步把 Planner 换回 REEDS_SHEPP。若实车 CPU 顶不住 30Hz，fallback 策略是**降 MPPI `batch_size`**（`2000 → 1500 → 1000`），不允许动 `controller_frequency / smoothing_frequency`，更不允许动 `robot_radius=0.318`。
+- **C/D 阶段未实装**：语义 Route Graph（Phase C）、Smac Lattice / ConstrainedSmoother / MINCO（Phase D，MINCO 为可选工具，不是必需）均挂在未来路线图上，**今日不修改长期规划器**（全局规划器继续使用 `nav2_smac_planner::SmacPlannerHybrid`）。C 启动门控：rmuc_2026 窄道/高低 smoke 连续 3 次 `navigate_to_pose` SUCCEEDED + 控制器频率稳定 + `slam:=False` 所需 `map/simulation/rmuc_2026.yaml` 与 `pcd/simulation/rmuc_2026.pcd` 均可加载（当前 Task 5 smoke 还被这两项资源缺失加 `Costmap timed out waiting for update` 阻塞）。D 启动门控：C 语义 Route Graph 稳定 + 有证据证明当前链路解决不了某类场景。完整表格与门控细则见 [`src/docs/ARCHITECTURE.md` §4.5](../docs/ARCHITECTURE.md#45-分阶段导航路线图)。
+
 ## 主要 Launch 文件
 
 ### 仿真模式（两终端启动，时序敏感）
@@ -143,7 +150,7 @@ ros2 pkg prefix sentry_motion_manager
 排查导航失败或速度尖峰时，建议至少录制：
 
 - `/tf`, `/tf_static`, `/joint_states`
-- `/livox/lidar`, `/livox/imu`
+- `/livox/lidar`, `/livox/imu`（`use_dual_mid360:=True` 时 `/livox/lidar` 是 merger 输出的 CustomMsg；实车还可加录 `/livox/lidar_primary`, `/livox/lidar_secondary`, `/livox/imu_secondary` 做前融合回溯）
 - `/aft_mapped_to_init`, `/cloud_registered`
 - `/odometry`, `/cmd_vel`, `/cmd_vel_nav`, `/cmd_vel_controller`
 - `/local_costmap/costmap_raw`, `/global_costmap/costmap_raw`

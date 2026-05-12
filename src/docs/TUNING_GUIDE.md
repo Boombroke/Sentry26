@@ -6,12 +6,22 @@
 本文档列出了需要在实车上根据实际情况微调的参数，以及对应的调优方法。
 
 配置文件位置：
-- 仿真：`sentry_nav_bringup/config/simulation/nav2_params.yaml`
-- 实车：`sentry_nav_bringup/config/reality/nav2_params.yaml`
+- 仿真：`sentry_nav_bringup/config/simulation/nav2_params.yaml`（Phase A 已迁移到 MPPI DiffDrive，20Hz）
+- 实车：`sentry_nav_bringup/config/reality/nav2_params.yaml`（Phase R-A 首版已迁移到 MPPI DiffDrive，30Hz；前向优先、Planner DUBIN，全场/上场 smoke 回归依赖 Task 6 台架和实测）
+
+> 今日范围：Phase A 仿真 MPPI 已落地；Phase B 地形 / 代价地图语义审查本轮已完成，结论是保持现有 YAML 参数（`clearDyObs=False`、`robot_radius=0.46 / inflation_radius=0.90`、低矮障碍链路 `preprocess.blind=0.35 / min_obstacle_intensity=0.05 / minBlockPointNum=5`、Point-LIO `gravity/blind/range` 不动），无数值变更。C 阶段语义 Route Graph 和 D 阶段 Smac Lattice/ConstrainedSmoother/MINCO 均为未来门控目标，尚未实装；MINCO 属于可选轨迹优化 / smoother 工具，不是必需。
+>
+> **C 阶段启动门控**（必须同时满足）：① 仿真 rmuc_2026 窄道与高低（坡道/台阶/资源岛）smoke 连续 3 次 `navigate_to_pose` SUCCEEDED；② 控制器频率稳定在 `controller_frequency` 设定值附近（仿真 20Hz，实测不低于 70%）；③ `slam:=False` 先验资源齐备（`install/sentry_nav_bringup/share/sentry_nav_bringup/map/simulation/rmuc_2026.yaml` 可加载，`install/sentry_nav_bringup/share/sentry_nav_bringup/pcd/simulation/rmuc_2026.pcd` 可加载）。Task 5 smoke 的 `slam:=False` 仍被这两项资源缺失 + `Costmap timed out waiting for update` 阻塞，**C 阶段尚未具备启动条件**。
+>
+> **D 阶段启动门控**（必须同时满足）：① C 阶段语义 Route Graph 在仿真 rmuc_2026 完整巡逻 1 小时路径语义稳定；② 有具体数据证明"MPPI + 现有 costmap + 语义 Route Graph"仍无法解决某类场景（窄弯跟随误差、倒车贴障、最小转弯半径规划失败等），需 Smac Lattice / ConstrainedSmoother / MINCO 之一才能收敛；③ 每项候选分支单独可回滚，不允许三者同时上。
+>
+> 推进阶段看的是可观测性、可重复 QA、可安全回滚、路径语义稳定，**不是算法复杂度**。"企业级"体现在故障可追溯，不是堆模型。详见 [架构详解 §4.5 分阶段导航路线图](ARCHITECTURE.md#45-分阶段导航路线图)。
 
 ---
 
 ## 一、Point-LIO 里程计参数
+
+> **双 Mid360 模式下 `extrinsic_T / extrinsic_R / mapping.gravity / gravity_init` 不是手调参数**。这些字段由 `src/sentry_nav/sentry_dual_mid360/scripts/codegen/generate_pointlio_overrides.py` 在 `colcon build --packages-select sentry_dual_mid360` 时从 xmacro 单源派生到 `install/sentry_dual_mid360/share/sentry_dual_mid360/config/pointlio_dual_overrides.yaml`；生成 YAML 是 build 产物，**不在源码 `config/` 提交、禁止手编辑**。机械师改 Mid360 安装位置后只改 xmacro（`wheeled_biped_real.sdf.xmacro` 的 `primary_lidar_pose` / `secondary_lidar_pose` 与 `sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro` 的 IMU factory pose），重跑一次 build 即同步更新。想知道当前安装外参与 override 是否一致，跑 `python3 src/sentry_nav/sentry_dual_mid360/scripts/codegen/verify_pointlio_overrides_fresh.py`；不一致就重新 build，不要手改 YAML。`nav2_params.yaml` 中的 Point-LIO `mapping` section 仅在 `use_dual_mid360:=False` 的单雷达回退路径下生效，不要把双雷达 codegen 结果抄回去。
 
 ### 1. point_filter_num（点云抽稀比例）
 
@@ -177,7 +187,7 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 - 过小 → 自身点云泄漏，轨迹上出现虚假障碍物
 - 过大 → 丢失近距离真实障碍物
 
-> 先确认 `gimbal_pitch → front_mid360` 的传感器安装外参与实际一致，再调 `blind`。`blind` 只能压自身点，不能补传感器 FOV 盲区；也不要再用 `mapping.gravity` 去表达安装角。
+> 先确认 `gimbal_pitch → primary_mid360` 的传感器安装外参与实际一致，再调 `blind`。`blind` 只能压自身点，不能补传感器 FOV 盲区；也不要再用 `mapping.gravity` 去表达安装角。
 
 **调优方法**：
 ```bash
@@ -197,15 +207,16 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 
 ### 9. min_obstacle_intensity（障碍物最小高度阈值）
 
-**当前值**：0.2（即 20cm 以上的高度差才算障碍物）
+**当前值**：仿真 / 实车均为 0.05（即 5cm 以上的高度差即可进入 `IntensityVoxelLayer`）
 
-**调优范围**：0.1 ~ 0.3
+**调优范围**：0.05 ~ 0.3
 
 **配置位置**：`local_costmap` 和 `global_costmap` 下的 `intensity_voxel_layer`
 
 **影响**：
 - 过小 → 地面噪声被识别为障碍物
 - 过大 → 矮小的真实障碍物被忽略
+- rmuc_2026 的低矮底座依赖该阈值保持较低；没有实测噪声证据时，不要为了让 costmap “看起来更干净”而调高。
 
 **调优方法**：
 ```bash
@@ -220,7 +231,7 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 
 ### 10. vehicleHeight（障碍物最大检测高度）
 
-**当前值**：terrain_analysis 0.5m，terrain_analysis_ext 1.0m
+**当前值**：terrain_analysis 0.70m，terrain_analysis_ext 0.8m
 
 **调优范围**：0.3 ~ 1.5
 
@@ -229,6 +240,12 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 **判断标准**：
 - 设为机器人能通过的最大高度即可
 - 过大会把高处结构误判为障碍物
+
+### 10-B. terrain / costmap 安全边界（rmuc_2026）
+
+- `terrain_analysis.clearDyObs` 保持 `False`：动态障碍需要留在 costmap 中参与避障，不能被地形层主动清掉。
+- Point-LIO `preprocess.blind`、`mapping.gravity` / `gravity_init` 和仿真 LiDAR 最小量程不属于 costmap 调参入口；近场低矮障碍漏检时应先核对 TF 外参、传感器量程和点云，而不是把安装角写进 gravity。
+- 仿真 `robot_radius: 0.46`、`inflation_radius: 0.90`、`cost_scaling_factor: 8.0` 是当前保守碰撞裕量；没有窄通道实测失败证据时不要放松，否则会降低防擦角安全余量。
 
 ---
 
@@ -249,6 +266,108 @@ ps aux | grep point_lio | awk '{print $6/1024 "MB"}'
 - 3m/s：20Hz → 每帧 15cm ✓，10Hz → 每帧 30cm ✗
 
 **注意**：修改 `publish_freq` 后必须同步修改 `lidar_time_inte = 1 / publish_freq`。
+
+---
+
+## 四-B、双 Mid360 前融合（pointcloud_merger）
+
+双 Mid360 升级后，Point-LIO 的上游多了一层外部 `sentry_dual_mid360::MergerNode`。它在 Point-LIO 之前把两路 `livox_ros_driver2/msg/CustomMsg` 融合成单路 `/livox/lidar`（`frame_id=primary_mid360`），Point-LIO 当单雷达消费，源码零改动。**顶层开关 `use_dual_mid360` 默认 `True`**；传 `False` 时 merger 不启动、生成的 Point-LIO override YAML 不加载、dual Livox override 与 per-device remap 均不应用，Livox driver 走基础 `configured_params`，Point-LIO 保持基础 YAML 的 `common.lid_topic: livox/lidar`，退回升级前单 Mid360 链路。
+
+参数文件位置：`src/sentry_nav/sentry_dual_mid360/config/pointcloud_merger_params.yaml`（根键 `pointcloud_merger`）。所有参数建议只在实车或标定台架上根据观测调整，不要拍脑袋改。
+
+**硬件同步优先级最高**：本节所有参数调优的前提是**两颗 Mid360 已经硬件同步**（PTP / gPTP / GPS PPS+GPRMC 三选一，见 `src/sentry_nav/sentry_dual_mid360/docs/SYNC_VERIFICATION.md` 四步法）。硬件没同步就绝不能用软件 slop 去补偿，否则 GICP / costmap 会继承错误几何。
+
+### 14-B. sync_tolerance_ms（ApproximateTime slop 上限）
+
+**当前值**：`10.0` ms
+
+**调优范围**：1.0 ~ 50.0（更大的值只用于应急诊断，上线禁止）
+
+**影响**：`message_filters::sync_policies::ApproximateTime` 的最大配对时间差。Merger 使用双重门控：先对 `ApproximateTime` 调 `setMaxIntervalDuration(sync_tolerance_ms)`，再在 callback 里重算 `abs_stamp_diff_ns` 二次比对，超出就丢对并累加 `drop_sync_`。
+
+**调优方法**：
+```bash
+# 1. 先跑硬件同步验证（四步法）
+python3 src/sentry_nav/sentry_dual_mid360/scripts/calib/verify_dual_mid360_sync.py --duration 60
+
+# 2. 观察 merger 吞吐率
+ros2 topic hz /livox/lidar_primary
+ros2 topic hz /livox/lidar_secondary
+ros2 topic hz /livox/lidar
+```
+
+**判断标准**：
+- 三路频率都接近 `publish_freq`（默认 10Hz）且 `drop_sync_` 计数稳定不增长 → 当前值合理。
+- `drop_sync_` 持续增长但硬件同步报 `HARDWARE_SYNC` → 回 §四检查 `publish_freq` 是否被误改到高于两颗雷达的实际能力。
+- 硬件同步报 `DRIFTING / NOT_SYNCED` → 禁止调大 slop，回 `SYNC_VERIFICATION.md` 修硬件。
+
+### 14-C. min_dist_front_m / min_dist_back_m（原生系近场裁剪）
+
+**当前值**：两项均为 `0.4` m
+
+**调优范围**：0.2 ~ 0.6
+
+**影响**：Merger 在**原生坐标系**（front / back 各自）做 min-distance 裁剪，再把 back 点云刚体变换到 `primary_mid360` 系。必须在原生系做几何裁剪，不能等合并后再按欧氏距离过滤，否则会裁掉邻侧雷达的有效低矮点。
+
+**调优方法**：
+```bash
+# 观察 merger 的 drop_front_min_dist_ / drop_back_min_dist_ 日志
+ros2 node info /pointcloud_merger
+# 以及 RViz 里 /livox/lidar 是否在机身正下方还有残余自身点
+```
+
+**判断标准**：
+- 机身处仍能看到自身点（RViz 里合并后点云落在机器人包络内）→ 各自方向小幅加大 0.05 m。
+- 低矮障碍（小于 0.3 m 的底座、台阶第一层）明显被吃掉 → 减小到 0.3 m 先验证，再配合 Point-LIO `preprocess.blind`（见 §8）一起调。
+- 不要把 `min_dist_*` 当作"盖掉地面"的手段，Point-LIO 有自己的 `preprocess.blind`，两层裁剪职责不同。
+
+### 14-D. queue_size（同步器队列长度）
+
+**当前值**：`10`
+
+**调优范围**：5 ~ 50
+
+**影响**：`ApproximateTime` 保留多少对历史消息做配对。小了丢对多、大了延迟与内存上升。
+
+**判断标准**：
+- 默认 10 在 `publish_freq=10Hz` 下对应 1 秒历史窗，足够应对 10 ms slop。只有在 CPU 严重抖动导致大量配对失败时才考虑拉到 20~30，并同步检查 merger 输出 `/livox/lidar` 的 `header.stamp` 单调性。
+- 不建议大于 50，否则延迟会把 Point-LIO 的 EKF 推入历史区，反而触发 `lidar loop back`。
+
+### 14-E. publish_freq（Livox driver 频率，dual override）
+
+**当前值（dual 模式）**：`10.0` Hz，位于 `livox_driver_dual_override.yaml`
+
+**调优范围**：10 ~ 15（**禁止超过 15Hz**）
+
+**影响**：Dual 模式下两颗雷达同时输出 CustomMsg，merger 每帧要做同步+刚体变换+stable_sort。频率越高，merger 的处理预算越紧，Point-LIO 的 IMU buffer 也更容易堆积。
+
+**判断标准**：
+- Merger 处理延迟预算：**中位数 ≤ 2 ms，p99 ≤ 5 ms**（实车 Jetson Orin 台架）。跑 `qa_merger_latency.py` 得到。
+- Merger latency 持续高于预算 → 降 `publish_freq` 到 10Hz（已是默认），再检查 `batch_size`。
+- **禁止动** `sentry_nav_bringup/config/reality/mid360_user_config.json` 的单雷达默认；dual override YAML 只影响 `use_dual_mid360:=True` 路径。
+
+### 14-F. Merger 处理延迟与性能剖析
+
+```bash
+# 合成数据 mock 剖析（无硬件依赖，默认种子 20260506）
+python3 src/sentry_nav/sentry_dual_mid360/scripts/qa/qa_merger_latency.py \
+    --max-median-ms 2.0 --max-p99-ms 5.0
+
+# 在线剖析 merger_node 的 CPU / RSS（需要 merger 已运行）
+python3 src/sentry_nav/sentry_dual_mid360/scripts/qa/qa_merger_latency.py \
+    --live-pid "$(pgrep -f merger_node | head -1)"
+```
+
+**规则**：mock 模式的结果**不能**冒充实车延迟；没硬件就走 BLOCKED，不得编造 PASS。
+
+### 14-G. 绝对禁止事项（merger 层硬规则）
+
+- **禁止**用 `timebase` 字段做时间基础：Point-LIO 只信 `header.stamp`；merger 必须输出 `timebase=0`。
+- **禁止**让 `header.stamp` 非单调：遇到重复时间戳 nudge 1 ns，绝不原样透传，否则 Point-LIO 触发 `lidar loop back` 丢整包。
+- **禁止**丢弃 `tag / reflectivity / line` 字段：Point-LIO 的 `preprocess.cpp` 按 `(tag & 0x30) == 0x10` 过滤；字段缺失会让合法点被误杀。
+- **禁止**把 back `line` 从 0~3 偏移到 4~7 去绕过 `scan_line=6` 过滤：Point-LIO 会把 `line >= scan_line` 的点直接丢，尝试绕过只会丢一半点。
+- **禁止**跳过 `std::stable_sort(offset_time)`：Point-LIO EKF 对点级时间单调敏感。
+- **禁止**只用 `ExactTime` 同步：硬件同步后 `header.stamp` 的纳秒精度不保证完全相等，必须 `ApproximateTime + setMaxIntervalDuration + callback 门控`。
 
 ---
 
@@ -306,7 +425,9 @@ velocity_smoother 是 Nav2 官方节点，位于 controller_server 与 `sentry_m
 **判断标准**：
 - `ros2 topic hz /cmd_vel_nav` 应接近 `smoothing_frequency`
 - `ros2 topic hz /cmd_vel` 应接近 motion manager 的 `output_frequency_hz`
-- 如果明显低于设定值 → CPU 不足，降低频率
+- 如果明显低于设定值：
+  - **实车**：`controller_frequency / smoothing_frequency` 绝对不能动（30Hz 是控制带宽设计值）。CPU 余量不足时 fallback 只能顺序降 MPPI `batch_size`（`2000 → 1500 → 1000`），再配合关闭 `visualize` / `regenerate_noises` 等已经默认关掉的开关。
+  - **仿真**：先诊断 RTF（应接近 1.0）、gpu_lidar / 阴影渲染负载、`batch_size` 是否过大；确认瓶颈后再在独立调参 commit 中同步调整 `controller_frequency` 与 `smoothing_frequency`（两者必须一起改），禁止只改一侧。
 
 ### 15. feedback 模式
 
@@ -333,13 +454,17 @@ python3 src/sentry_tools/serial_visualizer.py
 
 ### 16. max_accel / max_decel（加速度限制）
 
-**当前值**：`[4.5, 0.0, 5.0]` / `[-4.5, 0.0, -5.0]`
+**当前值**：
+- 仿真：`[1.5, 0.0, 8.0]` / `[-1.5, 0.0, -8.0]`
+- 实车：`[2.5, 0.0, 5.0]` / `[-2.5, 0.0, -5.0]`
 
 **调优范围**：1.0 ~ 6.0 m/s²（vy 始终锁 0）
 
 **影响**：
 - 过大 → 底盘实际跟不上（轮子打滑），smoother 形同虚设
 - 过小 → 机器人加速慢，响应迟钝
+
+**MPPI 耦合**：实车 MPPI `wz_max=3.0 / az_max=5.0` 必须与 smoother 的 `max_velocity[2]=3.0 / max_accel[2]=5.0` 对齐；上调 smoother 限值前必须同步评估 MPPI 采样是否仍在物理可执行范围内。
 
 **调优方法**：
 ```bash
@@ -354,14 +479,14 @@ python3 src/sentry_tools/serial_visualizer.py
 ```
 
 **判断标准**：
-- 仿真摩擦力限制 ≈ 0.2g ≈ 2.0 m/s²，当前 4.5 超过物理极限（仿真中 smoother 无实际意义）
-- 实车需实测：全速加速时观察轮子是否打滑
+- 仿真摩擦力限制 ≈ 0.2g ≈ 2.0 m/s²，仿真 1.5 已经在物理极限内（仿真中 smoother 主要起平滑作用）
+- 实车需实测：全速加速时观察轮子是否打滑；当前 2.5 m/s² 是实车 28kg 双电机物理上限 2.86 的留余量值
 
 ### 17. max_velocity（最大速度限制）
 
 **当前值**：仿真 `[1.5, 0.0, 6.3]` / 实车 `[1.5, 0.0, 3.0]` —— **vy 必须锁 0**（差速约束）
 
-应与 controller 的 `desired_linear_vel` / `max_angular_accel * simulate_ahead_time` 一致或略大。如果 smoother 限速比 controller 小，controller 的指令会被截断。
+实车 MPPI `wz_max=3.0` 与 smoother `max_velocity[2]=3.0` 一致：MPPI 不能输出超过 smoother 的速度，否则会被截断，反而让 critic 评分失真；smoother 也不能设得比 MPPI 大，否则失去平滑约束。如果 smoother 限速比 controller 小，controller 的指令会被截断。
 
 ### 18. deadband_velocity（死区）
 
@@ -377,60 +502,112 @@ python3 src/sentry_tools/serial_visualizer.py
 
 ---
 
-## 六-B、差速控制器 (RotationShim + RPP)
+## 六-B、差速控制器 MPPI DiffDrive（仿真 Phase A + 实车 Phase R-A 首版）
 
-Nav2 官方差速默认组合。`controller_plugins: ["RotateShim", "FollowPath"]` 级联：RotationShim 处理大转角原地旋转，RPP 负责路径跟随。
+仿真 `config/simulation/nav2_params.yaml` 和实车 `config/reality/nav2_params.yaml` 的 `controller_plugins` 现在都只留 `FollowPath`，插件为 `nav2_mppi_controller::MPPIController`，`motion_model: "DiffDrive"`。实车首版是前向优先（`vx_min=0.0`），Planner 配对 `DUBIN`，全场/上场 Nav Goal smoke 回归依赖 Task 6 台架和实测。
 
-### 19. RotationShim 关键参数
+### 18-B. MPPI Horizon 安全约束（硬规则）
 
-| 参数 | 仿真默认 | 实车默认 | 说明 |
+**不等式**：`time_steps × model_dt × vx_max < local_costmap_half_width`
+
+**当前值**（仿真 / 实车共用）：`32 × 0.05 × 1.5 = 2.4m`，local costmap `width/height=5.0m`，半径 2.5m，留 0.1m 裕量。
+
+**为什么重要**：MPPI 末端轨迹点如果落到 local costmap 之外，该段轨迹无代价可评估，critic 会返回默认值导致采样失真，等价于在盲区决策。任意一个参数变大都会吃掉裕量，必须手算一次再改。
+
+### 18-C. 差速语义硬锁（仿真 + 实车都必须遵守）
+
+| 参数 | 必须取值 | 原因 |
+|---|---|---|
+| `motion_model` | `DiffDrive` | 差速模型严格禁止横移采样 |
+| `vy_max` | 0.0 | 即使 critic 允许，下游 velocity_smoother / motion_manager 也会锁 0，提前锁可减少无效采样 |
+| `vy_std` | 0.0 | 采样噪声在 vy 方向的标准差也锁 0，避免噪声让 MPPI 学到偏侧向的策略 |
+| `vx_min` | 0.0 | 仿真 Phase A 与实车 Phase R-A 首版均禁止倒车采样；倒车需单独开闸并重新验证贴障风险 |
+| Planner `motion_model_for_search` | `DUBIN` | 与 MPPI `vx_min=0` 严格配对；REEDS_SHEPP 会生成 MPPI 无法跟随的 cusp/倒车路径 |
+
+### 18-D. 仿真 vs 实车参数对比
+
+| 参数 | 仿真 | 实车 | 差异原因 |
 |---|---|---|---|
-| `angular_dist_threshold` | 0.785 | 0.785 | 路径方向与朝向夹角 ≥ 此值（45°）时先原地转；贴墙/出生位狭窄场景不要放大到 90° |
-| `forward_sampling_distance` | 0.5 | 0.5 | 路径前方采样距离，用于判定目标方向 |
-| `rotate_to_heading_angular_vel` | 1.2 | 1.2 | 原地旋转角速度上限 (rad/s) |
-| `max_angular_accel` | 2.5 | 2.5 | 原地旋转角加速度 (rad/s²) |
-| `simulate_ahead_time` | 1.0 | 1.0 | 碰撞检查的预测时间窗 |
+| `vx_max` | 1.5 | 1.5 | 与 smoother `max_velocity[0]=1.5` 对齐，两端一致 |
+| `wz_max` | 6.3 | **3.0** | 实车 `velocity_smoother.max_velocity[2]=3.0` 是物理可执行上限，MPPI 不能超过 smoother，否则会被截断 |
+| `ax_max` | 1.5 | 1.5 | 线加速度物理可执行范围一致 |
+| `az_max` | 8.0 | **5.0** | 实车 `velocity_smoother.max_accel[2]=5.0` 是实测上限，仿真值不能直接套用 |
+| `batch_size` | 2000 | 2000 | 默认起点；实车 CPU 顶不住时顺序降到 1500 → 1000 |
+| `controller_frequency` | 20Hz | **30Hz** | 实车带宽需求更高；频率必须与 smoother 保持一致 |
 
-**调优方法**：
-- 机器人进入路径时反复小幅振荡 → 增大 `angular_dist_threshold`（如 0.5 → 1.0）减少 RotationShim 接管频次
-- 出了 RotationShim 后 RPP 急转 → 减小 `angular_dist_threshold`（如 0.785 → 0.5）让 RotationShim 对齐得更精确
+> **硬规则**：实车 `wz_max` 不能超过 smoother 的 3.0，`az_max` 不能超过 smoother 的 5.0。把 MPPI 上限设高于 smoother 只会被平滑器截断，反而让 MPPI 输出与实际执行速度脱节，critic 评分失准。
 
-### 20. RPP 关键参数
+### 18-E. CPU / RTF 相关参数
 
-| 参数 | 仿真默认 | 实车默认 | 说明 |
-|---|---|---|---|
-| `desired_linear_vel` | 1.5 | 1.0 | 期望线速度 (m/s)，仿真先压住起步侧撞风险 |
-| `lookahead_dist` | 1.2 | 1.2 | 基础前瞻距离 (m) |
-| `min_lookahead_dist` | 0.6 | 0.6 | velocity-scaled lookahead 下限 |
-| `max_lookahead_dist` | 1.5 | 1.5 | velocity-scaled lookahead 上限 |
-| `lookahead_time` | 1.0 | 1.0 | `lookahead = max(min, vx * lookahead_time)` 被限幅 |
-| `use_velocity_scaled_lookahead_dist` | true | true | 开启速度相关的 lookahead 自适应 |
-| `use_regulated_linear_velocity_scaling` | true | true | 开启曲率与接近减速 |
-| `regulated_linear_scaling_min_radius` | 0.5 | 0.5 | 曲率半径小于此值开始降速 |
-| `regulated_linear_scaling_min_speed` | 0.3 | 0.3 | 曲率降速的速度下限 |
-| `approach_velocity_scaling_dist` | 0.8 | 0.8 | 接近目标开始减速的距离 |
-| `min_approach_linear_velocity` | 0.3 | 0.3 | 接近段最小线速度 |
-| `use_rotate_to_heading` | false | false | 哨兵底盘不要求终端对齐目标朝向 |
-| `rotate_to_heading_min_angle` | 0.785 | 0.785 | 触发终端旋转的最小角度差 (rad) |
-| `max_angular_accel` | 3.2 | 3.2 | 角加速度上限 |
-| `allow_reversing` | false | false | 差速不允许倒车 |
-| `use_collision_detection` | `slam:=True` 时 false，`slam:=False` 时 true | 同左 | 由 launch 按模式自动切换碰撞预测 |
-| `max_allowed_time_to_collision_up_to_carrot` | 1.5 | 1.5 | 碰撞预测时间窗 (s) |
+| 参数 | 当前值 | 说明 |
+|---|---|---|
+| `batch_size` | 2000 | 采样批量，实车 30Hz CPU 余量紧张时顺序降到 `1500 → 1000`；**禁止动频率** |
+| `iteration_count` | 1 | 单次迭代；增大会多轮 refine，每帧耗时翻倍 |
+| `visualize` | false | 轨迹可视化走 ROS 话题，打开后会明显拖低 RTF / CPU |
+| `regenerate_noises` | false | 复用上帧噪声，关掉随机重生以省 CPU |
 
-**调优流程**：
-1. **线速度**：先用 `desired_linear_vel` 把期望速度定在硬件能吃到的值（仿真建议先 1.5，实车首轮 1.0）。
-2. **路径跟随**：若直线段频繁震荡，增大 `lookahead_dist`；若弯道切内拐角严重，减小 `lookahead_dist` 或增大 `regulated_linear_scaling_min_radius`。
-3. **高曲率降速**：观察仿真中 U 弯是否擦墙，若需更激进减速减小 `regulated_linear_scaling_min_radius`。
-4. **终端朝向**：哨兵默认不做底盘终端对齐；如果某个任务确实要求车头朝向目标，再单独打开 `use_rotate_to_heading` 并重新验证贴障风险。
-5. **RotationShim 与 RPP 交接**：开启 `headless` 仿真观察日志行 `Rotating shim active` 频率；如果起步贴墙/侧扫障碍，优先减小 `angular_dist_threshold`，让机器人先原地对齐再给前进。
-6. **碰撞预测**：导航模式应确认 launch 已把 `use_collision_detection` 打开；SLAM 模式若 unknown 太多导致误报，再保留关闭。
+### 18-F. 频率一致性（硬规则）
 
-### 20-B. 差速恢复策略
+- `controller_frequency` 与 `velocity_smoother.smoothing_frequency` 必须相等（仿真 20Hz，实车 30Hz）。Smoother 频率低于 controller 会丢指令，高于又吃不到数据。
+- **实车不允许动频率**：30Hz 是控制带宽设计值，提频会把 CPU 打爆造成控制链路抖动，降频会不够带宽。CPU 顶不住时的 fallback 策略**只能**是降 MPPI `batch_size`（`2000 → 1500 → 1000`）。
+- 仿真实测若 20Hz 设定跑不到 15Hz，优先检查 RTF 是否低于 1.0、gpu_lidar 渲染负载、`batch_size` 是否过大，再考虑调整 batch_size。
+
+### 18-G. 速度链路观测点（实车调试）
+
+上场前后都需要对照三条话题，确认 MPPI → smoother → motion_manager 链路完整：
+
+| 话题 | 含义 | 期望 |
+|---|---|---|
+| `/cmd_vel_controller` | MPPI 原始输出（未平滑） | 频率 ≈ `controller_frequency`（实车 30Hz）；`vy=0`；值在 `[vx_min, vx_max]`、`[-wz_max, wz_max]` 之内 |
+| `/cmd_vel_nav` | `velocity_smoother` 输出（平滑后） | 频率 ≈ `smoothing_frequency`（实车 30Hz）；`vy=0`；被 smoother 加速度限幅平滑 |
+| `/cmd_vel` | `sentry_motion_manager` 仲裁后最终输出 | 类型 `TwistStamped`；`vy=0`；navigation 源优先时与 `/cmd_vel_nav` 一致；急停/recovery/手动时按仲裁优先级替换 |
+
+```bash
+# 观察控制链路三级速度
+ros2 topic hz /cmd_vel_controller   # 实车应见 ~30Hz
+ros2 topic hz /cmd_vel_nav          # 实车应见 ~30Hz
+ros2 topic hz /cmd_vel              # 由 motion_manager output_frequency_hz 决定
+
+# 确认 vy 全链路锁 0
+ros2 topic echo /cmd_vel_controller --field twist.linear.y --once
+ros2 topic echo /cmd_vel_nav        --field twist.linear.y --once
+ros2 topic echo /cmd_vel            --field twist.linear.y --once
+```
+
+### 18-H. Critics 列表
+
+Nav2 Jazzy 官方差速推荐集，仿真和实车共用，不要随意删 critic：
+
+```
+ConstraintCritic, CostCritic, GoalCritic, GoalAngleCritic,
+PathAlignCritic, PathFollowCritic, PathAngleCritic, PreferForwardCritic
+```
+
+调权重时优先只改 `cost_weight`，不要直接改 `cost_power`，也不要新增自研 critic（Phase A / R-A 明确排除）。
+
+### 18-I. 实车首版验收门控（Task 6 台架/上场 smoke 待落地）
+
+台架（lifted bench，轮子离地或隔离驱动，不产生地面位移）只验证命令生成与链路语义，**不在台架上声称 Nav Goal 成功**；成功/失败需到真实地面或全场导航门控。
+
+- [ ] 台架：MPPI 节点 `Configured / Activated` 成功，`controller_server` 无 critic/costmap 超时致命日志。
+- [ ] 台架：`/cmd_vel_controller` 稳定 30Hz、`/cmd_vel_nav` 稳定 30Hz、`/cmd_vel` 按 motion_manager `output_frequency_hz`；全链路 `linear.y ≡ 0`。
+- [ ] 台架：向 `navigate_to_pose` 发一个点后，MPPI 能生成非零但有界的前向/角速度命令（`vx ∈ [0, 1.5]`、`|wz| ≤ 3.0`、`|az| ≤ 5.0`），整个过程不出现 `vx < 0` 的倒车采样、不出现 vy 非零。
+- [ ] 台架：取消目标 / 发零目标 / 急停时，`/cmd_vel_nav` 与 `/cmd_vel` 能在 smoother 减速上限内归零；`motion_manager/state` 里的仲裁源从 `navigation` 切到急停/空闲并反映在输出。
+- [ ] 台架：过程中 CPU 单核占用 < 80%；超过则先顺序降 `batch_size`（`2000 → 1500 → 1000`），再复测本节三条。
+- [ ] 地面/全场：Nav Goal 实际执行成功不是台架门控内容，请参见 [`src/docs/ARCHITECTURE.md` §4.5](ARCHITECTURE.md#45-分阶段导航路线图) 的 Phase A/R-A 上场 smoke 条目。
+- [ ] 回滚通道：确认 git 能恢复旧 `["RotateShim", "FollowPath"]` + `REEDS_SHEPP` YAML（上场前台架演练一次，不需要真的回滚运行）。
+
+---
+
+## 六-C、差速恢复策略与终端参数
+
+### 20-B. 差速恢复策略（仿真 + 实车共用）
 
 - 差速底盘的 recovery 不能依赖 `vy` 逃逸，所有兜底动作都必须落在 `vx + wz` 语义内。
 - 默认 BT 已移除旧 `<Spin/>` + `<BackUp/>` 主恢复路径，避免贴墙场景继续依赖会从 LIO 抖动中误判成功的反向动作。
 - `BackUpFreeSpace` 已于 2026 赛季重构时从 `nav2_plugins` 中删除；贴墙脱困由 `sentry_motion_manager` recovery 状态机通过 `cmd_vel_recovery` 接管，使用投影位移/进展判断避免抖动误判。`nav2_plugins` 包仍保留用于提供 `IntensityVoxelLayer`，不要删除整个包。
 - 当前 BT 只保留清图+等待占位；真正贴墙脱困应由 `sentry_motion_manager` recovery 状态机接管。
+- MPPI 本身对 `vx_min=0` 不允许采样倒车，因此 recovery 的后退动作走 `sentry_motion_manager` 的 `cmd_vel_recovery` 通道，不经过 MPPI。
 
 ### 21. 终端参数（general_goal_checker）
 
