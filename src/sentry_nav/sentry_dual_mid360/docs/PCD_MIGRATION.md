@@ -8,7 +8,7 @@
 
 ## 1. 背景与适用范围
 
-Sentry26 在 2026 赛季把定位雷达从单 Mid360 升级到**前后反向双 Mid360**。两颗 Mid360 通过 `pointcloud_merger` 外部前融合成单路 `/livox/lidar`（`livox_ros_driver2/msg/CustomMsg`，frame=`front_mid360`）喂给 Point-LIO，Point-LIO 源码零改动。
+Sentry26 在 2026 赛季把定位雷达从单 Mid360 升级到**挂在 `gimbal_pitch` 上的双 Mid360**（X 轴镜像安装，不是前后 180° 反装；历史名字 `front/back` 保留不变）。两颗 Mid360 通过 `pointcloud_merger` 外部前融合成单路 `/livox/lidar`（`livox_ros_driver2/msg/CustomMsg`，frame=`front_mid360`）喂给 Point-LIO，Point-LIO 源码零改动。
 
 对 `small_gicp_relocalization` 而言，**运行时输入发生了语义变化**：
 

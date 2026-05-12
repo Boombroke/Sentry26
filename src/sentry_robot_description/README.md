@@ -159,16 +159,17 @@ Gazebo 入口。
 - `chassis_length = 0.648`
 - `chassis_width = 0.650`
 - `chassis_z = 0.120`
-- `front_lidar_pose = -0.17 0 0.10 0.0 0.5235987755982988 3.141592653589793`
-- `back_lidar_pose  = 0.05 0 0.05 0.0 0.5235987755982988 3.141592653589793`
+- `front_lidar_pose = 0 0.102 0.3 -0.733 0.0 0.0`
+- `back_lidar_pose  = 0 -0.102 0.3 0.733 0.0 0.0`
 - `use_fixed_gimbal = True`
 
 说明：
 
-- 当前保留了 Mid360 的 yaw 反向安装；back 雷达再额外绕 z 旋转 `yaw = π` 物理反向安装，互补近场盲区
-- 当前实车默认前后双 Mid360 均 30° 下俯（`pitch = 0.5235987755982988 = pi / 6`）
-- 前 Mid360 的 IMU 进入 Point-LIO，后 Mid360 的 IMU 仅作诊断（`/livox/imu_back`），不进 LIO
-- Mid360 出厂 IMU 相对 LiDAR 的位姿 (Layer B) 定义在 `src/sentry_nav/sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro`，前后 Mid360 复用同一份 factory pose
+- 两颗 Mid360 挂在 `gimbal_pitch` 上绕 X 轴镜像安装（roll = ±0.733 rad ≈ ±42°，无 yaw offset，不是前后 180° 反装）。`front/back` 只是历史 frame 标识符
+- 两组 pose 只差 y 分量（±0.102 m）和 roll 符号；pitch/yaw 都是 0
+- `front_mid360` 的 IMU 进入 Point-LIO，`back_mid360` 的 IMU 仅作诊断（`/livox/imu_back`），不进 LIO
+- Mid360 出厂 IMU 相对 LiDAR 的位姿 (Layer B) 定义在 `src/sentry_nav/sentry_dual_mid360/urdf/mid360_imu_tf.sdf.xmacro`，两颗 Mid360 复用同一份 factory pose
+- `back_lidar_pose` 机械调整后必须用 `src/sentry_nav/sentry_dual_mid360/scripts/calib/calibrate_dual_mid360.sh --bootstrap --write-xmacro` 重新标定写回
 - 实车 `gimbal_yaw_joint / gimbal_pitch_joint` 为 fixed，不再依赖串口 joint state 驱动 TF
 
 ### 仿真入口默认值
@@ -315,21 +316,19 @@ gimbal_pitch -> back_mid360       fixed
 - `+pitch`: 绕 `y` 轴正向旋转
 - `+yaw`: 绕 `z` 轴正向旋转
 
-在这个包当前 Mid360 安装语义里，最常用的是：
+在这个包当前 Mid360 安装语义里，常用的轴和方向：
 
 - `pitch > 0`: 雷达下俯
 - `pitch < 0`: 雷达上仰
-- `yaw = pi`: 雷达前后反装 180°
+- `roll != 0`: 雷达左右翻滚（当前实车双 Mid360 就是用 roll 做 X 轴镜像安装）
+- `yaw = pi`: 雷达前后反装 180°（当前实车**没有**用这个姿态）
 
-当前实车前后双 Mid360 均 30° 下俯即：
+当前实车双 Mid360 的安装是绕 X 轴镜像（roll 反号），两组 pose 分别为：
 
-- `pitch = +0.5235987755982988`
+- `front_lidar_pose = 0 0.102 0.3 -0.733 0.0 0.0`（roll ≈ -42°）
+- `back_lidar_pose  = 0 -0.102 0.3 0.733 0.0 0.0`（roll ≈ +42°）
 
-`front_lidar_pose` / `back_lidar_pose` 当前使用 `x y z roll pitch yaw`。
-
-- `pitch > 0` 表示雷达下俯
-- `pitch < 0` 表示雷达上仰
-- 当前实车前后双 Mid360 均 30° 下俯即 `pitch = 0.5235987755982988`
+`front_lidar_pose` / `back_lidar_pose` 使用 `x y z roll pitch yaw`，均为弧度。
 
 ## 角度换算（弧度）
 
@@ -373,7 +372,7 @@ python3 -c "import math; print(math.degrees(0.5235987755982988))"
 0.0 0.5235987755982988 0.0
 ```
 
-也就是当前实车前后双 Mid360 的安装姿态（忽略 back 的 `yaw = π`）。
+这是教学用例，不等于当前实车。当前实车双 Mid360 是绕 X 轴镜像（见实车入口默认值），无 pitch 下俯。
 
 ### 2. 正装，只是上仰 30°
 
@@ -404,13 +403,7 @@ python3 -c "import math; print(math.degrees(0.5235987755982988))"
 - 若雷达是"上下翻转"装上去，通常先试 `roll = pi`
 - 若雷达是"前后反装"装上去，通常先试 `yaw = pi`
 
-当前模型历史上保留了：
-
-```text
-yaw = 3.141592653589793
-```
-
-这就是一个 180° 反装；当前实车 `back_lidar_pose` 的 `yaw = π` 就是后 Mid360 的物理反向安装。
+历史上 back_lidar_pose 曾使用 `yaw = 3.141592653589793`（即 180° 反装）做前后盲区互补，但**当前实车没有用这种布局**。现在 back 的 roll 取 front 的相反数、yaw 为 0，是绕 X 轴的镜像安装。这两种姿态不可混用。
 
 ### 5. 倒置后再下俯 30°
 

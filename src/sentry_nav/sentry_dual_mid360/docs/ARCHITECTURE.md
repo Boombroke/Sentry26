@@ -1,7 +1,8 @@
 # sentry_dual_mid360 Architecture
 
 > **Maintainer**: Boombroke <boombroke@icloud.com>
-> **Scope**: 包级权威架构文档。描述双 Mid360 前后反向融合方案的架构、硬件、配置、同步、标定、融合节点、Point-LIO 零改动集成、TF 布局、launch 路径、验证与故障排查。
+> **Scope**: 包级权威架构文档。描述双 Mid360 融合方案的架构、硬件、配置、同步、标定、融合节点、Point-LIO 零改动集成、TF 布局、launch 路径、验证与故障排查。
+> **命名说明**：`front_mid360` / `back_mid360` 只是历史标识符，**实际装法是绕 X 轴镜像的两颗雷达，不是一前一后 180° 反装**。调整物理安装角后名字不再携带方向语义，以相对外参（`T_back→front`）为准。
 > **定位**: 本文只讲本包视角，是工程落地说明；项目级总体架构参见仓库根 `src/docs/ARCHITECTURE.md`，双 Mid360 升级的知识点与工程守则参见仓库根 `AGENTS.md`。不重复上游 Point-LIO/Livox SDK 的通用介绍。
 
 ---
@@ -12,7 +13,7 @@
 
 本包要达成的目标（按优先级）：
 
-1. **互补盲区**：前后反向两颗 Mid360，覆盖全周；两颗都固定到 `gimbal_pitch` 下，随云台同步运动，避免底盘偏航带来的视野漂移。
+1. **互补盲区**：两颗 Mid360 挂在 `gimbal_pitch` 下，绕 X 轴镜像安装（roll 反向），两颗水平 FOV 合并形成近 360° 覆盖。随云台同步运动，避免底盘偏航带来的视野漂移。**注意**：实装不是"前后 180° 反装"，历史名字 `front/back` 保留只是为了避免大规模重命名。
 2. **Point-LIO 零源码改动**：绝不 fork Point-LIO。融合发生在 Point-LIO 之前，以 `livox_ros_driver2/CustomMsg` 的格式交给 Point-LIO 的订阅端；LIO 当黑盒处理。
 3. **外参唯一真相源**：所有 Mid360 外参（`extrinsic_T/R`）和重力向量只来源于 xmacro（机械 CAD 位姿）。不允许手写 YAML、不允许环境变量或 JSON 作为第二真相源。
 4. **向后兼容单雷达**：`use_dual_mid360:=False` 时 merger 不启动、生成的 Point-LIO override YAML 不加载、dual 驱动 JSON / override / per-device remap 均不注入；Livox driver 走基础 `configured_params`（单雷达默认），Point-LIO 保持基础 YAML 的 `common.lid_topic: livox/lidar`，回到单 Mid360 链路。
@@ -109,8 +110,9 @@ Livox 官方仅支持三种硬件同步方式：**PTP (IEEE 1588v2) / gPTP / GPS
 外参流程与写入规则：
 
 1. **CAD 默认值**：`src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro` 定义
-   - `front_lidar_pose="-0.17 0 0.10 0.0 0.5235987755982988 3.141592653589793"`（前雷达下俯 30°、yaw π 反装）
-   - `back_lidar_pose="0.05 0 0.05 0.0 0.5235987755982988 3.141592653589793"`（后雷达 yaw π 反向，保持与前对称的下俯角）
+   - `front_lidar_pose="0 0.102 0.3 -0.733 0.0 0.0"`（相对 `gimbal_pitch`：y=+10.2cm，roll=-42°）
+   - `back_lidar_pose="0 -0.102 0.3 0.733 0.0 0.0"`（相对 `gimbal_pitch`：y=-10.2cm，roll=+42°，X 轴镜像）
+   - 两组 pose **不带** yaw=π，`front/back` 只是标识符，不意味物理前后朝向。
 2. **标定工具**：Multi_LiCa 离线标定（依赖 teaserpp_python / open3d / pandas / ros2_numpy / scipy）。入口脚本：`scripts/calib/calibrate_dual_mid360.sh`。命令形如
    ```bash
    scripts/calib/calibrate_dual_mid360.sh --check-deps
@@ -238,7 +240,7 @@ graph TB
 要点：
 
 - 两颗 Mid360 都挂 `gimbal_pitch`，随云台同步运动；`base_footprint` 对 Nav2 来说感知不到云台旋转（odom_bridge 每帧 `lookupTransform(lidar_frame → base_frame)` 消化云台外参）。
-- `back_mid360` 通过 yaw=π 实现物理反向安装，TF fragment 由本包 `urdf/back_mid360.sdf.xmacro` 提供（跨包 `xmacro_include` 由 `sentry_robot_description` 调用，见根 `AGENTS.md` §9）。
+- `back_mid360` 相对 `gimbal_pitch` 以 X 轴镜像姿态安装（roll 取 front 的相反数），TF fragment 由本包 `urdf/back_mid360.sdf.xmacro` 提供（跨包 `xmacro_include` 由 `sentry_robot_description` 调用，见根 `AGENTS.md` §9）。**不是 yaw=π 的前后反装**。
 - `*_mid360_imu` 是 IMU 出厂 anchor（Layer B）；`front_mid360_imu` 的变换是 Point-LIO `extrinsic_T/R` 的派生源，`back_mid360_imu` 仅诊断用，不进 LIO。
 - `common_frame` / merger `output` frame 固定为 `front_mid360`；Point-LIO 以该 frame 读取点云并在内部维护 `camera_init`。
 
