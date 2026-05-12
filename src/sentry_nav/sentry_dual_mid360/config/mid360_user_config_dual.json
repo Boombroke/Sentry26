@@ -25,7 +25,8 @@
   },
   "lidar_configs" : [
     {
-      "ip" : "192.168.1.144",
+      "_comment_role": "primary_mid360 (IMU feeds Point-LIO, topic /livox/lidar_primary)",
+      "ip" : "192.168.1.145",
       "pcl_data_type" : 1,
       "pattern_mode" : 0,
       "extrinsic_parameter" : {
@@ -38,7 +39,8 @@
       }
     },
     {
-      "ip" : "192.168.1.145",
+      "_comment_role": "secondary_mid360 (diagnostic IMU only, topic /livox/lidar_secondary)",
+      "ip" : "192.168.1.144",
       "pcl_data_type" : 1,
       "pattern_mode" : 0,
       "extrinsic_parameter" : {

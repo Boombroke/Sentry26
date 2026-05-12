@@ -210,7 +210,7 @@ def _format_report(report: StabilityReport) -> str:
         "## rerun instructions (live validation)",
         "",
         "Prerequisites:",
-        "  1. Dual Mid360 hardware connected (IPs 192.168.1.144 and 192.168.1.145 reachable)",
+        "  1. Dual Mid360 hardware connected (IPs 192.168.1.145 and 192.168.1.144 reachable)",
         "  2. Prior PCD built from dual Mid360 scan (T21 output)",
         "     NOTE: single-Mid360 PCD is NOT compatible with dual Mid360 registered_scan",
         "  3. Full navigation stack running in localization mode:",

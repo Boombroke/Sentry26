@@ -94,7 +94,7 @@ python3 src/sentry_nav/sentry_dual_mid360/scripts/codegen/verify_pointlio_overri
 - **T11 外参 accepted**：`calibrate_dual_mid360.sh --check-deps` PASS，且 `wheeled_biped_real.sdf.xmacro` 的 `secondary_lidar_pose` 已按 Multi_LiCa 结果写回（或确认 CAD 默认可用，MH8 规则）。
 - **Override 新鲜**：`verify_pointlio_overrides_fresh.py` 必须 PASS；否则 Point-LIO 的 `extrinsic_T/R` 和 xmacro 不同步，建图出来的 PCD 带着错误外参，重建也没用。
 - **Merger 可用**：`colcon build --packages-select sentry_dual_mid360 --symlink-install`；`ros2 launch sentry_dual_mid360 pointcloud_merger_launch.py --print` 能成功解析。
-- **实车硬件**：双 Mid360 分别 ping 通 192.168.1.144 / 192.168.1.145；BMI088 IMU 在线；串口、轮足驱动正常。
+- **实车硬件**：双 Mid360 分别 ping 通 192.168.1.145 / 192.168.1.144；BMI088 IMU 在线；串口、轮足驱动正常。
 
 ---
 

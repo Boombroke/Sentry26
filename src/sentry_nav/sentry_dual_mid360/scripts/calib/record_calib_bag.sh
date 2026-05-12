@@ -9,8 +9,8 @@
 #
 # Recorded topics:
 #   REQUIRED (preflight aborts if missing):
-#     /livox/lidar_primary   — front Mid360 raw CustomMsg (IP: 192.168.1.144)
-#     /livox/lidar_secondary    — back  Mid360 raw CustomMsg (IP: 192.168.1.145)
+#     /livox/lidar_primary   — front Mid360 raw CustomMsg (IP: 192.168.1.145)
+#     /livox/lidar_secondary    — back  Mid360 raw CustomMsg (IP: 192.168.1.144)
 #   OPTIONAL (recorded when present, skipped with a warning when not):
 #     /tf                  — dynamic transforms
 #     /tf_static           — static transforms
@@ -32,8 +32,8 @@
 #   --dry-run               Print planned command; create no bag
 #
 # Hardware assumptions (real mode):
-#   Front Mid360: 192.168.1.144
-#   Back  Mid360: 192.168.1.145
+#   Front Mid360: 192.168.1.145
+#   Back  Mid360: 192.168.1.144
 #
 # Sim mode assumptions:
 #   Gazebo Harmonic must already be running and unpaused.
@@ -61,8 +61,8 @@ OPTIONAL_TOPICS=(
 # TOPICS_TO_RECORD is populated by check_topics() with only the required +
 # available-optional subset. Used for both `ros2 bag record` and metadata.
 TOPICS_TO_RECORD=()
-PRIMARY_IP="192.168.1.144"
-SECONDARY_IP="192.168.1.145"
+PRIMARY_IP="192.168.1.145"
+SECONDARY_IP="192.168.1.144"
 
 # ---------------------------------------------------------------------------
 # Defaults

@@ -19,11 +19,11 @@
 以下展示了从原始传感器数据输入到最终底盘执行器输出的完整数据通路。系统采用模块化设计，各组件通过 ROS2 话题和服务进行解耦。**感知层在 2026 赛季升级为双 Mid360**：两颗 Mid360 都挂 `gimbal_pitch`，绕 X 轴镜像安装（roll 反向，不是前后 180° 反装；`front/back` 仅是历史 frame 标识符），在 Point-LIO 之前由 `sentry_dual_mid360::MergerNode` 做外部前融合；Point-LIO 当单雷达消费融合结果，源码零改动。
 
 ```text
-[Primary Mid360 192.168.1.144] --+--> [/livox/lidar_primary (CustomMsg)] --+
+[Primary Mid360 192.168.1.145] --+--> [/livox/lidar_primary (CustomMsg)] --+
                                |                                       |
                                +--> [/livox/imu]  (唯一进 LIO 的 IMU)  |--> [pointcloud_merger
                                                                        |     ApproximateTime 同步
-[Secondary Mid360 192.168.1.145] --+--> [/livox/lidar_secondary  (CustomMsg)] --+     secondary→primary 刚体变换
+[Secondary Mid360 192.168.1.144] --+--> [/livox/lidar_secondary  (CustomMsg)] --+     secondary→primary 刚体变换
                                |                                             stable_sort offset_time
                                +--> [/livox/imu_secondary] (仅诊断，不进 LIO)      header.stamp 单调]
                                                                              |

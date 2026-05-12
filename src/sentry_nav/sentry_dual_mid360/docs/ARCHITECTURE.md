@@ -28,8 +28,8 @@
 ```mermaid
 graph LR
     subgraph Hardware["双 Mid360（挂 gimbal_pitch, X 轴镜像）"]
-        F[Primary Mid360<br/>192.168.1.144]
-        B[Secondary Mid360<br/>192.168.1.145]
+        F[Primary Mid360<br/>192.168.1.145]
+        B[Secondary Mid360<br/>192.168.1.144]
     end
 
     subgraph Driver["livox_ros_driver2（多话题模式）"]
@@ -62,8 +62,8 @@ graph LR
 
 | 设备 | 角色 | IP | 端口 (cmd/push/point/imu/log) | 主机端口 | 备注 |
 |------|------|------|------------------------------|----------|------|
-| Primary Mid360 (`primary_mid360`) | 主雷达 + IMU 源 | `192.168.1.144` | 56100 / 56200 / 56300 / 56400 / 56500 | 56101 / 56201 / 56301 / 56401 / 56501 | IMU 进 Point-LIO |
-| Secondary Mid360 (`secondary_mid360`) | 补盲 + 诊断 IMU | `192.168.1.145` | 同上 | 同上 | IMU 仅诊断，不进 LIO |
+| Primary Mid360 (`primary_mid360`) | 主雷达 + IMU 源 | `192.168.1.145` | 56100 / 56200 / 56300 / 56400 / 56500 | 56101 / 56201 / 56301 / 56401 / 56501 | IMU 进 Point-LIO |
+| Secondary Mid360 (`secondary_mid360`) | 补盲 + 诊断 IMU | `192.168.1.144` | 同上 | 同上 | IMU 仅诊断，不进 LIO |
 | 主控 (Jetson / x86) | ROS2 主机 | `192.168.1.100` | N/A | N/A | driver 与 merger 所在主机 |
 
 两颗 Mid360 的 `extrinsic_parameter` 在驱动 JSON 中**全部归零**；真正的物理外参由 xmacro → TF 决定（本包 `urdf/` + `sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro`），Point-LIO 内部 `extrinsic_T/R` 由 codegen 从 xmacro 派生。驱动侧不重复写外参是为避免第二真相源。

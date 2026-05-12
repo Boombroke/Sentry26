@@ -21,7 +21,7 @@ src/sentry_robot_description/resource/xmacro/wheeled_biped_real.sdf.xmacro
 
 | 硬件 | 要求 |
 |---|---|
-| 两台 Mid360 | Front IP `192.168.1.144`，Back IP `192.168.1.145` |
+| 两台 Mid360 | Front IP `192.168.1.145`，Back IP `192.168.1.144` |
 | 主机网卡 | 静态 IP `192.168.1.100/24`，ping 两台雷达都要通 |
 | 场地 | 雷达稳定静止，**周围有墙角/立柱/箱体**（纯空地标不出来） |
 
