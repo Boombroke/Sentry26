@@ -156,6 +156,8 @@ terrain_analysis_ext:
     ceilingFilteringThre: 0.8           # 高差超过 1m 的体素视为天花板（原 2.0 太宽松）
     localTerrainMapRadius: 4.0
 
+# Nav2 在 gimbal_yaw_fake 下规划直线；自旋时 fake_vel_transform 将速度旋到 gimbal_yaw/底盘系，
+# 在 map/odom 中轨迹呈弧线属正常。判直线请用 cmd_vel_nav2_result，勿用旋转变换后的 /cmd_vel。
 fake_vel_transform:
   ros__parameters:
     use_sim_time: false
@@ -163,9 +165,10 @@ fake_vel_transform:
     robot_base_frame: "gimbal_yaw"
     fake_robot_base_frame: "gimbal_yaw_fake"
     input_cmd_vel_topic: "cmd_vel_nav2_result"
-    output_cmd_vel_topic: "cmd_vel"
+    # Twist-only final chassis command; keep /cmd_vel free for teleop TwistStamped if needed.
+    output_cmd_vel_topic: "cmd_vel_chassis"
     cmd_spin_topic: "cmd_spin"
-    init_spin_speed: 3.14
+    init_spin_speed: 0.0
 
 small_gicp_relocalization:
   ros__parameters:
@@ -366,13 +369,14 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.15
+      # 全向+自旋工况下定位/跟踪有抖动，适当放大到点半径便于判定 goal reached
+      xy_goal_tolerance: 0.40
       yaw_goal_tolerance: 6.28
     FollowPath:
       plugin: "omni_pid_pursuit_controller::OmniPidPursuitController"
-      translation_kp: 3.0
-      translation_ki: 0.1
-      translation_kd: 0.3
+      translation_kp: 3.5
+      translation_ki: 0.0
+      translation_kd: 0.5
       enable_rotation: false
       rotation_kp: 5.0
       rotation_ki: 0.1

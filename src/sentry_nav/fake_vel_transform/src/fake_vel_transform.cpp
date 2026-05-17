@@ -25,8 +25,8 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
 {
   RCLCPP_INFO(get_logger(), "Start FakeVelTransform!");
 
-  this->declare_parameter<std::string>("robot_base_frame", "gimbal_link");
-  this->declare_parameter<std::string>("fake_robot_base_frame", "gimbal_link_fake");
+  this->declare_parameter<std::string>("robot_base_frame", "gimbal_yaw");
+  this->declare_parameter<std::string>("fake_robot_base_frame", "gimbal_yaw_fake");
   this->declare_parameter<std::string>("odom_topic", "odom");
   this->declare_parameter<std::string>("cmd_spin_topic", "cmd_spin");
   this->declare_parameter<std::string>("input_cmd_vel_topic", "");

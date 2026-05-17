@@ -1,0 +1,9 @@
+# serial_visualizer.py / sentry_toolbox.py (non-ROS parts)
+numpy>=1.20
+pyqtgraph>=0.13
+PyQt5>=5.15
+pyserial>=3.5
+PyYAML>=5.4
+
+# Optional: OpenGL acceleration when not running Gazebo (VIZ_OPENGL=1)
+# PyOpenGL>=3.1

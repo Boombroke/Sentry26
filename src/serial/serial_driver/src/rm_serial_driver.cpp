@@ -32,7 +32,7 @@ RMSerialDriver::RMSerialDriver(const rclcpp::NodeOptions & options)
     std::string log_path = "/tmp/vel_log_" +
       std::to_string(this->now().nanoseconds()) + ".csv";
     vel_log_file_.open(log_path);
-    vel_log_file_ << "timestamp_ns,vel_x,vel_y,vel_w\n";
+    vel_log_file_ << "timestamp_ns,lx,ly,az\n";
     RCLCPP_INFO(get_logger(), "Velocity logging enabled: %s", log_path.c_str());
   }
 
@@ -84,7 +84,7 @@ void RMSerialDriver::receiveLoop()
 {
   std::vector<uint8_t> header_buf(1);
   std::vector<uint8_t> data;
-  data.reserve(sizeof(ReceiveHpPacket));
+  data.reserve(sizeof(SendPacket));
 
   while (rclcpp::ok()) {
     try {
@@ -102,26 +102,24 @@ void RMSerialDriver::receiveLoop()
       serial_driver_->port()->receive(data);
       data.insert(data.begin(), hdr);
 
-      bool crc_ok = crc16::Verify_CRC16_Check_Sum(data.data(), data.size());
-      if (!crc_ok) {
-        RCLCPP_WARN_THROTTLE(
-          get_logger(), *get_clock(), 1000, "CRC error on packet 0x%02X", hdr);
+      // 0x5B 为本机下行帧头，串口回显时整帧丢弃，避免只跳 1 字节导致 0xB5 错位
+      if (hdr == FH_TX) {
+        RCLCPP_DEBUG(
+          get_logger(), "Skipped RX echo frame 0x%02X (%zu bytes)", hdr, data.size());
         continue;
       }
 
-      RCLCPP_DEBUG(get_logger(), "RX packet 0x%02X (%zu bytes) CRC OK", hdr, data.size());
-
-      switch (hdr) {
-        case HEADER_IMU:
-          handleImuPacket(fromVector<ReceiveImuPacket>(data));
-          break;
-        case HEADER_STATUS:
-          handleStatusPacket(fromVector<ReceiveStatusPacket>(data));
-          break;
-        case HEADER_HP:
-          handleHpPacket(fromVector<ReceiveHpPacket>(data));
-          break;
+      bool crc_ok = crc16::Verify_CRC16_Check_Sum(data.data(), data.size());
+      if (!crc_ok) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 1000,
+          "CRC error on SendPacket 0x%02X (%zu bytes); check MCU sends 34-byte merged frame",
+          hdr, data.size());
+        continue;
       }
+
+      RCLCPP_DEBUG(get_logger(), "RX SendPacket 0x%02X (%zu bytes) CRC OK", hdr, data.size());
+      handleSendPacket(fromVector<SendPacket>(data));
     } catch (const std::exception & ex) {
       RCLCPP_ERROR_THROTTLE(
         get_logger(), *get_clock(), 1000, "Error while receiving data: %s", ex.what());
@@ -130,17 +128,14 @@ void RMSerialDriver::receiveLoop()
   }
 }
 
-void RMSerialDriver::handleImuPacket(const ReceiveImuPacket & pkt)
+void RMSerialDriver::handleSendPacket(const SendPacket & pkt)
 {
-  sensor_msgs::msg::JointState msg;
-  msg.header.stamp = now();
-  msg.name = {"gimbal_pitch_joint", "gimbal_yaw_joint"};
-  msg.position = {pkt.pitch, pkt.yaw};
-  joint_state_pub_->publish(msg);
-}
+  sensor_msgs::msg::JointState joint;
+  joint.header.stamp = now();
+  joint.name = {"gimbal_pitch_joint", "gimbal_yaw_joint"};
+  joint.position = {pkt.pitch, pkt.yaw};
+  joint_state_pub_->publish(joint);
 
-void RMSerialDriver::handleStatusPacket(const ReceiveStatusPacket & pkt)
-{
   rm_interfaces::msg::GameStatus game;
   game.game_progress = pkt.game_progress;
   game.stage_remain_time = pkt.stage_remain_time;
@@ -148,38 +143,35 @@ void RMSerialDriver::handleStatusPacket(const ReceiveStatusPacket & pkt)
 
   rm_interfaces::msg::RobotStatus robot;
   robot.current_hp = pkt.current_hp;
-  robot.projectile_allowance_17mm = pkt.projectile_allowance_17mm;
+  robot.projectile_allowance_17mm = pkt.project_allowance_17mm;
   robot_status_pub_->publish(robot);
 
   rm_interfaces::msg::RfidStatus rfid;
   rfid.friendly_supply_zone_non_exchange = pkt.rfid_base;
   rfid_pub_->publish(rfid);
-}
 
-void RMSerialDriver::handleHpPacket(const ReceiveHpPacket & pkt)
-{
   rm_interfaces::msg::GameRobotHP hp;
-  hp.ally_1_robot_hp = pkt.ally_1_robot_hp;
-  hp.ally_2_robot_hp = pkt.ally_2_robot_hp;
-  hp.ally_3_robot_hp = pkt.ally_3_robot_hp;
-  hp.ally_4_robot_hp = pkt.ally_4_robot_hp;
-  hp.ally_7_robot_hp = pkt.ally_7_robot_hp;
-  hp.ally_outpost_hp = pkt.ally_outpost_hp;
-  hp.ally_base_hp    = pkt.ally_base_hp;
+  hp.ally_1_robot_hp = pkt.ally_1_robot_HP;
+  hp.ally_2_robot_hp = pkt.ally_2_robot_HP;
+  hp.ally_3_robot_hp = pkt.ally_3_robot_HP;
+  hp.ally_4_robot_hp = pkt.ally_4_robot_HP;
+  hp.ally_7_robot_hp = pkt.ally_7_robot_HP;
+  hp.ally_outpost_hp = pkt.ally_outpost_HP;
+  hp.ally_base_hp = pkt.ally_base_hp;
   allHP_pub_->publish(hp);
 }
 
 void RMSerialDriver::sendNavData(const geometry_msgs::msg::Twist::SharedPtr msg)
 {
   try {
-    SendNavPacket packet;
-    packet.vel_x = msg->linear.x;
-    packet.vel_y = msg->linear.y;
-    packet.vel_w = msg->angular.z;
+    ReceivePacket packet;
+    packet.lx = msg->linear.x;
+    packet.ly = msg->linear.y;
+    packet.az = msg->angular.z;
 
     if (enable_vel_log_ && vel_log_file_.is_open()) {
       vel_log_file_ << this->now().nanoseconds() << ','
-                    << packet.vel_x << ',' << packet.vel_y << ',' << packet.vel_w << '\n';
+                    << packet.lx << ',' << packet.ly << ',' << packet.az << '\n';
     }
 
     crc16::Append_CRC16_Check_Sum(reinterpret_cast<uint8_t *>(&packet), sizeof(packet));
@@ -188,8 +180,8 @@ void RMSerialDriver::sendNavData(const geometry_msgs::msg::Twist::SharedPtr msg)
     serial_driver_->port()->send(data);
 
     RCLCPP_DEBUG(
-      get_logger(), "TX Nav: vx=%.3f vy=%.3f vw=%.3f (%zu bytes)",
-      packet.vel_x, packet.vel_y, packet.vel_w, data.size());
+      get_logger(), "TX Nav: lx=%.3f ly=%.3f az=%.3f (%zu bytes)",
+      packet.lx, packet.ly, packet.az, data.size());
   } catch (const std::exception & ex) {
     RCLCPP_ERROR(get_logger(), "Error while sending data: %s", ex.what());
     reopenPort();

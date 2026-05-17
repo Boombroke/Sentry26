@@ -16,7 +16,7 @@
 
 #include <cmath>
 
-#include "pcl/common/transforms.h"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "pcl_conversions/pcl_conversions.h"
 #include "small_gicp/pcl/pcl_registration.hpp"
 #include "small_gicp/util/downsampling_omp.hpp"
@@ -49,12 +49,15 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("accumulated_count_threshold", 20);
   this->declare_parameter("min_range", 0.5);
   this->declare_parameter("min_inlier_ratio", 0.3);
-  this->declare_parameter("max_fitness_error", 1.0);
+  this->declare_parameter("max_fitness_error", 0.05);
   this->declare_parameter("enable_periodic_relocalization", false);
   this->declare_parameter("relocalization_interval", 30.0);
   this->declare_parameter("max_correction_distance", 5.0);
   this->declare_parameter("emergency_max_dist_sq", 50.0);
   this->declare_parameter("emergency_consecutive_failures", 3);
+  this->declare_parameter("emergency_max_correction_distance", 3.0);
+  this->declare_parameter("emergency_min_score_threshold", 200000.0);
+  this->declare_parameter("quality_convergence_threshold", 0.008);
   this->declare_parameter("terrain_clearing_threshold", 0.1);
 
   this->get_parameter("num_threads", num_threads_);
@@ -79,17 +82,23 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("max_correction_distance", max_correction_distance_);
   this->get_parameter("emergency_max_dist_sq", emergency_max_dist_sq_);
   this->get_parameter("emergency_consecutive_failures", emergency_consecutive_failures_);
+  this->get_parameter("emergency_max_correction_distance", emergency_max_correction_distance_);
+  this->get_parameter("emergency_min_score_threshold", emergency_min_score_threshold_);
+  this->get_parameter("quality_convergence_threshold", quality_convergence_threshold_);
   this->get_parameter("terrain_clearing_threshold", terrain_clearing_threshold_);
 
   RCLCPP_INFO(
     this->get_logger(),
     "Parameters: max_iterations=%d, accumulated_threshold=%d, min_range=%.2f, "
-    "min_inlier_ratio=%.2f, max_fitness_error=%.2f, periodic=%s, interval=%.1fs, "
-    "max_correction=%.1fm, emergency_max_dist_sq=%.1f, emergency_after=%d failures",
+    "min_inlier_ratio=%.2f, max_fitness_error=%.2f, quality_convergence_threshold=%.4f, "
+    "periodic=%s, interval=%.1fs, "
+    "max_correction=%.1fm, emergency_max_dist_sq=%.1f, emergency_after=%d failures, "
+    "emergency_max_correction=%.1fm, emergency_min_score=%.1f",
     max_iterations_, accumulated_count_threshold_, min_range_, min_inlier_ratio_,
-    max_fitness_error_, enable_periodic_relocalization_ ? "true" : "false",
-    relocalization_interval_, max_correction_distance_, emergency_max_dist_sq_,
-    emergency_consecutive_failures_);
+    max_fitness_error_, quality_convergence_threshold_,
+    enable_periodic_relocalization_ ? "true" : "false", relocalization_interval_,
+    max_correction_distance_, emergency_max_dist_sq_, emergency_consecutive_failures_,
+    emergency_max_correction_distance_, emergency_min_score_threshold_);
 
   if (!init_pose_.empty() && init_pose_.size() >= 6) {
     result_t_.translation() << init_pose_[0], init_pose_[1], init_pose_[2];
@@ -115,13 +124,6 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   map_clearing_pub_ = this->create_publisher<std_msgs::msg::Float32>("map_clearing", 1);
   cloud_clearing_pub_ = this->create_publisher<std_msgs::msg::Float32>("cloud_clearing", 1);
 
-  rclcpp::QoS latched_qos(1);
-  latched_qos.transient_local();
-  odom_to_lidar_odom_sub_ = this->create_subscription<geometry_msgs::msg::TransformStamped>(
-    "odom_to_lidar_odom", latched_qos,
-    std::bind(
-      &SmallGicpRelocalizationNode::odomToLidarOdomCallback, this, std::placeholders::_1));
-
   pcd_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     "registered_scan", 10,
     std::bind(&SmallGicpRelocalizationNode::registeredPcdCallback, this, std::placeholders::_1));
@@ -137,34 +139,42 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 
 void SmallGicpRelocalizationNode::loadPcdFile(const std::string & file_name)
 {
+  if (file_name.empty()) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "No prior PCD file configured. Target map remains empty; GICP registration will be skipped.");
+    return;
+  }
+
   if (pcl::io::loadPCDFile<pcl::PointXYZ>(file_name, *global_map_) == -1) {
     RCLCPP_ERROR(this->get_logger(), "Couldn't read PCD file: %s", file_name.c_str());
     return;
   }
   RCLCPP_INFO(this->get_logger(), "Loaded global map with %zu points", global_map_->points.size());
+  prepareTargetMap();
 }
 
-void SmallGicpRelocalizationNode::odomToLidarOdomCallback(
-  const geometry_msgs::msg::TransformStamped::SharedPtr msg)
+void SmallGicpRelocalizationNode::prepareTargetMap()
 {
-  if (global_map_ready_) {
+  if (!global_map_ || global_map_->empty()) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Prior PCD map is empty. Target map remains empty; GICP registration will be skipped.");
+    global_map_ready_ = false;
     return;
   }
-  Eigen::Affine3d odom_to_lidar_odom = tf2::transformToEigen(msg->transform);
-  RCLCPP_INFO_STREAM(
-    this->get_logger(), "Received odom_to_lidar_odom from odom_bridge: translation = "
-                          << odom_to_lidar_odom.translation().transpose() << ", rpy = "
-                          << odom_to_lidar_odom.rotation().eulerAngles(0, 1, 2).transpose());
-  prepareTargetMap(odom_to_lidar_odom);
-}
-
-void SmallGicpRelocalizationNode::prepareTargetMap(const Eigen::Affine3d & odom_to_lidar_odom)
-{
-  pcl::transformPointCloud(*global_map_, *global_map_, odom_to_lidar_odom);
 
   target_ = small_gicp::voxelgrid_sampling_omp<
     pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
     *global_map_, global_leaf_size_);
+
+  if (!target_ || target_->empty()) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Target map is empty after downsampling. GICP registration will be skipped.");
+    global_map_ready_ = false;
+    return;
+  }
 
   for (auto & pt : target_->points) {
     pt.z = 0.0f;
@@ -382,7 +392,14 @@ bool SmallGicpRelocalizationNode::performEmergencyRegistration()
     this->get_logger(), "Emergency: tested %zu candidates, best_idx=%d, best_score=%.1f",
     candidates.size(), best_idx, best_score);
 
-  bool accepted = (best_idx >= 0);
+  bool accepted = (best_idx >= 0) && (best_score >= emergency_min_score_threshold_);
+  if (best_idx >= 0 && best_score < emergency_min_score_threshold_) {
+    RCLCPP_ERROR(
+      this->get_logger(),
+      "Emergency REJECTED: best_score=%.1f below threshold=%.1f. "
+      "Possible false match, waiting for next cycle.",
+      best_score, emergency_min_score_threshold_);
+  }
   auto result = accepted ? candidates[best_idx].result : candidates[0].result;
 
   if (!accepted) {
@@ -403,6 +420,17 @@ bool SmallGicpRelocalizationNode::performEmergencyRegistration()
     "Emergency accepted: t=[%.3f, %.3f], yaw=%.3f (correction=%.3f m)",
     raw_t.x(), raw_t.y(), yaw,
     (constrained.translation() - result_t_.translation()).norm());
+
+  // 硬限制：Emergency 修正距离不得超过 emergency_max_correction_distance_
+  double emergency_correction = (constrained.translation() - result_t_.translation()).norm();
+  if (emergency_correction > emergency_max_correction_distance_) {
+    RCLCPP_ERROR(
+      this->get_logger(),
+      "Emergency REJECTED: correction %.3f m exceeds emergency_max_correction_distance %.3f m. "
+      "Robot may need manual /initialpose.",
+      emergency_correction, emergency_max_correction_distance_);
+    return false;
+  }
 
   result_t_ = previous_result_t_ = constrained;
   notifyTerrainClearing();
@@ -437,6 +465,14 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
     this->get_logger(), "GICP input: source=%zu points, target=%zu points",
     source_->size(), target_->size());
 
+  if (!target_ || target_->empty() || !target_tree_) {
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 5000,
+      "Target map empty or not loaded (prior PCD missing). "
+      "Skipping GICP registration. SLAM mode doesn't need PCD.");
+    return false;
+  }
+
   register_->reduction.num_threads = num_threads_;
   register_->rejector.max_dist_sq = max_dist_sq_;
   register_->optimizer.max_iterations = max_iterations_;
@@ -456,8 +492,23 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
     "GICP transform: t=[%.3f, %.3f, %.3f], rpy=[%.3f, %.3f, %.3f]",
     t.x(), t.y(), t.z(), rpy.x(), rpy.y(), rpy.z());
 
-  if (!result.converged) {
-    RCLCPP_WARN(this->get_logger(), "GICP did not converge.");
+  if (!result.converged && result.num_inliers > 0) {
+    double per_point_err = result.error / static_cast<double>(result.num_inliers);
+    if (per_point_err < quality_convergence_threshold_) {
+      RCLCPP_INFO(
+        this->get_logger(),
+        "GICP did not formally converge (iterations=%zu) but per_point_error=%.6f < "
+        "quality_convergence_threshold=%.6f, treating as quality-converged.",
+        result.iterations, per_point_err, quality_convergence_threshold_);
+    } else {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "GICP did not converge: iterations=%zu, per_point_error=%.6f >= threshold=%.6f",
+        result.iterations, per_point_err, quality_convergence_threshold_);
+      return false;
+    }
+  } else if (!result.converged) {
+    RCLCPP_WARN(this->get_logger(), "GICP did not converge (no inliers).");
     return false;
   }
 
@@ -587,7 +638,16 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
     Eigen::Isometry3d map_to_odom = map_to_robot_base * robot_base_to_odom;
 
     previous_result_t_ = result_t_ = map_to_odom;
+    has_localized_ = true;
     consecutive_periodic_failures_ = 0;
+
+    {
+      std::lock_guard<std::mutex> lock(cloud_mutex_);
+      accumulated_cloud_->clear();
+      accumulated_count_ = 0;
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Initial pose accepted. Marked as localized.");
   } catch (tf2::TransformException & ex) {
     RCLCPP_WARN(
       this->get_logger(), "Could not transform initial pose from %s to %s: %s",

@@ -476,7 +476,7 @@ Visualization Manager:
             Reliability Policy: Reliable
             Value: global_costmap/published_footprint
           Value: false
-      Enabled: false
+      Enabled: true
       Name: Global Planner
     - Class: rviz_common/Group
       Displays:

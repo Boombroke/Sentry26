@@ -11,7 +11,7 @@
             <ReactiveSequence>
               <RemovePassedGoals input_goals="{goals}"
                                  output_goals="{goals}"
-                                 radius="0.7"/>
+                                 radius="0.9"/>
               <ComputePathThroughPoses goals="{goals}"
                                        path="{path}"
                                        planner_id="GridBased"/>

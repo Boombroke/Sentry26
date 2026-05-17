@@ -62,8 +62,8 @@ def generate_launch_description():
 
     declare_world_cmd = DeclareLaunchArgument(
         "world",
-        default_value="rmul_2026",
-        description="Select world: 'rmuc_2025' or 'rmuc_2026' or 'rmul_2026' (map file share the same name as the this parameter)",
+        default_value="204",
+        description="Map/PCD base name under map/reality and pcd/reality (e.g. 204, rmul_2026)",
     )
 
     declare_map_yaml_cmd = DeclareLaunchArgument(
@@ -120,8 +120,8 @@ def generate_launch_description():
 
     declare_use_robot_state_pub_cmd = DeclareLaunchArgument(
         "use_robot_state_pub",
-        default_value="False",
-        description="Whether to start the robot state publisher",
+        default_value="True",
+        description="Whether to start the robot state publisher (required for base_footprint / gimbal_yaw TF)",
     )
 
     declare_rviz_config_file_cmd = DeclareLaunchArgument(

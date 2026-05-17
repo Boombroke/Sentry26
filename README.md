@@ -159,10 +159,10 @@ ros2 launch sentry_nav_bringup rm_sentry_launch.py \
   namespace:=red_standard_robot1
 
 # 或分步启动
-# 建图模式
-ros2 launch sentry_nav_bringup rm_navigation_reality_launch.py slam:=True
-# 导航模式（需要先验地图和 PCD）
-ros2 launch sentry_nav_bringup rm_navigation_reality_launch.py slam:=False
+# 建图模式（必须启动 robot_state_publisher 发布 base_footprint / gimbal_yaw TF）
+ros2 launch sentry_nav_bringup rm_navigation_reality_launch.py slam:=True use_robot_state_pub:=True
+# 导航模式（需要先验地图和 PCD，默认 world=204 对应 map/reality/204.yaml 与 pcd/reality/204.pcd）
+ros2 launch sentry_nav_bringup rm_navigation_reality_launch.py slam:=False world:=204
 ```
 
 ## 主要参数

@@ -48,8 +48,8 @@ def generate_launch_description():
 
     declare_world_cmd = DeclareLaunchArgument(
         "world",
-        default_value="rmul_2026",
-        description="Map name (rmuc_2025 / rmuc_2026 / rmul_2026 etc.)",
+        default_value="204",
+        description="Map/PCD base name under map/reality and pcd/reality (e.g. 204, rmul_2026)",
     )
 
     declare_use_rviz_cmd = DeclareLaunchArgument(
@@ -74,6 +74,7 @@ def generate_launch_description():
             "world": world,
             "use_rviz": use_rviz,
             "use_foxglove": use_foxglove,
+            "use_robot_state_pub": "True",
         }.items(),
     )
 

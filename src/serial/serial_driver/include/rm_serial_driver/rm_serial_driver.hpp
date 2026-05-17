@@ -40,9 +40,7 @@ private:
   void sendNavData(const geometry_msgs::msg::Twist::SharedPtr msg);
   void reopenPort();
 
-  void handleImuPacket(const ReceiveImuPacket & pkt);
-  void handleStatusPacket(const ReceiveStatusPacket & pkt);
-  void handleHpPacket(const ReceiveHpPacket & pkt);
+  void handleSendPacket(const SendPacket & pkt);
 
   std::unique_ptr<IoContext> owned_ctx_;
   std::string device_name_;

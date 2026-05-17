@@ -98,7 +98,9 @@ install_system_deps() {
         ros-jazzy-pcl-ros \
         ros-jazzy-tf2-eigen \
         ros-jazzy-serial-driver \
-        ros-jazzy-joy
+        ros-jazzy-joy \
+        python3-pyqtgraph \
+        python3-pyqt5
 
     ok "系统依赖安装完成"
 

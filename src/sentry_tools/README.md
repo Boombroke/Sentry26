@@ -6,12 +6,25 @@
 # 工具箱（串口 Mock + 地图拾取 + 连通性检测 + 串口诊断 + 重力标定），无需 ROS（重力标定需 ROS）
 python3 src/sentry_tools/sentry_toolbox.py
 
-# 串口数据可视化（需 ROS 环境）
-source install/setup.bash
-python3 src/sentry_tools/serial_visualizer.py
+# 串口数据可视化（需 ROS 环境；推荐启动脚本，避免 install/setup.bash 旧路径）
+bash src/sentry_tools/run_serial_visualizer.sh
+# 或：source /opt/ros/jazzy/setup.bash && source install/local_setup.bash && python3 src/sentry_tools/serial_visualizer.py
 ```
 
-依赖：`pip install pyserial`（PyQt5/pyqtgraph PyOpenGL/numpy/pyyaml 随 ROS2 Jazzy 自带）
+依赖（可视化工具）：
+
+```bash
+# 推荐：系统包（Ubuntu 24.04）
+sudo apt install python3-pyqtgraph python3-pyqt5
+
+# 或一键脚本
+bash src/sentry_tools/install_viz_deps.sh
+
+# 或 pip
+pip3 install -r src/sentry_tools/requirements.txt --user --break-system-packages
+```
+
+工具箱另需：`pip install pyserial`（或 `sudo apt install python3-serial`）
 
 ---
 
