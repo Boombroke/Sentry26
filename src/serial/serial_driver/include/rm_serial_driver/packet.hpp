@@ -18,7 +18,7 @@ struct SendPacket
   uint8_t  header = FH_RX;
   float    pitch;
   float    yaw;
-  uint8_t  game_progress;
+  uint8_t  game_progress; //0=未开始, 1=准备阶段, 2=自检阶段, 3=5s比赛倒计时, 4=比赛中, 5=比赛结束
   uint16_t stage_remain_time;
   uint16_t current_hp;
   uint16_t project_allowance_17mm;
