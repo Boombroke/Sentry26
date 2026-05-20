@@ -24,8 +24,11 @@ ament_auto_find_build_dependencies()
 ## Build ##
 ###########
 
+## NOTE: do not switch back to `DIRECTORY src` — `build_scan_context_db.cpp`
+## defines main() and must not be linked into the shared library.
 ament_auto_add_library(${PROJECT_NAME} SHARED
-  DIRECTORY src
+  src/scan_context.cpp
+  src/small_gicp_relocalization.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} OpenMP::OpenMP_CXX)
@@ -34,6 +37,12 @@ rclcpp_components_register_node(${PROJECT_NAME}
   PLUGIN small_gicp_relocalization::SmallGicpRelocalizationNode
   EXECUTABLE ${PROJECT_NAME}_node
 )
+
+## Offline tool: build a Scan Context descriptor database from a prior PCD map.
+ament_auto_add_executable(build_scan_context_db
+  src/build_scan_context_db.cpp
+)
+target_link_libraries(build_scan_context_db ${PROJECT_NAME})
 
 #############
 ## Testing ##
