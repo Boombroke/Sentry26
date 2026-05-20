@@ -17,7 +17,8 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -33,6 +34,7 @@ def generate_launch_description():
     world = LaunchConfiguration("world")
     use_rviz = LaunchConfiguration("use_rviz")
     use_foxglove = LaunchConfiguration("use_foxglove")
+    enable_recorder = LaunchConfiguration("enable_recorder")
 
     declare_namespace_cmd = DeclareLaunchArgument(
         "namespace",
@@ -64,6 +66,12 @@ def generate_launch_description():
         description="Whether to start foxglove_bridge",
     )
 
+    declare_enable_recorder_cmd = DeclareLaunchArgument(
+        "enable_recorder",
+        default_value="True",
+        description="Whether to start sentry_match_recorder (auto rosbag on game_progress=4)",
+    )
+
     navigation_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(launch_dir, "rm_navigation_reality_launch.py")
@@ -90,6 +98,19 @@ def generate_launch_description():
         arguments=["--ros-args", "--log-level", "rm_serial_driver:=info"],
     )
 
+    recorder_dir = get_package_share_directory("sentry_match_recorder")
+    recorder_launch_cmd = TimerAction(
+        period=5.0,
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(recorder_dir, "launch", "match_recorder_launch.py")
+                ),
+            )
+        ],
+        condition=IfCondition(enable_recorder),
+    )
+
     ld = LaunchDescription()
 
     ld.add_action(declare_namespace_cmd)
@@ -97,8 +118,10 @@ def generate_launch_description():
     ld.add_action(declare_world_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_foxglove_cmd)
+    ld.add_action(declare_enable_recorder_cmd)
 
     ld.add_action(navigation_cmd)
     ld.add_action(serial_driver_node)
+    ld.add_action(recorder_launch_cmd)
 
     return ld
