@@ -14,7 +14,9 @@
 
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
 
+#include <chrono>
 #include <cmath>
+#include <thread>
 
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "pcl_conversions/pcl_conversions.h"
@@ -60,6 +62,18 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("quality_convergence_threshold", 0.008);
   this->declare_parameter("terrain_clearing_threshold", 0.1);
 
+  this->declare_parameter("enable_deep_verification", false);
+  this->declare_parameter("deep_verification_interval", 30.0);
+  this->declare_parameter("deep_accumulated_count_threshold", 100);
+  this->declare_parameter("deep_max_dist_sq", 225.0);
+  this->declare_parameter("deep_max_iterations", 300);
+  this->declare_parameter("deep_global_leaf_size", 0.05);
+  this->declare_parameter("deep_registered_leaf_size", 0.05);
+  this->declare_parameter("deep_min_inlier_ratio", 0.3);
+  this->declare_parameter("deep_max_fitness_error", 0.5);
+  this->declare_parameter("deep_max_correction_distance", 15.0);
+  this->declare_parameter("deep_min_score_threshold", 500000.0);
+
   this->get_parameter("num_threads", num_threads_);
   this->get_parameter("num_neighbors", num_neighbors_);
   this->get_parameter("global_leaf_size", global_leaf_size_);
@@ -87,6 +101,18 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("quality_convergence_threshold", quality_convergence_threshold_);
   this->get_parameter("terrain_clearing_threshold", terrain_clearing_threshold_);
 
+  this->get_parameter("enable_deep_verification", enable_deep_verification_);
+  this->get_parameter("deep_verification_interval", deep_verification_interval_);
+  this->get_parameter("deep_accumulated_count_threshold", deep_accumulated_count_threshold_);
+  this->get_parameter("deep_max_dist_sq", deep_max_dist_sq_);
+  this->get_parameter("deep_max_iterations", deep_max_iterations_);
+  this->get_parameter("deep_global_leaf_size", deep_global_leaf_size_);
+  this->get_parameter("deep_registered_leaf_size", deep_registered_leaf_size_);
+  this->get_parameter("deep_min_inlier_ratio", deep_min_inlier_ratio_);
+  this->get_parameter("deep_max_fitness_error", deep_max_fitness_error_);
+  this->get_parameter("deep_max_correction_distance", deep_max_correction_distance_);
+  this->get_parameter("deep_min_score_threshold", deep_min_score_threshold_);
+
   RCLCPP_INFO(
     this->get_logger(),
     "Parameters: max_iterations=%d, accumulated_threshold=%d, min_range=%.2f, "
@@ -111,8 +137,11 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   accumulation_snapshot_t_ = result_t_;
 
   accumulated_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+  deep_accumulated_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
   global_map_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
   register_ = std::make_shared<
+    small_gicp::Registration<small_gicp::GICPFactor, small_gicp::ParallelReductionOMP>>();
+  deep_register_ = std::make_shared<
     small_gicp::Registration<small_gicp::GICPFactor, small_gicp::ParallelReductionOMP>>();
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
@@ -135,6 +164,19 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   transform_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(50),
     std::bind(&SmallGicpRelocalizationNode::publishTransform, this));
+
+  if (enable_deep_verification_) {
+    deep_timer_ = this->create_wall_timer(
+      std::chrono::milliseconds(static_cast<int>(deep_verification_interval_ * 1000.0)),
+      std::bind(&SmallGicpRelocalizationNode::deepVerificationTimerCallback, this));
+    RCLCPP_INFO(
+      this->get_logger(),
+      "Deep verification enabled: interval=%.1fs, leaf=%.3f, max_dist_sq=%.1f, "
+      "max_iter=%d, accum=%d, min_score=%.0f, max_corr=%.1fm",
+      deep_verification_interval_, deep_global_leaf_size_, deep_max_dist_sq_,
+      deep_max_iterations_, deep_accumulated_count_threshold_,
+      deep_min_score_threshold_, deep_max_correction_distance_);
+  }
 }
 
 void SmallGicpRelocalizationNode::loadPcdFile(const std::string & file_name)
@@ -152,6 +194,9 @@ void SmallGicpRelocalizationNode::loadPcdFile(const std::string & file_name)
   }
   RCLCPP_INFO(this->get_logger(), "Loaded global map with %zu points", global_map_->points.size());
   prepareTargetMap();
+  if (enable_deep_verification_) {
+    prepareDeepTargetMap();
+  }
 }
 
 void SmallGicpRelocalizationNode::prepareTargetMap()
@@ -192,6 +237,38 @@ void SmallGicpRelocalizationNode::prepareTargetMap()
   global_map_ready_ = true;
 }
 
+void SmallGicpRelocalizationNode::prepareDeepTargetMap()
+{
+  if (!global_map_ || global_map_->empty()) {
+    return;
+  }
+
+  target_deep_ = small_gicp::voxelgrid_sampling_omp<
+    pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
+    *global_map_, deep_global_leaf_size_);
+
+  if (!target_deep_ || target_deep_->empty()) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Deep target map is empty after downsampling. Deep verification disabled.");
+    enable_deep_verification_ = false;
+    return;
+  }
+
+  for (auto & pt : target_deep_->points) {
+    pt.z = 0.0f;
+  }
+
+  small_gicp::estimate_covariances_omp(*target_deep_, num_neighbors_, num_threads_);
+
+  target_deep_tree_ = std::make_shared<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
+    target_deep_, small_gicp::KdTreeBuilderOMP(num_threads_));
+
+  RCLCPP_INFO(
+    this->get_logger(), "Deep target map ready: %zu points (leaf_size=%.3f)",
+    target_deep_->size(), deep_global_leaf_size_);
+}
+
 void SmallGicpRelocalizationNode::registeredPcdCallback(
   const sensor_msgs::msg::PointCloud2::SharedPtr msg)
 {
@@ -227,6 +304,16 @@ void SmallGicpRelocalizationNode::registeredPcdCallback(
     }
     *accumulated_cloud_ += *filtered;
     accumulated_count_++;
+  }
+
+  if (enable_deep_verification_) {
+    std::lock_guard<std::mutex> lock(deep_cloud_mutex_);
+    if (deep_accumulated_count_ >= deep_accumulated_count_threshold_) {
+      deep_accumulated_cloud_->clear();
+      deep_accumulated_count_ = 0;
+    }
+    *deep_accumulated_cloud_ += *filtered;
+    deep_accumulated_count_++;
   }
 
   if (!has_localized_ && accumulated_count_ >= accumulated_count_threshold_) {
@@ -652,6 +739,167 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
     RCLCPP_WARN(
       this->get_logger(), "Could not transform initial pose from %s to %s: %s",
       robot_base_frame_.c_str(), current_scan_frame_id_.c_str(), ex.what());
+  }
+}
+
+void SmallGicpRelocalizationNode::deepVerificationTimerCallback()
+{
+  if (!global_map_ready_ || !target_deep_ || !target_deep_tree_) {
+    return;
+  }
+  if (!has_localized_) {
+    return;
+  }
+  if (deep_running_.load()) {
+    RCLCPP_DEBUG(
+      this->get_logger(), "Deep verification still running from previous tick. Skipping.");
+    return;
+  }
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr snapshot;
+  {
+    std::lock_guard<std::mutex> lock(deep_cloud_mutex_);
+    if (deep_accumulated_cloud_->empty() ||
+        deep_accumulated_count_ < deep_accumulated_count_threshold_ / 2) {
+      RCLCPP_DEBUG(
+        this->get_logger(),
+        "Deep verification: insufficient frames (%d/%d). Skipping.",
+        deep_accumulated_count_, deep_accumulated_count_threshold_);
+      return;
+    }
+    snapshot = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>(*deep_accumulated_cloud_);
+    deep_accumulated_cloud_->clear();
+    deep_accumulated_count_ = 0;
+  }
+
+  Eigen::Isometry3d initial_guess = result_t_;
+
+  deep_running_.store(true);
+  std::thread([this, snapshot, initial_guess]() {
+    runDeepVerification(snapshot, initial_guess);
+    deep_running_.store(false);
+  }).detach();
+}
+
+void SmallGicpRelocalizationNode::runDeepVerification(
+  pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_snapshot,
+  Eigen::Isometry3d initial_guess)
+{
+  if (!accumulated_snapshot || accumulated_snapshot->empty()) {
+    return;
+  }
+
+  RCLCPP_INFO(
+    this->get_logger(),
+    "Deep verification: %zu raw points, leaf=%.3f, max_dist_sq=%.1f, max_iter=%d",
+    accumulated_snapshot->size(), deep_global_leaf_size_, deep_max_dist_sq_,
+    deep_max_iterations_);
+
+  auto deep_source = small_gicp::voxelgrid_sampling_omp<
+    pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
+    *accumulated_snapshot, deep_registered_leaf_size_);
+
+  if (!deep_source || deep_source->empty()) {
+    RCLCPP_WARN(this->get_logger(), "Deep verification: source empty after downsample.");
+    return;
+  }
+
+  for (auto & pt : deep_source->points) {
+    pt.z = 0.0f;
+  }
+
+  small_gicp::estimate_covariances_omp(*deep_source, num_neighbors_, num_threads_);
+  auto deep_source_tree =
+    std::make_shared<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
+      deep_source, small_gicp::KdTreeBuilderOMP(num_threads_));
+
+  deep_register_->reduction.num_threads = num_threads_;
+  deep_register_->rejector.max_dist_sq = deep_max_dist_sq_;
+  deep_register_->optimizer.max_iterations = deep_max_iterations_;
+
+  auto t_start = std::chrono::steady_clock::now();
+  auto result =
+    deep_register_->align(*target_deep_, *deep_source, *target_deep_tree_, initial_guess);
+  auto t_end = std::chrono::steady_clock::now();
+  double elapsed_ms =
+    std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start).count() / 1000.0;
+
+  if (!result.converged && result.num_inliers > 0) {
+    double per_point_err = result.error / static_cast<double>(result.num_inliers);
+    if (per_point_err >= quality_convergence_threshold_) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Deep verification did NOT converge (iter=%zu, per_point=%.6f). Skipping.",
+        result.iterations, per_point_err);
+      return;
+    }
+  } else if (!result.converged) {
+    RCLCPP_WARN(this->get_logger(), "Deep verification: no inliers, skipping.");
+    return;
+  }
+
+  if (result.num_inliers == 0) {
+    return;
+  }
+
+  double inlier_ratio = static_cast<double>(result.num_inliers) / deep_source->size();
+  double fitness_error = result.error / static_cast<double>(result.num_inliers);
+  double score = static_cast<double>(result.num_inliers) / (fitness_error + 0.001);
+
+  RCLCPP_INFO(
+    this->get_logger(),
+    "Deep verification done in %.0f ms: inliers=%zu (ratio=%.3f), fitness=%.6f, score=%.0f",
+    elapsed_ms, result.num_inliers, inlier_ratio, fitness_error, score);
+
+  if (inlier_ratio < deep_min_inlier_ratio_) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Deep verification REJECTED: inlier_ratio=%.3f < %.3f.",
+      inlier_ratio, deep_min_inlier_ratio_);
+    return;
+  }
+  if (fitness_error > deep_max_fitness_error_) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Deep verification REJECTED: fitness_error=%.6f > %.6f.",
+      fitness_error, deep_max_fitness_error_);
+    return;
+  }
+  if (score < deep_min_score_threshold_) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Deep verification REJECTED: score=%.0f < %.0f. Possible false match.",
+      score, deep_min_score_threshold_);
+    return;
+  }
+
+  const Eigen::Vector3d raw_t = result.T_target_source.translation();
+  const Eigen::Matrix3d raw_r = result.T_target_source.rotation();
+  double yaw = std::atan2(raw_r(1, 0), raw_r(0, 0));
+
+  Eigen::Isometry3d constrained = Eigen::Isometry3d::Identity();
+  constrained.translation() << raw_t.x(), raw_t.y(), 0.0;
+  constrained.linear() =
+    Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+
+  double correction_dist = (constrained.translation() - result_t_.translation()).norm();
+  if (correction_dist > deep_max_correction_distance_) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Deep verification REJECTED: correction %.3fm > %.3fm.",
+      correction_dist, deep_max_correction_distance_);
+    return;
+  }
+
+  RCLCPP_WARN(
+    this->get_logger(),
+    "Deep verification ACCEPTED: t=[%.3f, %.3f], yaw=%.3f, correction=%.3fm, score=%.0f",
+    raw_t.x(), raw_t.y(), yaw, correction_dist, score);
+
+  result_t_ = previous_result_t_ = constrained;
+
+  if (correction_dist > terrain_clearing_threshold_) {
+    notifyTerrainClearing();
   }
 }
 

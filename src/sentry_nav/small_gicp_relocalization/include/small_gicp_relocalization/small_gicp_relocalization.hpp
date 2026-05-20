@@ -15,6 +15,7 @@
 #ifndef SMALL_GICP_RELOCALIZATION__SMALL_GICP_RELOCALIZATION_HPP_
 #define SMALL_GICP_RELOCALIZATION__SMALL_GICP_RELOCALIZATION_HPP_
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -47,11 +48,16 @@ private:
   void periodicRegistrationCallback();
   void loadPcdFile(const std::string & file_name);
   void prepareTargetMap();
+  void prepareDeepTargetMap();
   bool performRegistration(bool is_periodic);
   bool performEmergencyRegistration();
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
   void notifyTerrainClearing();
+  void deepVerificationTimerCallback();
+  void runDeepVerification(
+    pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_snapshot,
+    Eigen::Isometry3d initial_guess);
 
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
@@ -105,6 +111,30 @@ private:
 
   rclcpp::TimerBase::SharedPtr transform_timer_;
   rclcpp::TimerBase::SharedPtr periodic_timer_;
+  rclcpp::TimerBase::SharedPtr deep_timer_;
+
+  // Deep verification (low-frequency, high-quality) layer
+  bool enable_deep_verification_{false};
+  double deep_verification_interval_{30.0};
+  int deep_accumulated_count_threshold_{100};
+  double deep_max_dist_sq_{225.0};
+  int deep_max_iterations_{300};
+  float deep_global_leaf_size_{0.05f};
+  float deep_registered_leaf_size_{0.05f};
+  double deep_min_inlier_ratio_{0.3};
+  double deep_max_fitness_error_{0.5};
+  double deep_max_correction_distance_{15.0};
+  double deep_min_score_threshold_{500000.0};
+
+  pcl::PointCloud<pcl::PointCovariance>::Ptr target_deep_;
+  std::shared_ptr<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>> target_deep_tree_;
+  std::shared_ptr<
+    small_gicp::Registration<small_gicp::GICPFactor, small_gicp::ParallelReductionOMP>>
+    deep_register_;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr deep_accumulated_cloud_;
+  int deep_accumulated_count_{0};
+  std::mutex deep_cloud_mutex_;
+  std::atomic<bool> deep_running_{false};
 
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;

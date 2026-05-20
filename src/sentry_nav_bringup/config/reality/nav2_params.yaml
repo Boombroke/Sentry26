@@ -197,6 +197,18 @@ small_gicp_relocalization:
     emergency_consecutive_failures: 2                   # 3 → 2，触发延迟 15s → 4s
     emergency_min_score_threshold: 150000.0             # 200000 → 150000，配合放大半径放宽误匹配下限
     terrain_clearing_threshold: 0.1
+    # 第三层：低频高质量 deep verification（异步线程跑，约 200-500ms/次，不阻塞 publishTransform）
+    enable_deep_verification: true
+    deep_verification_interval: 30.0                    # 30s 一次，长期 drift / 误匹配兜底
+    deep_accumulated_count_threshold: 100               # 100 帧累积，比 periodic 稠密 5x
+    deep_max_dist_sq: 225.0                             # 15m 关联半径，远大于 emergency 8m
+    deep_max_iterations: 300                            # 优化迭代上限
+    deep_global_leaf_size: 0.05                         # target 副本精细到 5cm
+    deep_registered_leaf_size: 0.05                     # source 同样 5cm
+    deep_min_inlier_ratio: 0.3
+    deep_max_fitness_error: 0.5                         # 比 periodic 严格（更稠密 source 的合理预期）
+    deep_max_correction_distance: 15.0                  # 与 deep_max_dist_sq 半径配套
+    deep_min_score_threshold: 500000.0                  # 比 emergency 高 3.3x，避免误覆盖正确 result_t_
     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
     # prior_pcd_file: ""
 
