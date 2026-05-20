@@ -35,6 +35,8 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     use_foxglove = LaunchConfiguration("use_foxglove")
     enable_recorder = LaunchConfiguration("enable_recorder")
+    enable_behavior = LaunchConfiguration("enable_behavior")
+    target_tree = LaunchConfiguration("target_tree")
 
     declare_namespace_cmd = DeclareLaunchArgument(
         "namespace",
@@ -70,6 +72,18 @@ def generate_launch_description():
         "enable_recorder",
         default_value="True",
         description="Whether to start sentry_match_recorder (auto rosbag on game_progress=4)",
+    )
+
+    declare_enable_behavior_cmd = DeclareLaunchArgument(
+        "enable_behavior",
+        default_value="False",
+        description="Whether to start sentry_behavior (tactical BT server + client)",
+    )
+
+    declare_target_tree_cmd = DeclareLaunchArgument(
+        "target_tree",
+        default_value="rmuc_2026_sentry",
+        description="Tactical behavior tree ID for sentry_behavior_client to execute",
     )
 
     navigation_cmd = IncludeLaunchDescription(
@@ -111,6 +125,24 @@ def generate_launch_description():
         condition=IfCondition(enable_recorder),
     )
 
+    behavior_dir = get_package_share_directory("sentry_behavior")
+    behavior_launch_cmd = TimerAction(
+        period=8.0,
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(behavior_dir, "launch", "sentry_behavior_launch.py")
+                ),
+                launch_arguments={
+                    "namespace": namespace,
+                    "use_sim_time": "False",
+                    "target_tree": target_tree,
+                }.items(),
+            )
+        ],
+        condition=IfCondition(enable_behavior),
+    )
+
     ld = LaunchDescription()
 
     ld.add_action(declare_namespace_cmd)
@@ -119,9 +151,12 @@ def generate_launch_description():
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_foxglove_cmd)
     ld.add_action(declare_enable_recorder_cmd)
+    ld.add_action(declare_enable_behavior_cmd)
+    ld.add_action(declare_target_tree_cmd)
 
     ld.add_action(navigation_cmd)
     ld.add_action(serial_driver_node)
     ld.add_action(recorder_launch_cmd)
+    ld.add_action(behavior_launch_cmd)
 
     return ld
