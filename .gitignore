@@ -1,9 +1,11 @@
 build/
 install/
 log/
+logs/
 AGENTS.md
 MEMORY.md
 .cache/
+.claude/
 __pycache__/
 *.pyc
 
