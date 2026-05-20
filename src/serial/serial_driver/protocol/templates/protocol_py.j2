@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-# Auto-generated from protocol.yaml — DO NOT EDIT
+# AUTO-GENERATED from protocol.yaml — DO NOT EDIT
+# Run `python3 generate.py` after modifying protocol.yaml.
+#
+# Frame format (v3.0):
+#   [HEADER 1B] [LEN 1B] [PAYLOAD N B] [CRC16 2B]
 
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Optional, Tuple
 
 CRC16_INIT = 0xFFFF
 W_CRC_TABLE = [
@@ -38,23 +43,41 @@ def crc16(data: bytes) -> int:
     return crc & 0xFFFF
 
 
-{% for p in packets %}HEADER_{{ p.name_upper }} = {{ p.header_hex }}
-{% endfor %}
-{% for p in packets %}@dataclass
-class {{ p.py_class_name }}:
-{% for f in p.fields %}    {{ f.name }}: {{ 'float' if f.type == 'float' else 'int' }} = {{ '0.0' if f.type == 'float' else '0' }}
+# ----------------------------------------------------------------------------
+# Header constants
+# ----------------------------------------------------------------------------
+{% for p in packets -%}
+HEADER_{{ p.name_upper }} = {{ p.header_hex }}  # {{ p.direction }}, {{ p.frequency_hz }}Hz
 {% endfor %}
 
-{{ p.py_class_name }}.HEADER = {{ p.header_hex }}
-{{ p.py_class_name }}.STRUCT_FORMAT = '{{ p.payload_format }}'
-{{ p.py_class_name }}.TOTAL_SIZE = {{ p.total_size }}
-{{ p.py_class_name }}.FREQUENCY_HZ = {{ p.frequency_hz }}
-{{ p.py_class_name }}.DIRECTION = '{{ p.direction }}'
-{{ p.py_class_name }}.FIELDS_META = [
+# ----------------------------------------------------------------------------
+# Per-packet dataclasses
+# ----------------------------------------------------------------------------
+{% for p in packets %}
+@dataclass
+class {{ p.py_class_name }}:
+    """{{ p.direction }}, {{ p.frequency_hz }}Hz, frame={{ p.frame_size }}B"""
+{% for f in p.fields %}    {{ f.name }}: {{ 'float' if f.type == 'float' else 'int' }} = {{ '0.0' if f.type == 'float' else '0' }}  # {{ f.desc }}{% if f.unit %} [{{ f.unit }}]{% endif %}
+
+{% endfor %}
+
+{{ p.py_class_name }}.HEADER          = {{ p.header_hex }}
+{{ p.py_class_name }}.PAYLOAD_SIZE    = {{ p.payload_size }}
+{{ p.py_class_name }}.FRAME_SIZE      = {{ p.frame_size }}
+{{ p.py_class_name }}.STRUCT_NO_CRC   = '{{ p.frame_no_crc_format }}'  # header + len + payload
+{{ p.py_class_name }}.STRUCT_FULL     = '{{ p.frame_full_format }}'    # full frame incl CRC
+{{ p.py_class_name }}.FREQUENCY_HZ    = {{ p.frequency_hz }}
+{{ p.py_class_name }}.DIRECTION       = '{{ p.direction }}'
+{{ p.py_class_name }}.FIELDS_META     = [
 {% for f in p.fields %}    {'name': '{{ f.name }}', 'type': '{{ f.type }}'{% if f.unit %}, 'unit': '{{ f.unit }}'{% endif %}{% if f.desc %}, 'desc': '{{ f.desc|replace("'", "\\'") }}'{% endif %}},
 {% endfor %}]
 
-{% endfor %}PACKETS = {
+{% endfor %}
+
+# ----------------------------------------------------------------------------
+# Header → class lookup
+# ----------------------------------------------------------------------------
+PACKETS = {
 {% for p in packets %}    {{ p.header_hex }}: {{ p.py_class_name }},
 {% endfor %}}
 
@@ -68,34 +91,40 @@ ROS_TO_STM32_PACKETS = [
 
 
 def pack_with_crc(packet) -> bytes:
-    values = [packet.HEADER]
+    """Build a complete frame: [HEADER][LEN][PAYLOAD][CRC16]."""
+    values = [packet.HEADER, packet.PAYLOAD_SIZE]
     for meta in packet.FIELDS_META:
         values.append(getattr(packet, meta['name']))
-    body = struct.pack(packet.STRUCT_FORMAT, *values)
+    body = struct.pack(packet.STRUCT_NO_CRC, *values)
     return body + struct.pack('<H', crc16(body))
 
 
-def unpack_packet(data: bytes):
-    if len(data) < 3:
+def unpack_packet(data: bytes) -> Optional[Tuple[object, bool]]:
+    """Decode a frame; returns (packet_instance, crc_ok) or None on bad/incomplete input."""
+    if len(data) < 4:
         return None
     header = data[0]
+    plen = data[1]
     pkt_class = PACKETS.get(header)
     if pkt_class is None:
         return None
-    if len(data) < pkt_class.TOTAL_SIZE:
+    if plen != pkt_class.PAYLOAD_SIZE:
+        return None
+    if len(data) < pkt_class.FRAME_SIZE:
         return None
 
-    body = data[:pkt_class.TOTAL_SIZE - 2]
-    recv_crc = struct.unpack('<H', data[pkt_class.TOTAL_SIZE - 2:pkt_class.TOTAL_SIZE])[0]
+    body = data[:pkt_class.FRAME_SIZE - 2]
+    recv_crc = struct.unpack('<H', data[pkt_class.FRAME_SIZE - 2:pkt_class.FRAME_SIZE])[0]
     crc_ok = crc16(body) == recv_crc
 
-    unpacked = struct.unpack(pkt_class.STRUCT_FORMAT, body)
+    unpacked = struct.unpack(pkt_class.STRUCT_NO_CRC, body)
     pkt = pkt_class()
+    # unpacked = (header, len, *fields)
     for i, meta in enumerate(pkt_class.FIELDS_META):
-        setattr(pkt, meta['name'], unpacked[i + 1])
+        setattr(pkt, meta['name'], unpacked[i + 2])
     return pkt, crc_ok
 
 
 def packet_size_for_header(header: int) -> int:
     pkt_class = PACKETS.get(header)
-    return pkt_class.TOTAL_SIZE if pkt_class else 0
+    return pkt_class.FRAME_SIZE if pkt_class else 0

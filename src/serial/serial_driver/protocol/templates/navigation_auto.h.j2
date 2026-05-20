@@ -1,65 +1,153 @@
-#ifndef __NAVIGATION_AUTO_H
-#define __NAVIGATION_AUTO_H
+/* AUTO-GENERATED from protocol.yaml — DO NOT EDIT
+ * Run `python3 generate.py` after modifying protocol.yaml.
+ *
+ * Frame format (v3.0):
+ *   [HEADER 1B] [LEN 1B] [PAYLOAD N B] [CRC16 2B]
+ *   - LEN     = N (payload bytes only)
+ *   - CRC16   = covers [HEADER..PAYLOAD] (N+2 bytes), little-endian appended
+ *   - total   = N + 4
+ *
+ * Direction (from MCU perspective):
+ *   FH_TX_xxx : MCU sends to ROS
+ *   FH_RX_xxx : MCU receives from ROS
+ *
+ * STM32 integration:
+ *   1) Call Navigation_Init() once.
+ *   2) Inside a 1kHz FreeRTOS task call Navigation_Task() each tick.
+ *      Send timing is dispatched internally.
+ *   3) Implement the data-fetch hooks in navigation_auto.c marked with
+ *      "TODO: connect to ...".
+ *   4) The receive-side watchdog will force estop if no Heartbeat
+ *      arrives within HEARTBEAT_TIMEOUT_MS.
+ */
 
-#include "cmsis_os.h"
+#ifndef NAVIGATION_AUTO_H
+#define NAVIGATION_AUTO_H
+
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 
-#define APP_RX_DATA_SIZE  2048
-#define APP_TX_DATA_SIZE  2048
+#define APP_RX_DATA_SIZE   2048
+#define APP_TX_DATA_SIZE   2048
 
+/* Watchdog: if no Heartbeat for this long, MCU forces estop. */
+#define HEARTBEAT_TIMEOUT_MS 1500
+
+/* ----------------------------------------------------------------------------
+ * Header constants  (MCU view: TX = MCU→ROS, RX = ROS→MCU)
+ * ------------------------------------------------------------------------- */
 {% for p in stm32_to_ros -%}
-#define {{ "%-14s"|format(p.c_header_const) }} {{ p.header_hex }}
+#define {{ "%-22s"|format(p.c_header_const) }} {{ p.header_hex }}  /* MCU→ROS, {{ p.frequency_hz }}Hz, frame={{ p.frame_size }}B */
 {% endfor %}
-#define FH_RX          {{ nav_packet.header_hex }}
-
-// FreeRTOS task ~1000Hz (osDelay(1)). Interval in ticks.
-{% for p in stm32_to_ros -%}
-#define {{ "%-22s"|format('SEND_' + p.name_upper + '_INTERVAL') }} {{ p.send_interval }}
+{% for p in ros_to_stm32 -%}
+#define {{ "%-22s"|format(p.c_header_const) }} {{ p.header_hex }}  /* ROS→MCU, {{ p.frequency_hz }}Hz, frame={{ p.frame_size }}B */
 {% endfor %}
 
+/* ----------------------------------------------------------------------------
+ * Send intervals (in 1kHz task ticks)
+ * ------------------------------------------------------------------------- */
 {% for p in stm32_to_ros -%}
-// {{ p.header_hex }} — {{ p.total_size }} bytes, ~{{ p.frequency_hz }}Hz
+#define {{ "%-30s"|format('SEND_' + p.name_upper + '_INTERVAL_MS') }} {{ p.send_interval }}  /* {{ p.frequency_hz }}Hz */
+{% endfor %}
+
+/* ----------------------------------------------------------------------------
+ * Mode enums (kept consistent with protocol.yaml comments)
+ * ------------------------------------------------------------------------- */
+typedef enum {
+  CHASSIS_MODE_NORMAL    = 0,
+  CHASSIS_MODE_SPIN_LOW  = 1,
+  CHASSIS_MODE_SPIN_HIGH = 2,
+  CHASSIS_MODE_ESTOP     = 3,
+} ChassisMode_e;
+
+typedef enum {
+  ROS_STATE_INIT    = 0,
+  ROS_STATE_READY   = 1,
+  ROS_STATE_RUNNING = 2,
+  ROS_STATE_FAULT   = 3,
+} RosState_e;
+
+/* ----------------------------------------------------------------------------
+ * TX packet structs (MCU → ROS)
+ * ------------------------------------------------------------------------- */
+{% for p in stm32_to_ros %}
+/* {{ p.header_hex }} {{ p.c_struct_name }} — {{ p.frame_size }}B total ({{ p.payload_size }}B payload), {{ p.frequency_hz }}Hz */
 typedef struct
 {
   uint8_t  header;
-{% for f in p.fields -%}
-  {{ "%-8s"|format(f.c_type) }} {{ f.name }};{% if f.desc %}{% if f.name == 'team_colour' %}  // {{ f.desc }}{% endif %}{% endif %}
-{% endfor -%}
+  uint8_t  len;
+{% for f in p.fields %}
+  {{ "%-8s"|format(f.c_type) }} {{ f.name }};  /* {{ f.desc }}{% if f.unit %} [{{ f.unit }}]{% endif %} */
+{%- endfor %}
   uint16_t checksum;
 } __attribute__((packed)) {{ p.c_struct_name }};
 
 {% endfor %}
+/* ----------------------------------------------------------------------------
+ * RX packet structs (ROS → MCU)
+ * ------------------------------------------------------------------------- */
+{% for p in ros_to_stm32 %}
+/* {{ p.header_hex }} {{ p.c_struct_name }} — {{ p.frame_size }}B total ({{ p.payload_size }}B payload), {{ p.frequency_hz }}Hz */
 typedef struct
 {
   uint8_t  header;
-{% for f in nav_packet.fields -%}
-  {{ "%-8s"|format(f.c_type) }} {{ f.name }};
-{% endfor -%}
+  uint8_t  len;
+{% for f in p.fields %}
+  {{ "%-8s"|format(f.c_type) }} {{ f.name }};  /* {{ f.desc }}{% if f.unit %} [{{ f.unit }}]{% endif %} */
+{%- endfor %}
   uint16_t checksum;
-} __attribute__((packed)) {{ nav_packet.c_struct_name }};
+} __attribute__((packed)) {{ p.c_struct_name }};
+
+{% endfor %}
+/* ----------------------------------------------------------------------------
+ * Cached high-level state available to user code (after parsing RX frames).
+ * ------------------------------------------------------------------------- */
+typedef struct
+{
+{%- for f in ros_to_stm32[0].fields %}
+  {{ "%-8s"|format(f.c_type) }} {{ f.name }};  /* {{ f.desc }}{% if f.unit %} [{{ f.unit }}]{% endif %} */
+{%- endfor %}
+  bool     valid;         /* true once a NavCmd was received and CRC ok */
+  uint32_t last_recv_ms;  /* MCU tick of last successful NavCmd */
+} Navigation;
 
 typedef struct
 {
-{% for f in nav_packet.fields -%}
-  {{ "%-8s"|format(f.c_type) }} {{ f.name }};
-{% endfor -%}
-} Navigation;
+{%- for f in ros_to_stm32[1].fields %}
+  {{ "%-8s"|format(f.c_type) }} {{ f.name }};  /* {{ f.desc }}{% if f.unit %} [{{ f.unit }}]{% endif %} */
+{%- endfor %}
+  bool     valid;
+  uint32_t last_recv_ms;
+} HeartbeatState;
 
+/* ----------------------------------------------------------------------------
+ * Public API — call from FreeRTOS task or main loop
+ * ------------------------------------------------------------------------- */
 void Navigation_Init(void);
-void Navigation_Task(void);
+void Navigation_Task(void);                 /* call at 1kHz */
+void Navigation_OnUsbReceive(const uint8_t *data, uint32_t len);  /* call from USB CDC RX ISR/callback */
+bool Navigation_IsLinkAlive(void);          /* true if last Heartbeat within HEARTBEAT_TIMEOUT_MS */
 
+/* Send hooks — MCU emits these. User code can also call manually. */
 {% for p in stm32_to_ros -%}
 void send_{{ p.name_camel }}Packet(void);
 {% endfor %}
-void receive_Navigation(void);
-void Navigation_Parm(Navigation *navigation);
+
+/* CRC helper — MCU project should provide CRC16 (polynomial 0x1189 / table-based). */
 void Append_CRC16_Check_Sum_Buf(uint8_t *buf, uint32_t len);
+bool Verify_CRC16_Check_Sum_Buf(const uint8_t *buf, uint32_t len);
 
+/* ----------------------------------------------------------------------------
+ * Globals — exposed for legacy access patterns
+ * ------------------------------------------------------------------------- */
 {% for p in stm32_to_ros -%}
-extern {{ "%-16s"|format(p.c_struct_name) }} {{ "%-10s"|format('Smsg_' + p.key) }};
+extern {{ "%-22s"|format(p.c_struct_name) }} Smsg_{{ p.key }};
 {% endfor %}
-extern ReceivePacket    Rmsg;
-extern Navigation       navigation;
+{% for p in ros_to_stm32 -%}
+extern {{ "%-22s"|format(p.c_struct_name) }} Rmsg_{{ p.key }};
+{% endfor %}
+extern Navigation       g_navigation;
+extern HeartbeatState   g_heartbeat;
 
-#endif
+#endif  /* NAVIGATION_AUTO_H */

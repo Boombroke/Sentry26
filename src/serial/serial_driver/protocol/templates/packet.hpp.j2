@@ -1,3 +1,16 @@
+// AUTO-GENERATED from protocol.yaml — DO NOT EDIT
+// Run `python3 generate.py` after modifying protocol.yaml.
+//
+// Frame format (v3.0):
+//   [HEADER 1B] [LEN 1B] [PAYLOAD N B] [CRC16 2B]
+//   - LEN     = N (payload bytes only, NOT including header/len/crc)
+//   - CRC16   = covers [HEADER..PAYLOAD] (N+2 bytes), little-endian appended
+//   - total   = N + 4
+//
+// Header range:
+//   0x50-0x5F : MCU → ROS  (RX from ROS perspective)
+//   0xA0-0xAF : ROS → MCU  (TX from ROS perspective)
+
 #ifndef RM_SERIAL_DRIVER__PACKET_HPP_
 #define RM_SERIAL_DRIVER__PACKET_HPP_
 
@@ -9,42 +22,93 @@
 namespace rm_serial_driver
 {
 
+// ---------------------------------------------------------------------------
+// Header constants
+// ---------------------------------------------------------------------------
 {% for p in packets -%}
-constexpr uint8_t {{ "%-16s"|format(p.cpp_header_const) }} = {{ p.header_hex }};
+constexpr uint8_t {{ "%-22s"|format(p.cpp_header_const) }} = {{ p.header_hex }};  // {{ p.direction }}, {{ p.frequency_hz }}Hz, frame={{ p.frame_size }}B
 {% endfor %}
 
+// Convenience: set of all RX (MCU→ROS) headers
+constexpr bool isRxHeader(uint8_t h)
+{
+  return
 {% for p in stm32_to_ros -%}
-// {{ p.header_hex }} — {{ p.total_size }} bytes, ~{{ p.frequency_hz }}Hz
+    h == {{ p.cpp_header_const }}{% if not loop.last %} ||{% else %};{% endif %}
+
+{% endfor %}
+}
+
+constexpr bool isTxHeader(uint8_t h)
+{
+  return
+{% for p in ros_to_stm32 -%}
+    h == {{ p.cpp_header_const }}{% if not loop.last %} ||{% else %};{% endif %}
+
+{% endfor %}
+}
+
+// ---------------------------------------------------------------------------
+// RX packets (MCU → ROS)
+// ---------------------------------------------------------------------------
+{% for p in stm32_to_ros %}
+// {{ p.header_hex }} {{ p.cpp_struct_name }} — {{ p.frame_size }} bytes total ({{ p.payload_size }}B payload), {{ p.frequency_hz }}Hz
 struct {{ p.cpp_struct_name }}
 {
   uint8_t  header = {{ p.cpp_header_const }};
-{% for f in p.fields -%}
-  {{ "%-8s"|format(f.cpp_type) }} {{ "%-27s"|format(f.name + ';') }}{% if f.desc %}//{{ f.desc }}{% endif %}
-{% endfor -%}
-  uint16_t checksum = 0;
+  uint8_t  len    = {{ p.payload_size }};  // payload bytes
+{% for f in p.fields %}
+  {{ "%-8s"|format(f.cpp_type) }} {{ "%-30s"|format(f.name + ';') }}// {{ f.desc }}{% if f.unit %} [{{ f.unit }}]{% endif %}
+{%- endfor %}
+  uint16_t checksum = 0;  // CRC16 over [header..payload]
 } __attribute__((packed));
+static_assert(sizeof({{ p.cpp_struct_name }}) == {{ p.frame_size }}, "{{ p.cpp_struct_name }} wire size mismatch");
 
 {% endfor %}
-// {{ nav_packet.header_hex }} — {{ nav_packet.total_size }} bytes, ROS→电控导航速度指令
-struct {{ nav_packet.cpp_struct_name }}
+// ---------------------------------------------------------------------------
+// TX packets (ROS → MCU)
+// ---------------------------------------------------------------------------
+{% for p in ros_to_stm32 %}
+// {{ p.header_hex }} {{ p.cpp_struct_name }} — {{ p.frame_size }} bytes total ({{ p.payload_size }}B payload), {{ p.frequency_hz }}Hz
+struct {{ p.cpp_struct_name }}
 {
-  uint8_t  header = {{ nav_packet.cpp_header_const }};
-{% for f in nav_packet.fields -%}
-  {{ "%-8s"|format(f.cpp_type) }} {{ "%-27s"|format(f.name + ';') }}{% if f.desc %}//{{ f.desc }}{% endif %}
-{% endfor -%}
+  uint8_t  header = {{ p.cpp_header_const }};
+  uint8_t  len    = {{ p.payload_size }};
+{% for f in p.fields %}
+  {{ "%-8s"|format(f.cpp_type) }} {{ "%-30s"|format(f.name + ';') }}// {{ f.desc }}{% if f.unit %} [{{ f.unit }}]{% endif %}
+{%- endfor %}
   uint16_t checksum = 0;
 } __attribute__((packed));
+static_assert(sizeof({{ p.cpp_struct_name }}) == {{ p.frame_size }}, "{{ p.cpp_struct_name }} wire size mismatch");
 
-inline size_t packetSizeForHeader(uint8_t header)
+{% endfor %}
+// ---------------------------------------------------------------------------
+// Header → frame size lookup. Returns 0 for unknown headers (caller should drop).
+// Useful for building a generic dispatcher over [HEADER][LEN][PAYLOAD][CRC].
+// ---------------------------------------------------------------------------
+inline size_t frameSizeForHeader(uint8_t header)
 {
   switch (header) {
-{% for p in stm32_to_ros -%}
-    case {{ p.cpp_header_const }}:    return sizeof({{ p.cpp_struct_name }});
+{% for p in packets -%}
+    case {{ p.cpp_header_const }}: return {{ p.frame_size }};
 {% endfor %}
-    default:                 return 0;
+    default: return 0;
   }
 }
 
+inline size_t payloadSizeForHeader(uint8_t header)
+{
+  switch (header) {
+{% for p in packets -%}
+    case {{ p.cpp_header_const }}: return {{ p.payload_size }};
+{% endfor %}
+    default: return 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 template <typename T>
 inline T fromVector(const std::vector<uint8_t> & data)
 {
@@ -54,10 +118,11 @@ inline T fromVector(const std::vector<uint8_t> & data)
   return packet;
 }
 
-inline std::vector<uint8_t> toVector(const {{ nav_packet.cpp_struct_name }} & data)
+template <typename T>
+inline std::vector<uint8_t> toVector(const T & data)
 {
-  std::vector<uint8_t> packet(sizeof({{ nav_packet.cpp_struct_name }}));
-  std::memcpy(packet.data(), reinterpret_cast<const uint8_t *>(&data), sizeof({{ nav_packet.cpp_struct_name }}));
+  std::vector<uint8_t> packet(sizeof(T));
+  std::memcpy(packet.data(), reinterpret_cast<const uint8_t *>(&data), sizeof(T));
   return packet;
 }
 

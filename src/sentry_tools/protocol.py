@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-# Auto-generated from protocol.yaml — DO NOT EDIT
+# AUTO-GENERATED from protocol.yaml — DO NOT EDIT
+# Run `python3 generate.py` after modifying protocol.yaml.
+#
+# Frame format (v3.0):
+#   [HEADER 1B] [LEN 1B] [PAYLOAD N B] [CRC16 2B]
 
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Optional, Tuple
 
 CRC16_INIT = 0xFFFF
 W_CRC_TABLE = [
@@ -38,142 +43,246 @@ def crc16(data: bytes) -> int:
     return crc & 0xFFFF
 
 
-HEADER_IMU = 0xA1
-HEADER_STATUS = 0xA2
-HEADER_HP = 0xA3
-HEADER_NAV = 0xB5
+# ----------------------------------------------------------------------------
+# Header constants
+# ----------------------------------------------------------------------------
+HEADER_IMU = 0x51  # stm32_to_ros, 200Hz
+HEADER_CHASSIS_FEEDBACK = 0x52  # stm32_to_ros, 20Hz
+HEADER_REFEREE = 0x53  # stm32_to_ros, 1Hz
+HEADER_NAV_CMD = 0xA2  # ros_to_stm32, 20Hz
+HEADER_HEARTBEAT = 0xA3  # ros_to_stm32, 1Hz
+
+
+# ----------------------------------------------------------------------------
+# Per-packet dataclasses
+# ----------------------------------------------------------------------------
 
 @dataclass
 class ImuPacket:
-    pitch: float = 0.0
-    yaw: float = 0.0
+    """stm32_to_ros, 200Hz, frame=22B"""
+    gimbal_pitch: float = 0.0  # 云台 pitch（绕 y） [rad]
+
+    gimbal_yaw: float = 0.0  # 云台 yaw（绕 z） [rad]
+
+    chassis_pitch: float = 0.0  # 车体 pitch（绕 y），轮足姿态 [rad]
+
+    chassis_yaw: float = 0.0  # 车体 yaw（绕 z） [rad]
+
+    mcu_timestamp_ms: int = 0  # MCU 时间戳低 16 位，便于估算时延 [ms]
 
 
-ImuPacket.HEADER = 0xA1
-ImuPacket.STRUCT_FORMAT = '<Bff'
-ImuPacket.TOTAL_SIZE = 11
-ImuPacket.FREQUENCY_HZ = 1000
-ImuPacket.DIRECTION = 'stm32_to_ros'
-ImuPacket.FIELDS_META = [
-    {'name': 'pitch', 'type': 'float', 'unit': 'rad', 'desc': '云台 pitch'},
-    {'name': 'yaw', 'type': 'float', 'unit': 'rad', 'desc': '云台 yaw'},
+
+ImuPacket.HEADER          = 0x51
+ImuPacket.PAYLOAD_SIZE    = 18
+ImuPacket.FRAME_SIZE      = 22
+ImuPacket.STRUCT_NO_CRC   = '<BBffffH'  # header + len + payload
+ImuPacket.STRUCT_FULL     = '<BBffffHH'    # full frame incl CRC
+ImuPacket.FREQUENCY_HZ    = 200
+ImuPacket.DIRECTION       = 'stm32_to_ros'
+ImuPacket.FIELDS_META     = [
+    {'name': 'gimbal_pitch', 'type': 'float', 'unit': 'rad', 'desc': '云台 pitch（绕 y）'},
+    {'name': 'gimbal_yaw', 'type': 'float', 'unit': 'rad', 'desc': '云台 yaw（绕 z）'},
+    {'name': 'chassis_pitch', 'type': 'float', 'unit': 'rad', 'desc': '车体 pitch（绕 y），轮足姿态'},
+    {'name': 'chassis_yaw', 'type': 'float', 'unit': 'rad', 'desc': '车体 yaw（绕 z）'},
+    {'name': 'mcu_timestamp_ms', 'type': 'uint16', 'unit': 'ms', 'desc': 'MCU 时间戳低 16 位，便于估算时延'},
 ]
 
+
 @dataclass
-class StatusPacket:
-    game_progress: int = 0
-    stage_remain_time: int = 0
-    current_hp: int = 0
-    projectile_allowance_17mm: int = 0
-    team_colour: int = 0
-    rfid_base: int = 0
+class ChassisFeedbackPacket:
+    """stm32_to_ros, 20Hz, frame=14B"""
+    current_hp: int = 0  # 本机当前血量 [hp]
+
+    projectile_allowance_17mm: int = 0  # 17mm 弹丸剩余发射次数 [count]
+
+    chassis_power: float = 0.0  # 底盘实时功率 [W]
+
+    chassis_mode: int = 0  # 电控实际模式 0=normal 1=spin_low 2=spin_high 3=estop
+
+    reserved: int = 0  # 字节对齐占位，保留
 
 
-StatusPacket.HEADER = 0xA2
-StatusPacket.STRUCT_FORMAT = '<BBHHHBB'
-StatusPacket.TOTAL_SIZE = 12
-StatusPacket.FREQUENCY_HZ = 10
-StatusPacket.DIRECTION = 'stm32_to_ros'
-StatusPacket.FIELDS_META = [
-    {'name': 'game_progress', 'type': 'uint8', 'desc': '游戏阶段 0-未开始 1-准备 2-自检 3-倒计时 4-比赛中 5-结算'},
+
+ChassisFeedbackPacket.HEADER          = 0x52
+ChassisFeedbackPacket.PAYLOAD_SIZE    = 10
+ChassisFeedbackPacket.FRAME_SIZE      = 14
+ChassisFeedbackPacket.STRUCT_NO_CRC   = '<BBHHfBB'  # header + len + payload
+ChassisFeedbackPacket.STRUCT_FULL     = '<BBHHfBBH'    # full frame incl CRC
+ChassisFeedbackPacket.FREQUENCY_HZ    = 20
+ChassisFeedbackPacket.DIRECTION       = 'stm32_to_ros'
+ChassisFeedbackPacket.FIELDS_META     = [
+    {'name': 'current_hp', 'type': 'uint16', 'unit': 'hp', 'desc': '本机当前血量'},
+    {'name': 'projectile_allowance_17mm', 'type': 'uint16', 'unit': 'count', 'desc': '17mm 弹丸剩余发射次数'},
+    {'name': 'chassis_power', 'type': 'float', 'unit': 'W', 'desc': '底盘实时功率'},
+    {'name': 'chassis_mode', 'type': 'uint8', 'desc': '电控实际模式 0=normal 1=spin_low 2=spin_high 3=estop'},
+    {'name': 'reserved', 'type': 'uint8', 'desc': '字节对齐占位，保留'},
+]
+
+
+@dataclass
+class RefereePacket:
+    """stm32_to_ros, 1Hz, frame=27B"""
+    game_progress: int = 0  # 0=未开始 1=准备 2=自检 3=5s倒计时 4=比赛中 5=结算
+
+    stage_remain_time: int = 0  # 当前阶段剩余时间 [s]
+
+    team_colour: int = 0  # 1=红方 0=蓝方
+
+    rfid_base: int = 0  # 己方基地增益点 RFID（1=触发）
+
+    ally_1_robot_hp: int = 0  # 己方 1 号英雄血量 [hp]
+
+    ally_2_robot_hp: int = 0  # 己方 2 号工程血量 [hp]
+
+    ally_3_robot_hp: int = 0  # 己方 3 号步兵血量 [hp]
+
+    ally_4_robot_hp: int = 0  # 己方 4 号步兵血量 [hp]
+
+    ally_7_robot_hp: int = 0  # 己方 7 号哨兵血量 [hp]
+
+    ally_outpost_hp: int = 0  # 己方前哨站血量 [hp]
+
+    ally_base_hp: int = 0  # 己方基地血量 [hp]
+
+    event_data: int = 0  # 事件数据 bitfield，1=己方增益点 2=己方堡垒被占
+
+
+
+RefereePacket.HEADER          = 0x53
+RefereePacket.PAYLOAD_SIZE    = 23
+RefereePacket.FRAME_SIZE      = 27
+RefereePacket.STRUCT_NO_CRC   = '<BBBHBBHHHHHHHI'  # header + len + payload
+RefereePacket.STRUCT_FULL     = '<BBBHBBHHHHHHHIH'    # full frame incl CRC
+RefereePacket.FREQUENCY_HZ    = 1
+RefereePacket.DIRECTION       = 'stm32_to_ros'
+RefereePacket.FIELDS_META     = [
+    {'name': 'game_progress', 'type': 'uint8', 'desc': '0=未开始 1=准备 2=自检 3=5s倒计时 4=比赛中 5=结算'},
     {'name': 'stage_remain_time', 'type': 'uint16', 'unit': 's', 'desc': '当前阶段剩余时间'},
-    {'name': 'current_hp', 'type': 'uint16', 'desc': '机器人当前血量'},
-    {'name': 'projectile_allowance_17mm', 'type': 'uint16', 'desc': '17mm弹丸剩余发射次数'},
-    {'name': 'team_colour', 'type': 'uint8', 'desc': '1=red 0=blue'},
-    {'name': 'rfid_base', 'type': 'uint8', 'desc': '己方基地增益点'},
+    {'name': 'team_colour', 'type': 'uint8', 'desc': '1=红方 0=蓝方'},
+    {'name': 'rfid_base', 'type': 'uint8', 'desc': '己方基地增益点 RFID（1=触发）'},
+    {'name': 'ally_1_robot_hp', 'type': 'uint16', 'unit': 'hp', 'desc': '己方 1 号英雄血量'},
+    {'name': 'ally_2_robot_hp', 'type': 'uint16', 'unit': 'hp', 'desc': '己方 2 号工程血量'},
+    {'name': 'ally_3_robot_hp', 'type': 'uint16', 'unit': 'hp', 'desc': '己方 3 号步兵血量'},
+    {'name': 'ally_4_robot_hp', 'type': 'uint16', 'unit': 'hp', 'desc': '己方 4 号步兵血量'},
+    {'name': 'ally_7_robot_hp', 'type': 'uint16', 'unit': 'hp', 'desc': '己方 7 号哨兵血量'},
+    {'name': 'ally_outpost_hp', 'type': 'uint16', 'unit': 'hp', 'desc': '己方前哨站血量'},
+    {'name': 'ally_base_hp', 'type': 'uint16', 'unit': 'hp', 'desc': '己方基地血量'},
+    {'name': 'event_data', 'type': 'uint32', 'desc': '事件数据 bitfield，1=己方增益点 2=己方堡垒被占'},
 ]
+
 
 @dataclass
-class HpPacket:
-    ally_1_robot_hp: int = 0
-    ally_2_robot_hp: int = 0
-    ally_3_robot_hp: int = 0
-    ally_4_robot_hp: int = 0
-    ally_7_robot_hp: int = 0
-    ally_outpost_hp: int = 0
-    ally_base_hp: int = 0
+class NavCmdPacket:
+    """ros_to_stm32, 20Hz, frame=18B"""
+    lx: float = 0.0  # 底盘 body 系前向线速度 [m/s]
+
+    ly: float = 0.0  # 底盘 body 系侧向线速度（差速底盘锁 0） [m/s]
+
+    az: float = 0.0  # 底盘角速度 / 自旋速度 [rad/s]
+
+    mode: int = 0  # 0=normal 1=spin_low 2=spin_high 3=estop
+
+    reserved: int = 0  # 字节对齐占位，保留
 
 
-HpPacket.HEADER = 0xA3
-HpPacket.STRUCT_FORMAT = '<BHHHHHHH'
-HpPacket.TOTAL_SIZE = 17
-HpPacket.FREQUENCY_HZ = 2
-HpPacket.DIRECTION = 'stm32_to_ros'
-HpPacket.FIELDS_META = [
-    {'name': 'ally_1_robot_hp', 'type': 'uint16', 'desc': '己方1号英雄血量'},
-    {'name': 'ally_2_robot_hp', 'type': 'uint16', 'desc': '己方2号工程血量'},
-    {'name': 'ally_3_robot_hp', 'type': 'uint16', 'desc': '己方3号步兵血量'},
-    {'name': 'ally_4_robot_hp', 'type': 'uint16', 'desc': '己方4号步兵血量'},
-    {'name': 'ally_7_robot_hp', 'type': 'uint16', 'desc': '己方7号哨兵血量'},
-    {'name': 'ally_outpost_hp', 'type': 'uint16', 'desc': '己方前哨站血量'},
-    {'name': 'ally_base_hp', 'type': 'uint16', 'desc': '己方基地血量'},
+
+NavCmdPacket.HEADER          = 0xA2
+NavCmdPacket.PAYLOAD_SIZE    = 14
+NavCmdPacket.FRAME_SIZE      = 18
+NavCmdPacket.STRUCT_NO_CRC   = '<BBfffBB'  # header + len + payload
+NavCmdPacket.STRUCT_FULL     = '<BBfffBBH'    # full frame incl CRC
+NavCmdPacket.FREQUENCY_HZ    = 20
+NavCmdPacket.DIRECTION       = 'ros_to_stm32'
+NavCmdPacket.FIELDS_META     = [
+    {'name': 'lx', 'type': 'float', 'unit': 'm/s', 'desc': '底盘 body 系前向线速度'},
+    {'name': 'ly', 'type': 'float', 'unit': 'm/s', 'desc': '底盘 body 系侧向线速度（差速底盘锁 0）'},
+    {'name': 'az', 'type': 'float', 'unit': 'rad/s', 'desc': '底盘角速度 / 自旋速度'},
+    {'name': 'mode', 'type': 'uint8', 'desc': '0=normal 1=spin_low 2=spin_high 3=estop'},
+    {'name': 'reserved', 'type': 'uint8', 'desc': '字节对齐占位，保留'},
 ]
+
 
 @dataclass
-class NavPacket:
-    vel_x: float = 0.0
-    vel_y: float = 0.0
-    vel_w: float = 0.0
+class HeartbeatPacket:
+    """ros_to_stm32, 1Hz, frame=6B"""
+    ros_state: int = 0  # 0=init 1=ready 2=running 3=fault
+
+    reserved: int = 0  # 字节对齐占位，保留
 
 
-NavPacket.HEADER = 0xB5
-NavPacket.STRUCT_FORMAT = '<Bfff'
-NavPacket.TOTAL_SIZE = 15
-NavPacket.FREQUENCY_HZ = 20
-NavPacket.DIRECTION = 'ros_to_stm32'
-NavPacket.FIELDS_META = [
-    {'name': 'vel_x', 'type': 'float', 'unit': 'm/s', 'desc': '底盘x方向线速度'},
-    {'name': 'vel_y', 'type': 'float', 'unit': 'm/s', 'desc': '底盘y方向线速度'},
-    {'name': 'vel_w', 'type': 'float', 'unit': 'rad/s', 'desc': '底盘角速度'},
+
+HeartbeatPacket.HEADER          = 0xA3
+HeartbeatPacket.PAYLOAD_SIZE    = 2
+HeartbeatPacket.FRAME_SIZE      = 6
+HeartbeatPacket.STRUCT_NO_CRC   = '<BBBB'  # header + len + payload
+HeartbeatPacket.STRUCT_FULL     = '<BBBBH'    # full frame incl CRC
+HeartbeatPacket.FREQUENCY_HZ    = 1
+HeartbeatPacket.DIRECTION       = 'ros_to_stm32'
+HeartbeatPacket.FIELDS_META     = [
+    {'name': 'ros_state', 'type': 'uint8', 'desc': '0=init 1=ready 2=running 3=fault'},
+    {'name': 'reserved', 'type': 'uint8', 'desc': '字节对齐占位，保留'},
 ]
 
+
+
+# ----------------------------------------------------------------------------
+# Header → class lookup
+# ----------------------------------------------------------------------------
 PACKETS = {
-    0xA1: ImuPacket,
-    0xA2: StatusPacket,
-    0xA3: HpPacket,
-    0xB5: NavPacket,
+    0x51: ImuPacket,
+    0x52: ChassisFeedbackPacket,
+    0x53: RefereePacket,
+    0xA2: NavCmdPacket,
+    0xA3: HeartbeatPacket,
 }
 
 STM32_TO_ROS_PACKETS = [
     ImuPacket,
-    StatusPacket,
-    HpPacket,
+    ChassisFeedbackPacket,
+    RefereePacket,
 ]
 
 ROS_TO_STM32_PACKETS = [
-    NavPacket,
+    NavCmdPacket,
+    HeartbeatPacket,
 ]
 
 
 def pack_with_crc(packet) -> bytes:
-    values = [packet.HEADER]
+    """Build a complete frame: [HEADER][LEN][PAYLOAD][CRC16]."""
+    values = [packet.HEADER, packet.PAYLOAD_SIZE]
     for meta in packet.FIELDS_META:
         values.append(getattr(packet, meta['name']))
-    body = struct.pack(packet.STRUCT_FORMAT, *values)
+    body = struct.pack(packet.STRUCT_NO_CRC, *values)
     return body + struct.pack('<H', crc16(body))
 
 
-def unpack_packet(data: bytes):
-    if len(data) < 3:
+def unpack_packet(data: bytes) -> Optional[Tuple[object, bool]]:
+    """Decode a frame; returns (packet_instance, crc_ok) or None on bad/incomplete input."""
+    if len(data) < 4:
         return None
     header = data[0]
+    plen = data[1]
     pkt_class = PACKETS.get(header)
     if pkt_class is None:
         return None
-    if len(data) < pkt_class.TOTAL_SIZE:
+    if plen != pkt_class.PAYLOAD_SIZE:
+        return None
+    if len(data) < pkt_class.FRAME_SIZE:
         return None
 
-    body = data[:pkt_class.TOTAL_SIZE - 2]
-    recv_crc = struct.unpack('<H', data[pkt_class.TOTAL_SIZE - 2:pkt_class.TOTAL_SIZE])[0]
+    body = data[:pkt_class.FRAME_SIZE - 2]
+    recv_crc = struct.unpack('<H', data[pkt_class.FRAME_SIZE - 2:pkt_class.FRAME_SIZE])[0]
     crc_ok = crc16(body) == recv_crc
 
-    unpacked = struct.unpack(pkt_class.STRUCT_FORMAT, body)
+    unpacked = struct.unpack(pkt_class.STRUCT_NO_CRC, body)
     pkt = pkt_class()
+    # unpacked = (header, len, *fields)
     for i, meta in enumerate(pkt_class.FIELDS_META):
-        setattr(pkt, meta['name'], unpacked[i + 1])
+        setattr(pkt, meta['name'], unpacked[i + 2])
     return pkt, crc_ok
 
 
 def packet_size_for_header(header: int) -> int:
     pkt_class = PACKETS.get(header)
-    return pkt_class.TOTAL_SIZE if pkt_class else 0
+    return pkt_class.FRAME_SIZE if pkt_class else 0

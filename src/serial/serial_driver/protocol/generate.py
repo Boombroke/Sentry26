@@ -2,10 +2,17 @@
 """
 Usage: python3 generate.py [--output-dir DIR]
 
-Reads protocol.yaml and generates:
-  - packet.hpp (C++ ROS driver header)
-  - navigation_auto.h (STM32 C header)
-  - protocol.py (Python module for tools)
+Reads protocol.yaml v3.0 and generates:
+  - packet.hpp          (C++ ROS driver header)
+  - navigation_auto.h   (STM32 C header)
+  - navigation_auto.c   (STM32 C reference implementation)
+  - protocol.py         (Python module for tools)
+
+Frame format (v3.0):
+    [HEADER 1B] [LEN 1B] [PAYLOAD N B] [CRC16 2B]
+    LEN     = N (payload bytes only)
+    CRC16   = covers [HEADER..PAYLOAD] (N+2 bytes), little-endian appended
+    total   = N + 4
 """
 
 from __future__ import annotations
@@ -96,49 +103,65 @@ def normalize_protocol(raw: Any) -> dict[str, Any]:
                 }
             )
 
-        total_size = 1 + payload_size + 2
-        payload_format = "<B" + "".join(struct_chars)
-        struct_format = payload_format + "H"
+        # Frame layout: [HEADER 1B] [LEN 1B] [PAYLOAD] [CRC16 2B]
+        frame_size = 1 + 1 + payload_size + 2
+        # Python struct format for the entire frame (excluding CRC):
+        #   < B (header) B (len) <fields...>
+        # CRC is packed/unpacked separately as < H.
+        payload_struct_chars = "".join(struct_chars)
+        # Format used by Python tools to (de)serialize header+len+payload (no CRC):
+        #   header(B) + len(B) + payload chars
+        frame_no_crc_format = "<BB" + payload_struct_chars
+        # Full frame format including CRC at the end:
+        frame_full_format = frame_no_crc_format + "H"
 
         packet_upper = to_upper(packet_name)
+        camel = to_camel(packet_name)
+
         if direction == "ros_to_stm32":
-            cpp_header_const = f"HEADER_{packet_upper}_TX"
-            c_header_const = "FH_RX"
+            # ROS-side struct names: TX (we send)
+            cpp_struct_name = f"Tx{camel}Packet"
+            c_struct_name = f"Recv{camel}Packet"
+            cpp_header_const = f"HDR_TX_{packet_upper}"
+            c_header_const = f"HDR_RX_{packet_upper}"
         else:
-            cpp_header_const = f"HEADER_{packet_upper}"
-            c_header_const = f"FH_TX_{packet_upper}"
+            # ROS-side struct names: RX (we receive)
+            cpp_struct_name = f"Rx{camel}Packet"
+            c_struct_name = f"Send{camel}Packet"
+            cpp_header_const = f"HDR_RX_{packet_upper}"
+            c_header_const = f"HDR_TX_{packet_upper}"
 
         packets.append(
             {
                 "key": packet_name,
-                "name_camel": to_camel(packet_name),
+                "name_camel": camel,
                 "name_upper": packet_upper,
                 "header": int(header_value),
                 "header_hex": f"0x{int(header_value):02X}",
                 "direction": direction,
                 "frequency_hz": frequency_hz,
-                "send_interval": 1000 // frequency_hz,
+                "send_interval": max(1, 1000 // frequency_hz),
                 "fields": fields,
                 "payload_size": payload_size,
-                "total_size": total_size,
-                "payload_format": payload_format,
-                "struct_format": struct_format,
+                "frame_size": frame_size,
+                "frame_no_crc_format": frame_no_crc_format,
+                "frame_full_format": frame_full_format,
+                "payload_struct_chars": payload_struct_chars,
+                "cpp_struct_name": cpp_struct_name,
+                "c_struct_name": c_struct_name,
                 "cpp_header_const": cpp_header_const,
                 "c_header_const": c_header_const,
-                "cpp_struct_name": (
-                    f"Receive{to_camel(packet_name)}Packet" if direction == "stm32_to_ros" else f"Send{to_camel(packet_name)}Packet"
-                ),
-                "c_struct_name": (
-                    f"Send{to_camel(packet_name)}Packet" if direction == "stm32_to_ros" else "ReceivePacket"
-                ),
-                "py_class_name": f"{to_camel(packet_name)}Packet",
+                "py_class_name": f"{camel}Packet",
             }
         )
 
     stm32_to_ros = [p for p in packets if p["direction"] == "stm32_to_ros"]
     ros_to_stm32 = [p for p in packets if p["direction"] == "ros_to_stm32"]
-    if len(ros_to_stm32) != 1:
-        raise ValueError("当前模板要求恰好一个 ros_to_stm32 包")
+
+    if not stm32_to_ros:
+        raise ValueError("至少需要一个 stm32_to_ros 包")
+    if not ros_to_stm32:
+        raise ValueError("至少需要一个 ros_to_stm32 包")
 
     return {
         "version": raw.get("version", ""),
@@ -146,7 +169,6 @@ def normalize_protocol(raw: Any) -> dict[str, Any]:
         "packets": packets,
         "stm32_to_ros": stm32_to_ros,
         "ros_to_stm32": ros_to_stm32,
-        "nav_packet": ros_to_stm32[0],
     }
 
 
@@ -174,6 +196,7 @@ def main() -> int:
     outputs = [
         ("packet.hpp.j2", "packet.hpp"),
         ("navigation_auto.h.j2", "navigation_auto.h"),
+        ("navigation_auto.c.j2", "navigation_auto.c"),
         ("protocol_py.j2", "protocol.py"),
     ]
 
@@ -182,6 +205,10 @@ def main() -> int:
 
     generated_paths = []
     for template_name, output_name in outputs:
+        template_path = TEMPLATES_DIR / template_name
+        if not template_path.exists():
+            print(f"Skip missing template: {template_name}", file=sys.stderr)
+            continue
         template = env.get_template(template_name)
         rendered = template.render(**context)
         out_path = out_dir / output_name
