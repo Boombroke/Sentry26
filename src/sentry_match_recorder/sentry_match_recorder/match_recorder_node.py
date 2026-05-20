@@ -13,6 +13,7 @@ from pathlib import Path
 import rclpy
 import yaml
 from ament_index_python.packages import get_package_share_directory
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rm_interfaces.msg import GameStatus
@@ -33,8 +34,11 @@ class MatchRecorder(Node):
         self.declare_parameter('max_session_seconds', 480)
         self.declare_parameter('target_progress', 4)
         self.declare_parameter('topics_file', '')
-        self.declare_parameter('extra_topics', [])
-        self.declare_parameter('exclude_topics', [])
+        # Empty default list cannot be auto-typed by rclpy; allow dynamic typing
+        # so the YAML override (string list) is accepted.
+        dyn = ParameterDescriptor(dynamic_typing=True)
+        self.declare_parameter('extra_topics', [], dyn)
+        self.declare_parameter('exclude_topics', [], dyn)
 
         self.record_dir = self.get_parameter('record_dir').value
         self.sortie_prefix = self.get_parameter('sortie_prefix').value
