@@ -1,0 +1,12 @@
+/match_recorder:
+  ros__parameters:
+    record_dir: "logs/match-bags"
+    sortie_prefix: "sortie"
+    slice_seconds: 60
+    storage_id: "mcap"
+    debounce_count: 3
+    max_session_seconds: 480
+    target_progress: 4
+    topics_file: ""
+    extra_topics: []
+    exclude_topics: []

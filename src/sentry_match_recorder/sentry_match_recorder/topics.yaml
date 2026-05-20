@@ -1,0 +1,27 @@
+topics:
+  - /tf
+  - /tf_static
+  - /serial/gimbal_joint_state
+  - /livox/lidar_primary
+  - /livox/lidar_secondary
+  - /livox/imu_primary
+  - /livox/imu_secondary
+  - /odometry
+  - /lidar_odometry
+  - /cloud_registered
+  - /registered_scan
+  - /plan
+  - /local_plan
+  - /received_global_plan
+  - /cmd_vel_nav
+  - /cmd_vel_chassis
+  - /cmd_vel
+  - /global_costmap/costmap
+  - /global_costmap/costmap_updates
+  - /local_costmap/costmap
+  - /local_costmap/costmap_updates
+  - /behavior_tree_log
+  - /referee/game_status
+  - /referee/robot_status
+  - /referee/all_robot_hp
+  - /referee/rfidStatus
