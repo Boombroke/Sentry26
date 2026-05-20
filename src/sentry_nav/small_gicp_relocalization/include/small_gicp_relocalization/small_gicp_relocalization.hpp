@@ -16,6 +16,7 @@
 #define SMALL_GICP_RELOCALIZATION__SMALL_GICP_RELOCALIZATION_HPP_
 
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -25,13 +26,14 @@
 #include "pcl/io/pcd_io.h"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
-#include "std_msgs/msg/float32.hpp"
 #include "small_gicp/ann/kdtree_omp.hpp"
 #include "small_gicp/factors/gicp_factor.hpp"
 #include "small_gicp/pcl/pcl_point.hpp"
 #include "small_gicp/registration/reduction_omp.hpp"
 #include "small_gicp/registration/registration.hpp"
 #include "small_gicp_relocalization/localization_health.hpp"
+#include "small_gicp_relocalization/scan_context.hpp"
+#include "std_msgs/msg/float32.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
@@ -57,8 +59,10 @@ private:
   void notifyTerrainClearing();
   void deepVerificationTimerCallback();
   void runDeepVerification(
-    pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_snapshot,
-    Eigen::Isometry3d initial_guess);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_snapshot, Eigen::Isometry3d initial_guess);
+  void prepareScanContextDB();
+  bool checkAndTriggerGlobalRelocalization();
+  void runGlobalRelocalization(pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_snapshot);
 
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
@@ -157,6 +161,25 @@ private:
   size_t health_window_size_{5};
   double health_unhealthy_score_threshold_{50000.0};
   double health_stale_timeout_sec_{30.0};
+
+  // Global relocalization (Scan Context) layer
+  bool enable_global_relocalization_{false};
+  std::string scan_context_db_file_;
+  ScanContextConfig sc_config_;
+  int global_top_k_{5};
+  double global_relocalization_min_interval_sec_{30.0};
+  double global_max_correction_distance_{30.0};
+  double global_min_score_threshold_{300000.0};
+  int global_accumulated_count_threshold_{50};
+  double global_max_dist_sq_{225.0};
+  int global_max_iterations_{200};
+  float global_registered_leaf_size_{0.05f};
+
+  std::unique_ptr<ScanContextEngine> sc_engine_;
+  std::unique_ptr<ScanContextDB> sc_db_;
+  bool global_relocalization_ready_{false};
+  std::atomic<bool> global_running_{false};
+  std::chrono::steady_clock::time_point last_global_attempt_time_;
 };
 
 }  // namespace small_gicp_relocalization

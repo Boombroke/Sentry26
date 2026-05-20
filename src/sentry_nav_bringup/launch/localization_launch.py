@@ -34,6 +34,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
     prior_pcd_file = LaunchConfiguration("prior_pcd_file")
+    scan_context_db_file = LaunchConfiguration("scan_context_db_file")
     params_file = LaunchConfiguration("params_file")
     use_composition = LaunchConfiguration("use_composition")
     container_name = LaunchConfiguration("container_name")
@@ -80,6 +81,15 @@ def generate_launch_description():
         "prior_pcd_file",
         default_value="",
         description="Full path to prior PCD file to load",
+    )
+
+    declare_scan_context_db_file_cmd = DeclareLaunchArgument(
+        "scan_context_db_file",
+        default_value="",
+        description=(
+            "Full path to Scan Context descriptor database (.scdb). "
+            "Empty disables global relocalization."
+        ),
     )
 
     declare_params_file_cmd = DeclareLaunchArgument(
@@ -150,7 +160,11 @@ def generate_launch_description():
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params, {"prior_pcd_file": prior_pcd_file}],
+                parameters=[
+                    configured_params,
+                    {"prior_pcd_file": prior_pcd_file},
+                    {"scan_context_db_file": scan_context_db_file},
+                ],
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
@@ -182,7 +196,11 @@ def generate_launch_description():
                 package="small_gicp_relocalization",
                 plugin="small_gicp_relocalization::SmallGicpRelocalizationNode",
                 name="small_gicp_relocalization",
-                parameters=[configured_params, {"prior_pcd_file": prior_pcd_file}],
+                parameters=[
+                    configured_params,
+                    {"prior_pcd_file": prior_pcd_file},
+                    {"scan_context_db_file": scan_context_db_file},
+                ],
             ),
             ComposableNode(
                 package="nav2_lifecycle_manager",
@@ -211,6 +229,7 @@ def generate_launch_description():
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
+    ld.add_action(declare_scan_context_db_file_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)

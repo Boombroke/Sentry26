@@ -213,6 +213,21 @@ small_gicp_relocalization:
     health_window_size: 5
     health_unhealthy_score_threshold: 50000.0           # 比 emergency_min_score(150000) 低，避免与单次失败重复
     health_stale_timeout_sec: 30.0                      # 30s 无成功样本也视为 unhealthy
+    # 全局重定位（T2）：health monitor 触发，Scan Context 描述子查询 + GICP 精调
+    enable_global_relocalization: true
+    scan_context_db_file: ""                            # launch 启动时通过参数注入；为空则全局重定位禁用
+    sc_num_rings: 20
+    sc_num_sectors: 60
+    sc_max_radius: 30.0
+    sc_height_min: -2.0
+    global_top_k: 5
+    global_relocalization_min_interval_sec: 30.0        # 节流：30s 内不重复触发
+    global_max_correction_distance: 30.0                # 半个场地大小，全局允许大跳
+    global_min_score_threshold: 300000.0                # 比 emergency 严，比 deep 松
+    global_accumulated_count_threshold: 50
+    global_max_dist_sq: 225.0
+    global_max_iterations: 200
+    global_registered_leaf_size: 0.05
     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
     # prior_pcd_file: ""
 
