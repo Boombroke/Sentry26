@@ -171,10 +171,12 @@ small_gicp_relocalization:
     min_inlier_ratio: 0.3
     max_fitness_error: 1.5
     enable_periodic_relocalization: true
-    relocalization_interval: 5.0
-    max_correction_distance: 5.0
-    emergency_max_dist_sq: 25.0
-    emergency_consecutive_failures: 3
+    relocalization_interval: 2.0                        # 5.0 → 2.0，撞击后 2s 内必启动一次配准
+    max_correction_distance: 8.0                        # 5.0 → 8.0，正常 periodic 纠偏上限
+    emergency_max_dist_sq: 64.0                         # 25.0 → 64.0，emergency 关联半径 5m → 8m
+    emergency_max_correction_distance: 8.0              # 显式写出（原默认 3.0），与 emergency_max_dist_sq 对齐
+    emergency_consecutive_failures: 2                   # 3 → 2，触发延迟 15s → 4s
+    emergency_min_score_threshold: 150000.0             # 200000 → 150000，配合放大半径放宽误匹配下限
     terrain_clearing_threshold: 0.1
     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
     # prior_pcd_file: ""
