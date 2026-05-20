@@ -23,5 +23,5 @@ sentry_behavior_server:
 sentry_behavior_client:
   ros__parameters:
     use_sim_time: true
-    target_tree: red
+    target_tree: rmuc_2026_sentry
     #1: red_yes  2: red_down   

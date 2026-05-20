@@ -25,7 +25,7 @@ namespace sentry_behavior
 SentryBehaviorClient::SentryBehaviorClient(const rclcpp::NodeOptions & options)
 : Node("sentry_behavior_client", options)
 {
-  declare_parameter<std::string>("target_tree", "test_attacked_feedback");
+  declare_parameter<std::string>("target_tree", "test");
   get_parameter("target_tree", target_tree_);
 
   action_client_ = rclcpp_action::create_client<BTExecuteTree>(this, "sentry_behavior");

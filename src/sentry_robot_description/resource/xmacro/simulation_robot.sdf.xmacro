@@ -15,6 +15,8 @@
     <xmacro_define_value name="gimbal_yaw_height" value="0.1376" />
     <!-- gimbal_pitch 相对于 gimbal_yaw 的高度差 -->
     <xmacro_define_value name="gimbal_pitch_height" value="0.16" />
+    <!-- mid360 相对 chassis 向下俯仰角 (rad)，30°；须用数值，URDF 无法解析 ${pi/6} -->
+    <xmacro_define_value name="mid360_pitch_down" value="0.5235987755982988" />
 
     <!--simulation_robot model-->
     <model name="simulation_robot">
@@ -24,7 +26,7 @@
         <!--rplidar a2-->
         <xmacro_block name="rplidar_a2" prefix="front_" parent="chassis" pose="0.155 0 0.1 0 0 0" update_rate="10" samples="400" visualize="true"/>
         <!--livox-->
-        <xmacro_block name="livox" prefix="front_" parent="chassis" pose="0.16 0.0 0.18 0.0 0.0 0.0" update_rate="20" samples="1200"/>
+        <xmacro_block name="livox" prefix="front_" parent="chassis" pose="0.16 0.0 0.18 0.0 ${mid360_pitch_down} 0.0" update_rate="20" samples="1200"/>
         <!--industrial camera-->
         <xmacro_block name="industrial_camera" prefix="front_" parent="gimbal_pitch" pose="0.1 0 0.045 0 0 0" update_rate="5" horizontal_fov="1" width="640" height="480"/>
 

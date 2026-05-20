@@ -16,7 +16,7 @@ SMBU PolarBear Team robot description package for RoboMaster 2025.
 
 - [simulation_robot](./resource/xmacro/simulation_robot.sdf.xmacro)
 
-    搭载云台相机 industrial_camera 和激光雷达 rplidar_a2 和 Livox mid360，其中相机与 gimbal_pitch 轴固连，mid360 水平安装与 chassis 固连。
+    搭载云台相机 industrial_camera 和激光雷达 rplidar_a2 和 Livox mid360，其中相机与 gimbal_pitch 轴固连，mid360 相对 chassis 下倾 30° 安装。
 
     ![sentry](https://raw.githubusercontent.com/LihanChen2004/picx-images-hosting/master/sentry_description.1sf3yc69kr.webp)
 

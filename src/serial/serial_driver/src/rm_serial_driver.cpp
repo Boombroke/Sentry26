@@ -37,7 +37,7 @@ RMSerialDriver::RMSerialDriver(const rclcpp::NodeOptions & options)
   }
 
   cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
-    "/cmd_vel", 10,
+    "/cmd_vel_chassis", 10,
     std::bind(&RMSerialDriver::sendNavData, this, std::placeholders::_1));
 
   joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
@@ -113,7 +113,7 @@ void RMSerialDriver::receiveLoop()
       if (!crc_ok) {
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 1000,
-          "CRC error on SendPacket 0x%02X (%zu bytes); check MCU sends 34-byte merged frame",
+          "CRC error on SendPacket 0x%02X (%zu bytes); check MCU sends 38-byte merged frame",
           hdr, data.size());
         continue;
       }
@@ -158,6 +158,7 @@ void RMSerialDriver::handleSendPacket(const SendPacket & pkt)
   hp.ally_7_robot_hp = pkt.ally_7_robot_HP;
   hp.ally_outpost_hp = pkt.ally_outpost_HP;
   hp.ally_base_hp = pkt.ally_base_hp;
+  hp.event_data = pkt.event_data;
   allHP_pub_->publish(hp);
 }
 

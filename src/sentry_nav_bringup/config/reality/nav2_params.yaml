@@ -76,8 +76,8 @@ point_lio:
       plane_thr: 0.1                                    # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 81.0
       ivox_grid_resolution: 0.5
-      gravity: [2.639014832, 0.0, -9.675732356]            # gravity to be aligned
-      gravity_init: [2.639014832, 0.0, -9.675732356]       # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
+      gravity: [-0.502450413, -0.032656074, 0.863989099]                        # mid360 下倾 30° (rpy=[0, pi/6, pi] on gimbal_yaw)，建议用 sentry_tools 实测标定
+      gravity_init: [-0.502450413, -0.032656074, 0.863989099]                  # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
       extrinsic_T: [ -0.011, -0.02329, 0.04412 ]
       extrinsic_R: [ 1.0, 0.0, 0.0,
                      0.0, 1.0, 0.0,
@@ -373,7 +373,7 @@ controller_server:
       xy_goal_tolerance: 0.40
       yaw_goal_tolerance: 6.28
     FollowPath:
-      plugin: "omni_pid_pursuit_controller::OmniPidPursuitController"
+      plugin: "pb_omni_pid_pursuit_controller::OmniPidPursuitController"
       translation_kp: 3.5
       translation_ki: 0.0
       translation_kd: 0.5

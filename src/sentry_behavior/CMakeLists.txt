@@ -19,6 +19,7 @@ add_definitions(-DROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/\")
 
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
+find_package(rm_interfaces REQUIRED)
 
 ###########
 ## Build ##
@@ -45,17 +46,17 @@ list(APPEND plugin_libs is_rfid_detected)
 ament_auto_add_library(is_status_ok SHARED plugins/condition/is_status_ok.cpp)
 list(APPEND plugin_libs is_status_ok)
 
-ament_auto_add_library(is_attacked SHARED plugins/condition/is_attacked.cpp)
-list(APPEND plugin_libs is_attacked)
-
 ament_auto_add_library(is_detect_enemy SHARED plugins/condition/is_detect_enemy.cpp)
 list(APPEND plugin_libs is_detect_enemy)
 
-ament_auto_add_library(is_hp_add SHARED plugins/condition/is_hp_add.cpp)
-list(APPEND plugin_libs is_hp_add)
-
 ament_auto_add_library(is_outpost_ok SHARED plugins/condition/is_outpost_ok.cpp)
 list(APPEND plugin_libs is_outpost_ok)
+
+ament_auto_add_library(is_enemy_fortress_occupied SHARED plugins/condition/is_enemy_fortress_occupied.cpp)
+list(APPEND plugin_libs is_enemy_fortress_occupied)
+
+ament_auto_add_library(is_ally_base_hp_low SHARED plugins/condition/is_ally_base_hp_low.cpp)
+list(APPEND plugin_libs is_ally_base_hp_low)
 
 ####### Actions #######
 
@@ -81,7 +82,10 @@ list(APPEND plugin_libs tick_after_timeout_node)
 
 foreach(bt_plugin ${plugin_libs})
   target_compile_definitions(${bt_plugin} PRIVATE BT_PLUGIN_EXPORT)
+  ament_target_dependencies(${bt_plugin} rm_interfaces)
 endforeach()
+
+ament_target_dependencies(sentry_behavior_server rm_interfaces)
 
 #############
 ## Testing ##

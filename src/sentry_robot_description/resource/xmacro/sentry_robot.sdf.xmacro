@@ -15,13 +15,15 @@
     <xmacro_define_value name="gimbal_yaw_height" value="0.026" />
     <!-- gimbal_pitch 相对于 gimbal_yaw 的高度差 -->
     <xmacro_define_value name="gimbal_pitch_height" value="0.355" />
+    <!-- mid360 相对 gimbal_yaw 向下俯仰角 (rad)，30°；须用数值，URDF 无法解析 ${pi/6} -->
+    <xmacro_define_value name="mid360_pitch_down" value="0.5235987755982988" />
 
     <!--sentry_robot model-->
     <model name="sentry_robot">
 
         <pose>0 0 0.15 0 0 0</pose>
         <xmacro_block name="rm25_example_robot" sticker_type="${global_armor_sticker_type}" chassis_height="${chassis_height}" gimbal_yaw_height="${gimbal_yaw_height}" gimbal_pitch_height="${gimbal_pitch_height}"/>
-        <xmacro_block name="livox" prefix="front_" parent="gimbal_yaw" pose="-0.15 0.0 0.28 0.0 0.0 ${pi}" update_rate="50" samples="1875"/>
+        <xmacro_block name="livox" prefix="front_" parent="gimbal_yaw" pose="-0.15 0.0 0.28 0.0 ${mid360_pitch_down} ${pi}" update_rate="50" samples="1875"/>
         <!--industrial camera-->
         <xmacro_block name="industrial_camera" prefix="front_" parent="gimbal_pitch" pose="0.1 0 0.045 0 0 0" update_rate="30" horizontal_fov="1" width="1920" height="1080"/>
 

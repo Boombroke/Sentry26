@@ -594,6 +594,14 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: initialpose
     - Class: nav2_rviz_plugins/GoalTool
+    - Class: rviz_default_plugins/PublishPoint
+      Single click: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: clicked_point
   Transformation:
     Current:
       Class: rviz_default_plugins/TF

@@ -28,6 +28,10 @@ BT::NodeStatus BattlefieldInformationAction::tick() {
   int ally_total = msg->ally_1_robot_hp + msg->ally_3_robot_hp +
                    msg->ally_4_robot_hp + msg->ally_7_robot_hp;
 
+  if (msg->event_data == 1) {
+    ally_total += 500;
+  }
+
   if (ally_total > 1200) {
     setOutput("weight", "2.0");
   } else if (ally_total > 400) {

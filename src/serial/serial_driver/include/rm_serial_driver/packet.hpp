@@ -9,10 +9,10 @@
 namespace rm_serial_driver
 {
 
-constexpr uint8_t FH_RX = 0xB5;
-constexpr uint8_t FH_TX = 0x5B;
+constexpr uint8_t FH_RX = 0x5B;
+constexpr uint8_t FH_TX = 0xB5;
 
-// 电控→ROS，34 bytes
+// 电控→ROS，38 bytes
 struct SendPacket
 {
   uint8_t  header = FH_RX;
@@ -31,6 +31,7 @@ struct SendPacket
   uint16_t ally_7_robot_HP;
   uint16_t ally_outpost_HP;
   uint16_t ally_base_hp;
+  uint32_t event_data;  // 1=己方增益点, 2=己方堡垒被敌方占领
   uint16_t checksum = 0;
 } __attribute__((packed));
 
@@ -44,7 +45,7 @@ struct ReceivePacket
   uint16_t checksum = 0;
 } __attribute__((packed));
 
-static_assert(sizeof(SendPacket) == 34, "SendPacket wire size must be 34 bytes");
+static_assert(sizeof(SendPacket) == 38, "SendPacket wire size must be 38 bytes");
 static_assert(sizeof(ReceivePacket) == 15, "ReceivePacket wire size must be 15 bytes");
 
 inline size_t packetSizeForHeader(uint8_t header)

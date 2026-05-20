@@ -45,14 +45,12 @@ BT::NodeStatus IsGameStatusCondition::checkGameStart()
   const bool is_time_in_range =
     (msg->stage_remain_time >= min_remain_time) && (msg->stage_remain_time <= max_remain_time);
 
-  auto state = msg->behavior_state;
-  RCLCPP_INFO(logger_, "GameStatus message state=%d", state);
-
-  if (state >= 1 && state <= 3) {
-    setOutput("state", std::to_string(state) + ".0");
+  // behavior_state 1~3 仅用于旧版多战术 Switch3；单决策树只判断比赛阶段与剩余时间
+  const uint8_t behavior_state = msg->behavior_state;
+  if (behavior_state >= 1 && behavior_state <= 3) {
+    setOutput("state", std::to_string(behavior_state) + ".0");
   } else {
-    RCLCPP_ERROR(logger_, "state error!");
-    return BT::NodeStatus::FAILURE;
+    setOutput("state", "0.0");
   }
 
   return (is_progress_match && is_time_in_range) ? BT::NodeStatus::SUCCESS

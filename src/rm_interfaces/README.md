@@ -13,7 +13,17 @@
 | GameStatus.msg | 比赛阶段与剩余时间 | rm_serial_driver |
 | RobotStatus.msg | 机器人血量、等级、伤害、弹量 | rm_serial_driver |
 | RfidStatus.msg | RFID 增益点检测状态 | rm_serial_driver |
-| GameRobotHP.msg | 己方 7 个单位血量 | rm_serial_driver |
+| GameRobotHP.msg | 己方 7 个单位血量 + `event_data` 事件标志 | rm_serial_driver |
+
+`GameRobotHP.event_data`（电控 `SendPacket.event_data`）：
+
+| 值 | 含义 | 行为树用法 |
+|----|------|------------|
+| `1` | 己方增益点激活 | `BattlefieldInformation` 战术加权 +500 |
+| `2` | 己方堡垒被敌方占领 | `IsEnemyFortressOccupied` → 阶段三防御巡逻 |
+| 其他 | 无特殊事件 | — |
+
+> 修改 `.msg` 后须先 `colcon build --packages-select rm_interfaces --allow-overriding rm_interfaces`，再编译依赖它的包。
 
 ### 视觉消息 (msg/vision/)
 

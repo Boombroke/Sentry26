@@ -4,7 +4,6 @@
     <Sequence>
       <WhileDoElse>
         <IsStatusOK ammo_min="0"
-                    heat_max="350"
                     hp_min="200"
                     key_port="{@referee_robotStatus}"/>
         <PubGoal goal_pose_x="4.6"
@@ -24,7 +23,6 @@
     <Sequence>
       <WhileDoElse>
         <IsStatusOK ammo_min="0"
-                    heat_max="350"
                     hp_min="150"
                     key_port="{@referee_robotStatus}"/>
         <Sequence>
@@ -51,12 +49,10 @@
     <Sequence>
       <WhileDoElse>
         <IsStatusOK ammo_min="0"
-                    heat_max="350"
                     hp_min="150"
                     key_port="{@referee_robotStatus}"/>
         <Sequence>
           <IsStatusOK ammo_min="0"
-                      heat_max="400"
                       hp_min="300"
                       key_port="{@referee_robotStatus}"/>
           <PubGoal goal_pose_x="6.5"
@@ -75,14 +71,6 @@
         </Sequence>
       </WhileDoElse>
     </Sequence>
-  </BehaviorTree>
-
-  <BehaviorTree ID="test_add">
-    <WhileDoElse>
-      <IsHPAdd key_port="{@referee_robotStatus}"/>
-      <Sleep msec="10"/>
-      <Sleep msec="10"/>
-    </WhileDoElse>
   </BehaviorTree>
 
   <BehaviorTree ID="test_case">
@@ -132,18 +120,10 @@
                   default="{@referee_allRobotHP}"/>
       <output_port name="weight"/>
     </Action>
-    <Condition ID="IsHPAdd"
-               editable="true">
-      <input_port name="key_port"
-                  default="{@referee_robotStatus}"/>
-    </Condition>
     <Condition ID="IsStatusOK">
       <input_port name="ammo_min"
                   default="0"
                   type="int">Lower then minimum ammo will return FAILURE</input_port>
-      <input_port name="heat_max"
-                  default="350"
-                  type="int">Maximum heat. NOTE: Sentry heat limit is 400</input_port>
       <input_port name="hp_min"
                   default="300"
                   type="int">Minimum HP. NOTE: Sentry init/max HP is 400</input_port>

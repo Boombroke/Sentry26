@@ -24,7 +24,7 @@ IsStatusOKCondition::IsStatusOKCondition(const std::string & name, const BT::Nod
 
 BT::NodeStatus IsStatusOKCondition::checkRobotStatus()
 {
-  int hp_min, heat_max, ammo_min;
+  int hp_min, ammo_min, ammo_max;
   auto msg = getInput<rm_interfaces::msg::RobotStatus>("key_port");
   if (!msg) {
     RCLCPP_ERROR(logger_, "RobotStatus message is not available");
@@ -32,14 +32,14 @@ BT::NodeStatus IsStatusOKCondition::checkRobotStatus()
   }
 
   getInput("hp_min", hp_min);
-  getInput("heat_max", heat_max);
   getInput("ammo_min", ammo_min);
+  getInput("ammo_max", ammo_max);
 
   const bool is_hp_ok = (msg->current_hp >= hp_min);
-  const bool is_heat_ok = (msg->shooter_17mm_1_barrel_heat <= heat_max);
-  const bool is_ammo_ok = (msg->projectile_allowance_17mm > ammo_min);
+  const bool is_ammo_ok = (msg->projectile_allowance_17mm > ammo_min) &&
+                          (msg->projectile_allowance_17mm <= ammo_max);
   RCLCPP_INFO(logger_,"ammo=%d",msg->projectile_allowance_17mm);
-  return (is_hp_ok && is_heat_ok && is_ammo_ok) ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+  return (is_hp_ok && is_ammo_ok) ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
 }
 
 BT::PortsList IsStatusOKCondition::providedPorts()
@@ -48,8 +48,8 @@ BT::PortsList IsStatusOKCondition::providedPorts()
     BT::InputPort<rm_interfaces::msg::RobotStatus>(
       "key_port", "{@referee_robotStatus}", "RobotStatus port on blackboard"),
     BT::InputPort<int>("hp_min", 300, "Minimum HP. NOTE: Sentry init/max HP is 400"),
-    BT::InputPort<int>("heat_max", 350, "Maximum heat. NOTE: Sentry heat limit is 400"),
-    BT::InputPort<int>("ammo_min", 0, "Lower then minimum ammo will return FAILURE")};
+    BT::InputPort<int>("ammo_min", 0, "Lower than minimum ammo will return FAILURE"),
+    BT::InputPort<int>("ammo_max", 65535, "Higher than maximum ammo will return FAILURE")};
 }
 }  // namespace sentry_behavior
 
