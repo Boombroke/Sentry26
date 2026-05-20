@@ -31,6 +31,7 @@
 #include "small_gicp/pcl/pcl_point.hpp"
 #include "small_gicp/registration/reduction_omp.hpp"
 #include "small_gicp/registration/registration.hpp"
+#include "small_gicp_relocalization/localization_health.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
@@ -150,6 +151,12 @@ private:
   double terrain_clearing_threshold_;
 
   std::mutex cloud_mutex_;
+
+  // Localization health monitor (T3): sliding-window score median + stale check
+  std::unique_ptr<LocalizationHealth> health_monitor_;
+  size_t health_window_size_{5};
+  double health_unhealthy_score_threshold_{50000.0};
+  double health_stale_timeout_sec_{30.0};
 };
 
 }  // namespace small_gicp_relocalization

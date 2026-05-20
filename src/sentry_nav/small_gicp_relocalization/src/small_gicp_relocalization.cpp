@@ -74,6 +74,10 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("deep_max_correction_distance", 15.0);
   this->declare_parameter("deep_min_score_threshold", 500000.0);
 
+  this->declare_parameter("health_window_size", 5);
+  this->declare_parameter("health_unhealthy_score_threshold", 50000.0);
+  this->declare_parameter("health_stale_timeout_sec", 30.0);
+
   this->get_parameter("num_threads", num_threads_);
   this->get_parameter("num_neighbors", num_neighbors_);
   this->get_parameter("global_leaf_size", global_leaf_size_);
@@ -112,6 +116,28 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("deep_max_fitness_error", deep_max_fitness_error_);
   this->get_parameter("deep_max_correction_distance", deep_max_correction_distance_);
   this->get_parameter("deep_min_score_threshold", deep_min_score_threshold_);
+
+  {
+    int health_window_size_param = static_cast<int>(health_window_size_);
+    this->get_parameter("health_window_size", health_window_size_param);
+    if (health_window_size_param < 1) {
+      health_window_size_param = 1;
+    }
+    health_window_size_ = static_cast<size_t>(health_window_size_param);
+  }
+  this->get_parameter("health_unhealthy_score_threshold", health_unhealthy_score_threshold_);
+  this->get_parameter("health_stale_timeout_sec", health_stale_timeout_sec_);
+
+  HealthConfig health_cfg;
+  health_cfg.window_size = health_window_size_;
+  health_cfg.unhealthy_score_threshold = health_unhealthy_score_threshold_;
+  health_cfg.stale_timeout_sec = health_stale_timeout_sec_;
+  health_monitor_ = std::make_unique<LocalizationHealth>(health_cfg);
+
+  RCLCPP_INFO(
+    this->get_logger(),
+    "Health monitor: window=%zu, unhealthy_score_threshold=%.0f, stale_timeout=%.1fs",
+    health_window_size_, health_unhealthy_score_threshold_, health_stale_timeout_sec_);
 
   RCLCPP_INFO(
     this->get_logger(),
@@ -394,11 +420,31 @@ void SmallGicpRelocalizationNode::periodicRegistrationCallback()
   accumulated_cloud_->clear();
   accumulated_count_ = 0;
   accumulation_snapshot_t_ = result_t_;
+
+  if (health_monitor_) {
+    auto m = health_monitor_->getMetrics();
+    if (m.unhealthy) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Localization health UNHEALTHY: median_score=%.0f (threshold=%.0f), "
+        "min=%.0f, samples=%zu, idle=%.1fs",
+        m.median_score, health_monitor_->config().unhealthy_score_threshold,
+        m.min_score, m.sample_count, m.seconds_since_last_success);
+    } else if (m.sample_count >= health_monitor_->config().window_size) {
+      RCLCPP_DEBUG(
+        this->get_logger(),
+        "Localization health OK: median_score=%.0f, samples=%zu",
+        m.median_score, m.sample_count);
+    }
+  }
 }
 
 bool SmallGicpRelocalizationNode::performEmergencyRegistration()
 {
   if (accumulated_cloud_->empty()) {
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return false;
   }
 
@@ -490,6 +536,9 @@ bool SmallGicpRelocalizationNode::performEmergencyRegistration()
   auto result = accepted ? candidates[best_idx].result : candidates[0].result;
 
   if (!accepted) {
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return false;
   }
 
@@ -516,11 +565,17 @@ bool SmallGicpRelocalizationNode::performEmergencyRegistration()
       "Emergency REJECTED: correction %.3f m exceeds emergency_max_correction_distance %.3f m. "
       "Robot may need manual /initialpose.",
       emergency_correction, emergency_max_correction_distance_);
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return false;
   }
 
   result_t_ = previous_result_t_ = constrained;
   notifyTerrainClearing();
+  if (health_monitor_) {
+    health_monitor_->recordSuccess(best_score);
+  }
   return true;
 }
 
@@ -528,6 +583,9 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
 {
   if (accumulated_cloud_->empty()) {
     RCLCPP_WARN(this->get_logger(), "No accumulated points to process.");
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return false;
   }
 
@@ -545,6 +603,9 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
     source_, small_gicp::KdTreeBuilderOMP(num_threads_));
 
   if (!source_ || !source_tree_) {
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return false;
   }
 
@@ -557,6 +618,9 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
       this->get_logger(), *this->get_clock(), 5000,
       "Target map empty or not loaded (prior PCD missing). "
       "Skipping GICP registration. SLAM mode doesn't need PCD.");
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return false;
   }
 
@@ -592,10 +656,16 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
         this->get_logger(),
         "GICP did not converge: iterations=%zu, per_point_error=%.6f >= threshold=%.6f",
         result.iterations, per_point_err, quality_convergence_threshold_);
+      if (health_monitor_) {
+        health_monitor_->recordFailure();
+      }
       return false;
     }
   } else if (!result.converged) {
     RCLCPP_WARN(this->get_logger(), "GICP did not converge (no inliers).");
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return false;
   }
 
@@ -608,11 +678,15 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
       this->get_logger(),
       "GICP quality check FAILED: inlier_ratio=%.3f < min_inlier_ratio=%.3f",
       inlier_ratio, min_inlier_ratio_);
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return false;
   }
 
+  double fitness_error = 0.0;
   if (result.num_inliers > 0) {
-    double fitness_error = result.error / static_cast<double>(result.num_inliers);
+    fitness_error = result.error / static_cast<double>(result.num_inliers);
     RCLCPP_INFO(this->get_logger(), "GICP fitness_error=%.6f (threshold=%.6f)",
       fitness_error, max_fitness_error_);
 
@@ -621,6 +695,9 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
         this->get_logger(),
         "GICP quality check FAILED: fitness_error=%.6f > max_fitness_error=%.6f",
         fitness_error, max_fitness_error_);
+      if (health_monitor_) {
+        health_monitor_->recordFailure();
+      }
       return false;
     }
   }
@@ -634,6 +711,9 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
         this->get_logger(),
         "Periodic reloc: correction too large (%.3f m > %.3f m). Rejecting.",
         delta_dist, max_correction_distance_);
+      if (health_monitor_) {
+        health_monitor_->recordFailure();
+      }
       return false;
     }
     RCLCPP_INFO(
@@ -663,6 +743,11 @@ bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
       this->get_logger(),
       "Correction %.3fm > threshold %.3fm, triggered terrain clearing.",
       correction_dist, terrain_clearing_threshold_);
+  }
+
+  if (health_monitor_ && result.num_inliers > 0) {
+    double score = static_cast<double>(result.num_inliers) / (fitness_error + 0.001);
+    health_monitor_->recordSuccess(score);
   }
 
   return true;
@@ -831,14 +916,23 @@ void SmallGicpRelocalizationNode::runDeepVerification(
         this->get_logger(),
         "Deep verification did NOT converge (iter=%zu, per_point=%.6f). Skipping.",
         result.iterations, per_point_err);
+      if (health_monitor_) {
+        health_monitor_->recordFailure();
+      }
       return;
     }
   } else if (!result.converged) {
     RCLCPP_WARN(this->get_logger(), "Deep verification: no inliers, skipping.");
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return;
   }
 
   if (result.num_inliers == 0) {
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return;
   }
 
@@ -856,6 +950,9 @@ void SmallGicpRelocalizationNode::runDeepVerification(
       this->get_logger(),
       "Deep verification REJECTED: inlier_ratio=%.3f < %.3f.",
       inlier_ratio, deep_min_inlier_ratio_);
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return;
   }
   if (fitness_error > deep_max_fitness_error_) {
@@ -863,6 +960,9 @@ void SmallGicpRelocalizationNode::runDeepVerification(
       this->get_logger(),
       "Deep verification REJECTED: fitness_error=%.6f > %.6f.",
       fitness_error, deep_max_fitness_error_);
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return;
   }
   if (score < deep_min_score_threshold_) {
@@ -870,6 +970,9 @@ void SmallGicpRelocalizationNode::runDeepVerification(
       this->get_logger(),
       "Deep verification REJECTED: score=%.0f < %.0f. Possible false match.",
       score, deep_min_score_threshold_);
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return;
   }
 
@@ -888,6 +991,9 @@ void SmallGicpRelocalizationNode::runDeepVerification(
       this->get_logger(),
       "Deep verification REJECTED: correction %.3fm > %.3fm.",
       correction_dist, deep_max_correction_distance_);
+    if (health_monitor_) {
+      health_monitor_->recordFailure();
+    }
     return;
   }
 
@@ -900,6 +1006,10 @@ void SmallGicpRelocalizationNode::runDeepVerification(
 
   if (correction_dist > terrain_clearing_threshold_) {
     notifyTerrainClearing();
+  }
+
+  if (health_monitor_) {
+    health_monitor_->recordSuccess(score);
   }
 }
 

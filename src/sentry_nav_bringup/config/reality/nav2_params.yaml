@@ -209,6 +209,10 @@ small_gicp_relocalization:
     deep_max_fitness_error: 0.5                         # 比 periodic 严格（更稠密 source 的合理预期）
     deep_max_correction_distance: 15.0                  # 与 deep_max_dist_sq 半径配套
     deep_min_score_threshold: 500000.0                  # 比 emergency 高 3.3x，避免误覆盖正确 result_t_
+    # 健康度监控（T3）：滑动窗口 score 中位数检测，将来供全局重定位触发器订阅
+    health_window_size: 5
+    health_unhealthy_score_threshold: 50000.0           # 比 emergency_min_score(150000) 低，避免与单次失败重复
+    health_stale_timeout_sec: 30.0                      # 30s 无成功样本也视为 unhealthy
     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
     # prior_pcd_file: ""
 
