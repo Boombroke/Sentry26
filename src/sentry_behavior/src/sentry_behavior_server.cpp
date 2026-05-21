@@ -119,8 +119,14 @@ int main(int argc, char * argv[])
   exec.remove_node(action_server->node());
 
   try {
+    // models.xml 仅供 Groot2 离线浏览节点模型, 不参与运行时加载.
+    // 写入用户级 cache 避免污染 git 工作树, 路径与 ROS2 / colcon 习惯一致.
+    const char * home = std::getenv("HOME");
+    std::filesystem::path cache_dir =
+      std::filesystem::path(home ? home : "/tmp") / ".cache" / "sentry_behavior";
+    std::filesystem::create_directories(cache_dir);
     std::string xml_models = BT::writeTreeNodesModelXML(action_server->factory());
-    std::ofstream file(std::filesystem::path(ROOT_DIR) / "behavior_trees" / "models.xml");
+    std::ofstream file(cache_dir / "models.xml");
     file << xml_models;
   } catch (const std::exception & e) {
     std::cerr << "Failed to export BT node models: " << e.what() << std::endl;

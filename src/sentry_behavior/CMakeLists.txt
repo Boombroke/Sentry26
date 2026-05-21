@@ -11,8 +11,6 @@ add_definitions(-Wall -Werror)
 ## Export compile commands for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_definitions(-DROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/\")
-
 #######################
 ## Find dependencies ##
 #######################
