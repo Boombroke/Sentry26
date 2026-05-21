@@ -11,8 +11,6 @@ add_definitions(-Wall -Werror)
 ## Export compile commands for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_definitions(-DROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/\")
-
 #######################
 ## Find dependencies ##
 #######################
@@ -40,45 +38,13 @@ rclcpp_components_register_node(action_client
 ament_auto_add_library(is_game_status SHARED plugins/condition/is_game_status.cpp)
 list(APPEND plugin_libs is_game_status)
 
-ament_auto_add_library(is_rfid_detected SHARED plugins/condition/is_rfid_detected.cpp)
-list(APPEND plugin_libs is_rfid_detected)
-
 ament_auto_add_library(is_status_ok SHARED plugins/condition/is_status_ok.cpp)
 list(APPEND plugin_libs is_status_ok)
 
-ament_auto_add_library(is_detect_enemy SHARED plugins/condition/is_detect_enemy.cpp)
-list(APPEND plugin_libs is_detect_enemy)
-
-ament_auto_add_library(is_outpost_ok SHARED plugins/condition/is_outpost_ok.cpp)
-list(APPEND plugin_libs is_outpost_ok)
-
-ament_auto_add_library(is_enemy_fortress_occupied SHARED plugins/condition/is_enemy_fortress_occupied.cpp)
-list(APPEND plugin_libs is_enemy_fortress_occupied)
-
-ament_auto_add_library(is_ally_base_hp_low SHARED plugins/condition/is_ally_base_hp_low.cpp)
-list(APPEND plugin_libs is_ally_base_hp_low)
-
 ####### Actions #######
 
-ament_auto_add_library(pub_goal SHARED plugins/action/pub_goal.cpp)
-list(APPEND plugin_libs pub_goal)
-
-ament_auto_add_library(battlefield_information SHARED plugins/action/battlefield_information.cpp)
-list(APPEND plugin_libs battlefield_information)
-
-ament_auto_add_library(pursuit SHARED plugins/action/pursuit.cpp)
-list(APPEND plugin_libs pursuit)
-
-####### Controls #######
-ament_auto_add_library(recovery_node SHARED plugins/control/recovery_node.cpp)
-list(APPEND plugin_libs recovery_node)
-
-####### Decorators #######
-ament_auto_add_library(rate_controller SHARED plugins/decorator/rate_controller.cpp)
-list(APPEND plugin_libs rate_controller)
-
-ament_auto_add_library(tick_after_timeout_node SHARED plugins/decorator/tick_after_timeout_node.cpp)
-list(APPEND plugin_libs tick_after_timeout_node)
+ament_auto_add_library(navigate_to SHARED plugins/action/navigate_to.cpp)
+list(APPEND plugin_libs navigate_to)
 
 foreach(bt_plugin ${plugin_libs})
   target_compile_definitions(${bt_plugin} PRIVATE BT_PLUGIN_EXPORT)

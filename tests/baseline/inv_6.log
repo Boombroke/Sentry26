@@ -1,0 +1,5 @@
+Goal accepted with ID: <UUID>
+    node_status:
+  status: 3
+return_message: rmuc_2026_sentry tree completed with status=3 after 1 ticks
+Goal finished with status: ABORTED
