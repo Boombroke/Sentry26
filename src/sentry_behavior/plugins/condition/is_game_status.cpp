@@ -45,14 +45,6 @@ BT::NodeStatus IsGameStatusCondition::checkGameStart()
   const bool is_time_in_range =
     (msg->stage_remain_time >= min_remain_time) && (msg->stage_remain_time <= max_remain_time);
 
-  // behavior_state 1~3 仅用于旧版多战术 Switch3；单决策树只判断比赛阶段与剩余时间
-  const uint8_t behavior_state = msg->behavior_state;
-  if (behavior_state >= 1 && behavior_state <= 3) {
-    setOutput("state", std::to_string(behavior_state) + ".0");
-  } else {
-    setOutput("state", "0.0");
-  }
-
   return (is_progress_match && is_time_in_range) ? BT::NodeStatus::SUCCESS
                                                  : BT::NodeStatus::FAILURE;
 }
@@ -65,7 +57,6 @@ BT::PortsList IsGameStatusCondition::providedPorts()
     BT::InputPort<int>("expected_game_progress", 4, "Expected game progress stage"),
     BT::InputPort<int>("min_remain_time", 0, "Minimum remaining time (s)"),
     BT::InputPort<int>("max_remain_time", 420, "Maximum remaining time (s)"),
-    BT::OutputPort<std::string>("state"),
   };
 }
 }  // namespace sentry_behavior
