@@ -43,7 +43,9 @@ fi
 
 SRV_YAML="$WORK_DIR/srv.yaml"
 SERVER_LOG="$WORK_DIR/server.log"
+MOCK_LOG="$WORK_DIR/mock.log"
 SERVER_PID=""
+MOCK_PID=""
 PASS_COUNT=0
 FAIL_COUNT=0
 
@@ -53,7 +55,14 @@ cleanup() {
     sleep 1
     kill -KILL "$SERVER_PID" 2>/dev/null || true
   fi
+  if [ -n "$MOCK_PID" ]; then
+    kill -INT "$MOCK_PID" 2>/dev/null || true
+    sleep 1
+    kill -KILL "$MOCK_PID" 2>/dev/null || true
+  fi
   pkill -KILL -f sentry_behavior_server 2>/dev/null || true
+  pkill -KILL -f mock_navigate_to_pose_server 2>/dev/null || true
+  pkill -KILL -f "ros2 topic pub.*referee" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -71,6 +80,37 @@ bt_action_server:
     behavior_trees:
       - sentry_behavior/behavior_trees
 EOF
+
+start_mock_nav() {
+  pkill -KILL -f mock_navigate_to_pose_server 2>/dev/null || true
+  sleep 1
+  : > "$MOCK_LOG"
+  python3 -u "$REPO_ROOT/tests/mock_navigate_to_pose_server.py" \
+    --result succeed --duration 0.6 \
+    > "$MOCK_LOG" 2>&1 &
+  MOCK_PID=$!
+  # 等 action server 注册
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if grep -q "NavigateToPose server up" "$MOCK_LOG" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.5
+  done
+  echo "[ERR] mock NavigateToPose server failed to come up:" >&2
+  tail -20 "$MOCK_LOG" >&2
+  return 1
+}
+
+stop_mock_nav() {
+  if [ -n "$MOCK_PID" ]; then
+    kill -INT "$MOCK_PID" 2>/dev/null || true
+    sleep 1
+    kill -KILL "$MOCK_PID" 2>/dev/null || true
+    MOCK_PID=""
+  fi
+  pkill -KILL -f mock_navigate_to_pose_server 2>/dev/null || true
+  sleep 1
+}
 
 start_server() {
   pkill -KILL -f sentry_behavior_server 2>/dev/null || true
@@ -99,18 +139,22 @@ stop_server() {
   sleep 1
 }
 
+# 用 Python rclpy 发 5 条 (5Hz). ros2 topic pub CLI 在 jazzy 对带中文注释
+# 的 rm_interfaces .msg 解析会触发 rosidl_adapter 内部 bug, 改走 rclpy 兜底.
 pub_game_status() {
   local progress="$1"
-  ros2 topic pub --once /referee/game_status rm_interfaces/msg/GameStatus \
-    "{game_progress: ${progress}, stage_remain_time: 200, behavior_state: 0}" \
-    > /dev/null 2>&1 || true
+  python3 "$REPO_ROOT/tests/pub_referee.py" game \
+    --progress "$progress" --remain 200 --rate-hz 5 --count 5 \
+    > /dev/null 2>&1 &
+  disown
 }
 
 pub_robot_status() {
   local hp="$1"; local ammo="$2"
-  ros2 topic pub --once /referee/robot_status rm_interfaces/msg/RobotStatus \
-    "{current_hp: ${hp}, projectile_allowance_17mm: ${ammo}, maximum_hp: 400}" \
-    > /dev/null 2>&1 || true
+  python3 "$REPO_ROOT/tests/pub_referee.py" robot \
+    --hp "$hp" --ammo "$ammo" --rate-hz 5 --count 5 \
+    > /dev/null 2>&1 &
+  disown
 }
 
 # 启 BT 异步，把 action result 写到 $1
@@ -121,39 +165,43 @@ send_bt_goal_async() {
   echo $!
 }
 
-# 抓 /goal_pose 若干秒，输出每条 PoseStamped 的 (x,y) 行
+# 抓 mock NavigateToPose server 收到的 goal 序列, 相邻完全相同坐标折叠成 1 行
+# (Stage 4 起 BT 不再 publish /goal_pose, 改为调 nav2 NavigateToPose action,
+# mock server 把每个 goal 打到 stdout 即 MOCK_LOG)
+# 实现: 先记录起始行号, sleep N 秒, 再读 mock log 这段范围. 调用方可
+# 在 sleep 期间并行做 publish/send_goal/state-change.
 capture_goal_pose() {
   local seconds="$1"
   local outfile="$2"
   local raw_file="${outfile%.txt}_raw.txt"
-  # 抓 /goal_pose 序列，相邻完全相同的 (x,y) 折叠成 1 行，便于 baseline diff 稳定
-  # 同时保留 _raw.txt 含完整逐帧序列，便于诊断
-  timeout "$seconds" ros2 topic echo /goal_pose --no-arr 2>/dev/null \
-    | awk -v raw="$raw_file" '
-        BEGIN { in_pos=0; last="" }
-        /^---$/ {
-          if (have_x && have_y) {
-            cur = sprintf("%.2f,%.2f", x, y)
-            print cur > raw
-            fflush(raw)
-            if (cur != last) { print cur; fflush(); last = cur }
-          }
-          have_x=0; have_y=0; next
-        }
-        /position:/ { in_pos=1; next }
-        /orientation:/ { in_pos=0; next }
-        in_pos && /x:/ { sub(/.*x:[ \t]*/,""); x=$1; have_x=1; next }
-        in_pos && /y:/ { sub(/.*y:[ \t]*/,""); y=$1; have_y=1; next }
-        END {
-          if (have_x && have_y) {
-            cur = sprintf("%.2f,%.2f", x, y)
-            print cur > raw
-            if (cur != last) print cur
-          }
-          close(raw)
-        }
-      ' \
-    > "$outfile" || true
+
+  local start_lineno
+  start_lineno=$(wc -l < "$MOCK_LOG" 2>/dev/null | awk '{print $1+0}')
+  : "${start_lineno:=0}"
+  sleep "$seconds"
+  local end_lineno
+  end_lineno=$(wc -l < "$MOCK_LOG" 2>/dev/null | awk '{print $1+0}')
+  : "${end_lineno:=0}"
+  if [ "$end_lineno" -le "$start_lineno" ]; then
+    : > "$outfile"
+    : > "$raw_file"
+    return 0
+  fi
+  awk -v from="$((start_lineno + 1))" -v to="$end_lineno" -v raw="$raw_file" '
+    NR >= from && NR <= to && /\[MOCK\] received goal/ {
+      x = ""; y = ""
+      for (i=1; i<=NF; i++) {
+        if ($i ~ /^x=/) x = substr($i, 3)
+        else if ($i ~ /^y=/) y = substr($i, 3)
+      }
+      if (x != "" && y != "") {
+        cur = sprintf("%.2f,%.2f", x, y)
+        print cur > raw
+        if (cur != last) { print cur; last = cur }
+      }
+    }
+    END { close(raw) }
+  ' "$MOCK_LOG" > "$outfile"
 }
 
 assert_eq_or_diff() {
@@ -430,17 +478,18 @@ run_case_inv7() {
 
 # Main
 echo "Mode: $MODE; Work: $WORK_DIR"
+start_mock_nav || exit 99
 start_server || exit 99
 run_case_inv1
-stop_server; start_server || exit 99
+stop_server; stop_mock_nav; start_mock_nav || exit 99; start_server || exit 99
 run_case_inv2
-stop_server; start_server || exit 99
+stop_server; stop_mock_nav; start_mock_nav || exit 99; start_server || exit 99
 run_case_inv3
-stop_server; start_server || exit 99
+stop_server; stop_mock_nav; start_mock_nav || exit 99; start_server || exit 99
 run_case_inv4
-stop_server; start_server || exit 99
+stop_server; stop_mock_nav; start_mock_nav || exit 99; start_server || exit 99
 run_case_inv5
-stop_server; start_server || exit 99
+stop_server; stop_mock_nav; start_mock_nav || exit 99; start_server || exit 99
 run_case_inv6
 run_case_inv7
 

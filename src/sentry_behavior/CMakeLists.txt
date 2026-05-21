@@ -43,8 +43,8 @@ list(APPEND plugin_libs is_status_ok)
 
 ####### Actions #######
 
-ament_auto_add_library(pub_goal SHARED plugins/action/pub_goal.cpp)
-list(APPEND plugin_libs pub_goal)
+ament_auto_add_library(navigate_to SHARED plugins/action/navigate_to.cpp)
+list(APPEND plugin_libs navigate_to)
 
 foreach(bt_plugin ${plugin_libs})
   target_compile_definitions(${bt_plugin} PRIVATE BT_PLUGIN_EXPORT)

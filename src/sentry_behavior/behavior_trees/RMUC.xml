@@ -1,42 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <root BTCPP_format="4">
- <BehaviorTree ID="rmuc_2026_sentry">
-    <!-- 总闸：比赛阶段 4 + 剩余时间 0~420s -->
+  <BehaviorTree ID="rmuc_2026_sentry">
+    <!-- 总闸: 比赛阶段 4 + 剩余时间 0~420s -->
     <Sequence>
       <IsGameStatus max_remain_time="420"
                     min_remain_time="0"
                     expected_game_progress="4"
                     key_port="{@referee_gameStatus}"/>
       <Sequence>
-        <!-- ===== 阶段一（一次性）：首点压制 → 补给 ===== -->
+        <!-- ===== 阶段一(一次性): 首点压制 → 补给 ===== -->
         <Sequence>
-          <!-- 首点 (5.90, 4.15): 弹丸 >= 1 且 血量 >= 150 时停留; 弹丸 == 0 或 血量 < 150 时离开 -->
-          <RetryUntilSuccessful num_attempts="-1">
-            <Sequence>
-              <PubGoal goal_pose_x="5.90"
-                       goal_pose_y="4.15"
-                       topic_name="/goal_pose"/>
-              <Fallback>
-                <Inverter>
-                  <IsStatusOK ammo_min="1"
-                              hp_min="0"
-                              key_port="{@referee_robotStatus}"/>
-                </Inverter>
-                <Inverter>
-                  <IsStatusOK ammo_min="0"
-                              hp_min="150"
-                              key_port="{@referee_robotStatus}"/>
-                </Inverter>
-              </Fallback>
-            </Sequence>
-          </RetryUntilSuccessful>
+          <!-- 首点 (5.90, 4.15): 弹丸 >= 1 且 血量 >= 150 时驻守;
+               弹丸 == 0 或 血量 < 150 时离开.
+               WhileDoElse 是 reactive 控制流; do 分支用 KeepRunningUntilFailure
+               包住 NavigateTo, 这样 NavigateTo SUCCESS 后会自动重 reset 重发,
+               保持持续驻守语义, 直到 condition FAILURE 才走 else (AlwaysSuccess) 退出. -->
+          <WhileDoElse>
+            <IsStatusOK ammo_min="1"
+                        hp_min="150"
+                        key_port="{@referee_robotStatus}"/>
+            <KeepRunningUntilFailure>
+              <NavigateTo action_name="navigate_to_pose"
+                          goal_pose_x="5.90"
+                          goal_pose_y="4.15"/>
+            </KeepRunningUntilFailure>
+            <AlwaysSuccess/>
+          </WhileDoElse>
 
-          <!-- 补给区 (-0.94, -5.01)：弹丸 >= 50 且 血量 >= 400 才离开 -->
-          <RetryUntilSuccessful num_attempts="-1">
-            <Sequence>
-              <PubGoal goal_pose_x="-0.94"
-                       goal_pose_y="-5.01"
-                       topic_name="/goal_pose"/>
+          <!-- 补给区 (-0.94, -5.01): 满弹满血 (ammo >= 50 && hp >= 400) 即退出 -->
+          <WhileDoElse>
+            <Inverter>
               <Sequence>
                 <IsStatusOK ammo_min="50"
                             hp_min="0"
@@ -45,11 +38,17 @@
                             hp_min="400"
                             key_port="{@referee_robotStatus}"/>
               </Sequence>
-            </Sequence>
-          </RetryUntilSuccessful>
+            </Inverter>
+            <KeepRunningUntilFailure>
+              <NavigateTo action_name="navigate_to_pose"
+                          goal_pose_x="-0.94"
+                          goal_pose_y="-5.01"/>
+            </KeepRunningUntilFailure>
+            <AlwaysSuccess/>
+          </WhileDoElse>
         </Sequence>
 
-        <!-- ===== 阶段二（循环至比赛结束）：次点驻守 ↔ 补给 ===== -->
+        <!-- ===== 阶段二(循环至比赛结束): 次点驻守 ↔ 补给 ===== -->
         <KeepRunningUntilFailure>
           <WhileDoElse>
             <!-- 安全条件: 弹丸 >= 1 且 血量 >= 150 -->
@@ -57,20 +56,16 @@
                         hp_min="150"
                         key_port="{@referee_robotStatus}"/>
 
-            <!-- 驻守次点 (5.56, -3.02) -->
-            <Sequence>
-              <PubGoal goal_pose_x="5.56"
-                       goal_pose_y="-3.02"
-                       topic_name="/goal_pose"/>
-              <Sleep msec="200"/>
-            </Sequence>
+            <!-- do: 持续驻守次点 (NavigateTo SUCCESS 后 KeepRunning 重发) -->
+            <KeepRunningUntilFailure>
+              <NavigateTo action_name="navigate_to_pose"
+                          goal_pose_x="5.56"
+                          goal_pose_y="-3.02"/>
+            </KeepRunningUntilFailure>
 
-            <!-- 弹丸 == 0 或 血量 < 150：回补给区，补满后再回次点 -->
-            <RetryUntilSuccessful num_attempts="-1">
-              <Sequence>
-                <PubGoal goal_pose_x="-0.94"
-                         goal_pose_y="-5.01"
-                         topic_name="/goal_pose"/>
+            <!-- else: 弹丸 == 0 或 血量 < 150 → 回补给区, 满弹满血退出 -->
+            <WhileDoElse>
+              <Inverter>
                 <Sequence>
                   <IsStatusOK ammo_min="50"
                               hp_min="0"
@@ -79,22 +74,22 @@
                               hp_min="400"
                               key_port="{@referee_robotStatus}"/>
                 </Sequence>
-              </Sequence>
-            </RetryUntilSuccessful>
+              </Inverter>
+              <KeepRunningUntilFailure>
+                <NavigateTo action_name="navigate_to_pose"
+                            goal_pose_x="-0.94"
+                            goal_pose_y="-5.01"/>
+              </KeepRunningUntilFailure>
+              <AlwaysSuccess/>
+            </WhileDoElse>
           </WhileDoElse>
         </KeepRunningUntilFailure>
       </Sequence>
     </Sequence>
   </BehaviorTree>
 
-  <!-- Description of Node Models (used by Groot) -->
+  <!-- Description of Node Models (used by Groot2) -->
   <TreeNodesModel>
-    <Action ID="BattlefieldInformation"
-            editable="true">
-      <input_port name="key_port"
-                  default="{@referee_allRobotHP}"/>
-      <output_port name="weight"/>
-    </Action>
     <Condition ID="IsGameStatus"
                editable="true">
       <input_port name="max_remain_time"
@@ -106,68 +101,31 @@
       <input_port name="key_port"
                   default="{@referee_gameStatus}">GameStatus port on blackboard</input_port>
     </Condition>
-    <Condition ID="IsAllyBaseHpLow"
-               editable="true">
-      <input_port name="key_port"
-                  default="{@referee_allRobotHP}"/>
-      <input_port name="threshold"
-                  default="5000"/>
-    </Condition>
-    <Condition ID="IsEnemyFortressOccupied"
-               editable="true">
-      <input_port name="key_port"
-                  default="{@referee_allRobotHP}"/>
-    </Condition>
-    <Condition ID="IsOutpostOk"
-               editable="true">
-      <input_port name="key_port"
-                  default="{@referee_allRobotHP}"/>
-    </Condition>
-    <Condition ID="IsRfidDetected">
-      <input_port name="friendly_supply_zone_exchange"
-                  default="false"
-                  type="bool">己方与兑换区重叠的补给区</input_port>
-      <input_port name="friendly_supply_zone_non_exchange"
-                  default="false"
-                  type="bool">己方与兑换区不重叠的补给区 / RMUL 补给区</input_port>
-      <input_port name="center_gain_point"
-                  default="false"
-                  type="bool">中心增益点（仅 RMUL 适用）</input_port>
-      <input_port name="friendly_fortress_gain_point"
-                  default="false"
-                  type="bool">己方堡垒增益点</input_port>
-      <input_port name="key_port"
-                  default="{@referee_rfidStatus}"
-                  type="rm_interfaces::msg::RfidStatus_&lt;std::allocator&lt;void&gt; &gt;">RfidStatus port on blackboard</input_port>
-    </Condition>
     <Condition ID="IsStatusOK">
       <input_port name="ammo_min"
                   default="0"
-                  type="int">Lower than minimum ammo will return FAILURE</input_port>
+                  type="int">ammo &lt; ammo_min returns FAILURE (inclusive: ammo &gt;= ammo_min OK)</input_port>
       <input_port name="ammo_max"
                   default="65535"
-                  type="int">Higher than maximum ammo will return FAILURE</input_port>
+                  type="int">ammo &gt; ammo_max returns FAILURE (inclusive: ammo &lt;= ammo_max OK)</input_port>
       <input_port name="hp_min"
                   default="300"
-                  type="int">Minimum HP. NOTE: Sentry init/max HP is 400</input_port>
+                  type="int">HP &lt; hp_min returns FAILURE (inclusive: hp &gt;= hp_min OK)</input_port>
       <input_port name="key_port"
                   default="{@referee_robotStatus}"
                   type="rm_interfaces::msg::RobotStatus_&lt;std::allocator&lt;void&gt; &gt;">RobotStatus port on blackboard</input_port>
     </Condition>
-    <Action ID="PubGoal"
+    <Action ID="NavigateTo"
             editable="true">
+      <input_port name="action_name"
+                  default="navigate_to_pose">Action server name (Nav2 navigate_to_pose)</input_port>
       <input_port name="goal_pose_x"/>
       <input_port name="goal_pose_y"/>
-      <input_port name="topic_name"
-                  default="/goal_pose"/>
-    </Action>
-    <Action ID="Pursuit"
-            editable="true">
-      <input_port name="key_port"
-                  default="{@tracker_target}"/>
-      <input_port name="topic_name"
-                  default="/goal_pose"/>
+      <input_port name="goal_pose_yaw"
+                  default="0.0"
+                  type="float">目标航向 (rad), 默认 0</input_port>
+      <output_port name="error_code"
+                   type="int"/>
     </Action>
   </TreeNodesModel>
-
 </root>
