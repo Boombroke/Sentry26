@@ -62,7 +62,7 @@ private:
     pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_snapshot, Eigen::Isometry3d initial_guess);
   void prepareScanContextDB();
   bool checkAndTriggerGlobalRelocalization();
-  void runGlobalRelocalization(
+  bool runGlobalRelocalization(
     pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_snapshot,
     Eigen::Vector3d robot_in_odom);
 

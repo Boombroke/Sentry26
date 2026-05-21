@@ -396,10 +396,68 @@ void SmallGicpRelocalizationNode::registeredPcdCallback(
       this->get_logger(), "Accumulated %d frames (%zu points), performing initial registration...",
       accumulated_count_, accumulated_cloud_->size());
 
+    bool sc_success = false;
+
+    // 冷启动优先走 Scan Context 全局重定位（如果 .scdb 已加载）。
+    // SC 不依赖 init_pose / LIO 重力收敛 yaw，能在机器人离 PCD 建图原点 1m+ 时给出
+    // 准确初值，避免 GICP 从 identity + 3m 关联半径起跑锁次优局部最小。
+    if (global_relocalization_ready_) {
+      RCLCPP_INFO(
+        this->get_logger(),
+        "Cold start: trying Scan Context global relocalization first "
+        "(does not depend on init_pose / LIO orientation)");
+      Eigen::Vector3d robot_in_odom;
+      bool tf_ok = false;
+      try {
+        auto tf_stamped = tf_buffer_->lookupTransform(
+          odom_frame_, robot_base_frame_, tf2::TimePointZero,
+          tf2::durationFromSec(0.5));
+        robot_in_odom << tf_stamped.transform.translation.x, tf_stamped.transform.translation.y,
+          tf_stamped.transform.translation.z;
+        tf_ok = true;
+      } catch (const tf2::TransformException & ex) {
+        RCLCPP_WARN(
+          this->get_logger(),
+          "Cold start SC: TF lookup %s->%s failed: %s. Falling back to GICP-only.",
+          odom_frame_.c_str(), robot_base_frame_.c_str(), ex.what());
+      }
+      if (tf_ok) {
+        // 深拷贝 snapshot，不影响后续 GICP 精调用 accumulated_cloud_ 本体
+        pcl::PointCloud<pcl::PointXYZ>::Ptr snapshot;
+        {
+          std::lock_guard<std::mutex> lock(cloud_mutex_);
+          snapshot = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>(*accumulated_cloud_);
+        }
+        // 同步调用（不 detach）：节点冷启动期间 publishTransform 50ms 一次发的
+        // result_t_ 还是 identity，SC 跑慢点没关系；失败也只是降级到 GICP-only。
+        sc_success = runGlobalRelocalization(snapshot, robot_in_odom);
+        if (sc_success) {
+          RCLCPP_WARN(
+            this->get_logger(),
+            "Cold start SC SUCCEEDED. Refining with GICP from SC initial guess.");
+        } else {
+          RCLCPP_WARN(
+            this->get_logger(),
+            "Cold start SC failed. Falling back to identity-init GICP.");
+        }
+      }
+    } else {
+      RCLCPP_INFO(
+        this->get_logger(),
+        "Cold start: .scdb not loaded, using identity-init GICP "
+        "(may fail if start position differs from mapping origin).");
+    }
+
+    // performRegistration 用 previous_result_t_ 当 GICP 初值：
+    //   - SC 成功：previous_result_t_ 已是 SC 结果（runGlobalRelocalization 写好），
+    //              GICP 在准确初值上 3m 半径精调，必收敛到厘米级
+    //   - SC 失败：previous_result_t_ 仍是 init_pose（identity），GICP 自己起跑（旧行为）
     bool success = performRegistration(false);
     if (success) {
       has_localized_ = true;
-      RCLCPP_INFO(this->get_logger(), "Initial localization succeeded.");
+      RCLCPP_INFO(
+        this->get_logger(), "Initial localization succeeded%s.",
+        sc_success ? " (SC + GICP refine)" : " (GICP only)");
 
       if (enable_periodic_relocalization_) {
         periodic_timer_ = this->create_wall_timer(
@@ -1154,18 +1212,18 @@ bool SmallGicpRelocalizationNode::checkAndTriggerGlobalRelocalization()
     sc_db_->descriptors.size(), robot_in_odom.x(), robot_in_odom.y());
 
   std::thread([this, snapshot, robot_in_odom]() {
-    runGlobalRelocalization(snapshot, robot_in_odom);
+    (void)runGlobalRelocalization(snapshot, robot_in_odom);
     global_running_.store(false);
   }).detach();
   return true;
 }
 
-void SmallGicpRelocalizationNode::runGlobalRelocalization(
+bool SmallGicpRelocalizationNode::runGlobalRelocalization(
   pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_snapshot,
   Eigen::Vector3d robot_in_odom)
 {
   if (!accumulated_snapshot || accumulated_snapshot->empty() || !global_relocalization_ready_) {
-    return;
+    return false;
   }
 
   auto t_start = std::chrono::steady_clock::now();
@@ -1205,7 +1263,7 @@ void SmallGicpRelocalizationNode::runGlobalRelocalization(
   size_t top_k = std::min<size_t>(static_cast<size_t>(global_top_k_), candidates.size());
   if (top_k == 0) {
     RCLCPP_WARN(this->get_logger(), "Global relocalization: empty database, skipping.");
-    return;
+    return false;
   }
   std::partial_sort(
     candidates.begin(), candidates.begin() + top_k, candidates.end(),
@@ -1234,14 +1292,14 @@ void SmallGicpRelocalizationNode::runGlobalRelocalization(
   if (!target_ || !target_tree_) {
     RCLCPP_WARN(
       this->get_logger(), "Global relocalization: target map not ready, skipping GICP refinement.");
-    return;
+    return false;
   }
   auto source = small_gicp::voxelgrid_sampling_omp<
     pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
     *accumulated_snapshot, global_registered_leaf_size_);
   if (!source || source->empty()) {
     RCLCPP_WARN(this->get_logger(), "Global relocalization: source empty after downsample.");
-    return;
+    return false;
   }
   for (auto & pt : source->points) {
     pt.z = 0.0f;
@@ -1306,7 +1364,7 @@ void SmallGicpRelocalizationNode::runGlobalRelocalization(
       this->get_logger(),
       "Global relocalization REJECTED in %.0fms: best_score=%.0f < threshold=%.0f", elapsed_ms,
       best_score, global_min_score_threshold_);
-    return;
+    return false;
   }
 
   // 2D 约束
@@ -1322,7 +1380,7 @@ void SmallGicpRelocalizationNode::runGlobalRelocalization(
     RCLCPP_ERROR(
       this->get_logger(), "Global relocalization REJECTED: correction %.2fm > %.2fm.", correction,
       global_max_correction_distance_);
-    return;
+    return false;
   }
 
   RCLCPP_WARN(
@@ -1336,6 +1394,7 @@ void SmallGicpRelocalizationNode::runGlobalRelocalization(
     health_monitor_->reset();
   }
   notifyTerrainClearing();
+  return true;
 }
 
 }  // namespace small_gicp_relocalization
