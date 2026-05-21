@@ -29,7 +29,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from protocol import (
     crc16, pack_with_crc, unpack_packet, packet_size_for_header,
-    ImuPacket, StatusPacket, HpPacket, NavPacket,
+    ImuPacket, ChassisFeedbackPacket, RefereePacket, NavCmdPacket, HeartbeatPacket,
+    HEADER_IMU, HEADER_CHASSIS_FEEDBACK, HEADER_REFEREE, HEADER_NAV_CMD, HEADER_HEARTBEAT,
     STM32_TO_ROS_PACKETS, ROS_TO_STM32_PACKETS, PACKETS,
 )
 
@@ -128,7 +129,7 @@ REMEDIES = {
 
 
 class SerialReaderThread(QtCore.QThread):
-    nav_packet_received = QtCore.pyqtSignal(float, float, float, bool)
+    nav_packet_received = QtCore.pyqtSignal(float, float, float, int, bool)
     serial_error = QtCore.pyqtSignal(str)
 
     def __init__(self, serial_obj: serial.Serial, serial_lock: threading.Lock):
@@ -173,8 +174,8 @@ class SerialReaderThread(QtCore.QThread):
             if result is None:
                 continue
             pkt, crc_ok = result
-            if isinstance(pkt, NavPacket) and NavPacket in ROS_TO_STM32_PACKETS and NavPacket.HEADER in PACKETS:
-                self.nav_packet_received.emit(pkt.vel_x, pkt.vel_y, pkt.vel_w, crc_ok)
+            if isinstance(pkt, NavCmdPacket) and NavCmdPacket in ROS_TO_STM32_PACKETS and NavCmdPacket.HEADER in PACKETS:
+                self.nav_packet_received.emit(pkt.lx, pkt.ly, pkt.az, int(pkt.mode), crc_ok)
 
 
 class DiagReaderThread(QtCore.QThread):
@@ -302,16 +303,19 @@ class DiagReaderThread(QtCore.QThread):
                     if gap > self._max_no_packet_gap:
                         self._max_no_packet_gap = gap
                 self._last_valid_packet_time = now
-                if hdr == 0xA1 and len(body) == 9:
-                    _, pitch, yaw = struct.unpack('<Bff', body)
+                if hdr == HEADER_IMU and len(body) == ImuPacket.FRAME_SIZE - 2:
+                    # body = [header, len, gimbal_pitch, gimbal_yaw, chassis_pitch, chassis_yaw, mcu_ts]
+                    fields = struct.unpack(ImuPacket.STRUCT_NO_CRC, body)
+                    gimbal_pitch = fields[2]
+                    gimbal_yaw = fields[3]
                     if self._last_imu_pitch is not None and self._last_imu_yaw is not None:
                         if (
-                            abs(pitch - self._last_imu_pitch) > self.CONTENT_JUMP_THRESHOLD
-                            or abs(yaw - self._last_imu_yaw) > self.CONTENT_JUMP_THRESHOLD
+                            abs(gimbal_pitch - self._last_imu_pitch) > self.CONTENT_JUMP_THRESHOLD
+                            or abs(gimbal_yaw - self._last_imu_yaw) > self.CONTENT_JUMP_THRESHOLD
                         ):
                             self._content_jumps += 1
-                    self._last_imu_pitch = pitch
-                    self._last_imu_yaw = yaw
+                    self._last_imu_pitch = gimbal_pitch
+                    self._last_imu_yaw = gimbal_yaw
             else:
                 self._pkt_crc_err[hdr] += 1
                 self._consecutive_crc_errors += 1
@@ -408,13 +412,20 @@ class SerialMockTab(QtWidgets.QWidget):
             (3, '3 五秒倒计时'),
             (4, '4 比赛中'),
             (5, '5 结算'),
-        ]
+        ],
+        'chassis_mode': [
+            (0, '0 normal'),
+            (1, '1 spin_low'),
+            (2, '2 spin_high'),
+            (3, '3 estop'),
+        ],
     }
 
     SPECIAL_FIELDS = {
         'game_progress': 'combo',
         'team_colour': 'radio',
         'rfid_base': 'checkbox',
+        'chassis_mode': 'combo',
     }
 
     FIELD_LABEL_OVERRIDES = {
@@ -424,6 +435,22 @@ class SerialMockTab(QtWidgets.QWidget):
         'projectile_allowance_17mm': '17mm 弹丸额度',
         'team_colour': '队伍颜色',
         'rfid_base': '基地 RFID 激活',
+        'gimbal_pitch':     '云台 pitch (rad)',
+        'gimbal_yaw':       '云台 yaw (rad)',
+        'chassis_pitch':    '车体 pitch (rad)',
+        'chassis_yaw':      '车体 yaw (rad)',
+        'mcu_timestamp_ms': 'MCU 时间戳低16位 (ms)',
+        'chassis_power':    '底盘功率 (W)',
+        'chassis_mode':     '电控模式',
+        'event_data':       '事件 bitfield',
+        'ally_1_robot_hp':  '英雄血量',
+        'ally_2_robot_hp':  '工程血量',
+        'ally_3_robot_hp':  '步兵3血量',
+        'ally_4_robot_hp':  '步兵4血量',
+        'ally_7_robot_hp':  '哨兵血量',
+        'ally_outpost_hp':  '前哨站血量',
+        'ally_base_hp':     '基地血量',
+        'reserved':         '预留',
     }
 
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
@@ -480,11 +507,7 @@ class SerialMockTab(QtWidgets.QWidget):
         main_layout.addLayout(top_bar)
 
         self.tabs = QtWidgets.QTabWidget()
-        send_packet_classes = [
-            pkt_class
-            for pkt_class in (ImuPacket, StatusPacket, HpPacket)
-            if pkt_class in STM32_TO_ROS_PACKETS and pkt_class.HEADER in PACKETS
-        ]
+        send_packet_classes = list(STM32_TO_ROS_PACKETS)
         for pkt_class in send_packet_classes:
             tab_name = f'{pkt_class.__name__.replace("Packet", "")} 0x{pkt_class.HEADER:02X}'
             tab_widget, enable_cb, controls, interval_spin = self._build_packet_tab(pkt_class)
@@ -504,16 +527,19 @@ class SerialMockTab(QtWidgets.QWidget):
         self.nav_vel_x_label = QtWidgets.QLabel('0.000 m/s')
         self.nav_vel_y_label = QtWidgets.QLabel('0.000 m/s')
         self.nav_vel_w_label = QtWidgets.QLabel('0.000 rad/s')
+        self.nav_mode_label = QtWidgets.QLabel('0')
         self.nav_crc_label = QtWidgets.QLabel('N/A')
 
-        rx_layout.addWidget(QtWidgets.QLabel('vel_x'), 0, 0)
+        rx_layout.addWidget(QtWidgets.QLabel('lx'), 0, 0)
         rx_layout.addWidget(self.nav_vel_x_label, 0, 1)
-        rx_layout.addWidget(QtWidgets.QLabel('vel_y'), 0, 2)
+        rx_layout.addWidget(QtWidgets.QLabel('ly'), 0, 2)
         rx_layout.addWidget(self.nav_vel_y_label, 0, 3)
-        rx_layout.addWidget(QtWidgets.QLabel('vel_w'), 1, 0)
+        rx_layout.addWidget(QtWidgets.QLabel('az'), 1, 0)
         rx_layout.addWidget(self.nav_vel_w_label, 1, 1)
-        rx_layout.addWidget(QtWidgets.QLabel('CRC'), 1, 2)
-        rx_layout.addWidget(self.nav_crc_label, 1, 3)
+        rx_layout.addWidget(QtWidgets.QLabel('mode'), 1, 2)
+        rx_layout.addWidget(self.nav_mode_label, 1, 3)
+        rx_layout.addWidget(QtWidgets.QLabel('CRC'), 2, 0)
+        rx_layout.addWidget(self.nav_crc_label, 2, 1)
 
         main_layout.addWidget(rx_group)
 
@@ -537,7 +563,9 @@ class SerialMockTab(QtWidgets.QWidget):
                 combo = QtWidgets.QComboBox()
                 for val, text in self.GAME_PROGRESS_LABELS[field_name]:
                     combo.addItem(text, val)
-                combo.setCurrentIndex(4)
+                # default to "比赛中" for game_progress, "normal" (idx 0) for others
+                default_idx = 4 if field_name == 'game_progress' else 0
+                combo.setCurrentIndex(min(default_idx, combo.count() - 1))
                 layout.addWidget(combo, i, 1)
                 controls[field_name] = combo
                 continue
@@ -586,6 +614,13 @@ class SerialMockTab(QtWidgets.QWidget):
             elif field_type == 'uint8':
                 spin = QtWidgets.QSpinBox()
                 spin.setRange(0, 255)
+                spin.setValue(0)
+                layout.addWidget(spin, i, 1)
+                controls[field_name] = spin
+            elif field_type == 'uint32':
+                spin = QtWidgets.QSpinBox()
+                # QSpinBox is 32-bit signed in Qt; cap at INT32_MAX to be safe
+                spin.setRange(0, 2_147_483_647)
                 spin.setValue(0)
                 layout.addWidget(spin, i, 1)
                 controls[field_name] = spin
@@ -744,11 +779,12 @@ class SerialMockTab(QtWidgets.QWidget):
             tab_info['count'] += 1
             self.update_status_bar()
 
-    @QtCore.pyqtSlot(float, float, float, bool)
-    def on_nav_packet_received(self, vel_x: float, vel_y: float, vel_w: float, crc_ok: bool) -> None:
-        self.nav_vel_x_label.setText(f'{vel_x:.3f} m/s')
-        self.nav_vel_y_label.setText(f'{vel_y:.3f} m/s')
-        self.nav_vel_w_label.setText(f'{vel_w:.3f} rad/s')
+    @QtCore.pyqtSlot(float, float, float, int, bool)
+    def on_nav_packet_received(self, lx: float, ly: float, az: float, mode: int, crc_ok: bool) -> None:
+        self.nav_vel_x_label.setText(f'{lx:.3f} m/s')
+        self.nav_vel_y_label.setText(f'{ly:.3f} m/s')
+        self.nav_vel_w_label.setText(f'{az:.3f} rad/s')
+        self.nav_mode_label.setText(f'{mode}')
         if crc_ok:
             self.nav_crc_label.setText('OK')
             self.nav_crc_label.setStyleSheet('color: #34d399; font-weight: 600;')
