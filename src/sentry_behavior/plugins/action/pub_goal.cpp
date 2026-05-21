@@ -17,7 +17,7 @@
 namespace sentry_behavior
 {
 
-    PubGoalAction::PubGoalAction(
+PubGoalAction::PubGoalAction(
   const std::string & name, const BT::NodeConfig & conf, const BT::RosNodeParams & params)
 : RosTopicPubNode<geometry_msgs::msg::PoseStamped>(name, conf, params)
 {
@@ -25,26 +25,23 @@ namespace sentry_behavior
 
 bool PubGoalAction::setMessage(geometry_msgs::msg::PoseStamped & msg)
 {
-    auto res_x = getInput<std::float_t>("goal_pose_x");
-    auto res_y = getInput<std::float_t>("goal_pose_y");
-    if (!res_x) {
-      throw BT::RuntimeError("error reading port [goal_pose]:", res_x.error());
-    }
-    else if(!res_y){
-      throw BT::RuntimeError("error reading port [goal_pose]:", res_y.error());
-    }
-    msg.header.stamp = rclcpp::Clock().now();
-    msg.header.frame_id = "map";
-    msg.pose.position.set__x(res_x.value());
-    msg.pose.position.set__y(res_y.value());
-    msg.pose.position.z=0;
-    msg.pose.orientation.x=0;
-    msg.pose.orientation.y=0;
-    msg.pose.orientation.z=0;
-    msg.pose.orientation.w=1.0;
-    //msg.header.stamp = now();
-    //msg.header.frame_id = "map";
-    //msg.pose = goal->pose;
+  auto res_x = getInput<std::float_t>("goal_pose_x");
+  auto res_y = getInput<std::float_t>("goal_pose_y");
+  if (!res_x) {
+    throw BT::RuntimeError("error reading port [goal_pose_x]:", res_x.error());
+  }
+  if (!res_y) {
+    throw BT::RuntimeError("error reading port [goal_pose_y]:", res_y.error());
+  }
+  msg.header.stamp = node_->now();
+  msg.header.frame_id = "map";
+  msg.pose.position.set__x(res_x.value());
+  msg.pose.position.set__y(res_y.value());
+  msg.pose.position.z = 0;
+  msg.pose.orientation.x = 0;
+  msg.pose.orientation.y = 0;
+  msg.pose.orientation.z = 0;
+  msg.pose.orientation.w = 1.0;
   return true;
 }
 
@@ -52,7 +49,7 @@ BT::PortsList PubGoalAction::providedPorts()
 {
   BT::PortsList additional_ports = {
     BT::InputPort<std::float_t>("goal_pose_x"),
-      BT::InputPort<std::float_t>("goal_pose_y"),
+    BT::InputPort<std::float_t>("goal_pose_y"),
   };
   return providedBasicPorts(additional_ports);
 }
