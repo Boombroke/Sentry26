@@ -35,10 +35,10 @@ BT::NodeStatus IsStatusOKCondition::checkRobotStatus()
   getInput("ammo_min", ammo_min);
   getInput("ammo_max", ammo_max);
 
+  // 阈值含等号语义: hp >= hp_min, ammo_min <= ammo <= ammo_max
   const bool is_hp_ok = (msg->current_hp >= hp_min);
-  const bool is_ammo_ok = (msg->projectile_allowance_17mm > ammo_min) &&
+  const bool is_ammo_ok = (msg->projectile_allowance_17mm >= ammo_min) &&
                           (msg->projectile_allowance_17mm <= ammo_max);
-  RCLCPP_INFO(logger_,"ammo=%d",msg->projectile_allowance_17mm);
   return (is_hp_ok && is_ammo_ok) ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
 }
 
@@ -47,9 +47,11 @@ BT::PortsList IsStatusOKCondition::providedPorts()
   return {
     BT::InputPort<rm_interfaces::msg::RobotStatus>(
       "key_port", "{@referee_robotStatus}", "RobotStatus port on blackboard"),
-    BT::InputPort<int>("hp_min", 300, "Minimum HP. NOTE: Sentry init/max HP is 400"),
-    BT::InputPort<int>("ammo_min", 0, "Lower than minimum ammo will return FAILURE"),
-    BT::InputPort<int>("ammo_max", 65535, "Higher than maximum ammo will return FAILURE")};
+    BT::InputPort<int>("hp_min", 300, "HP < hp_min returns FAILURE (inclusive: hp >= hp_min OK)"),
+    BT::InputPort<int>(
+      "ammo_min", 0, "ammo < ammo_min returns FAILURE (inclusive: ammo >= ammo_min OK)"),
+    BT::InputPort<int>(
+      "ammo_max", 65535, "ammo > ammo_max returns FAILURE (inclusive: ammo <= ammo_max OK)")};
 }
 }  // namespace sentry_behavior
 
