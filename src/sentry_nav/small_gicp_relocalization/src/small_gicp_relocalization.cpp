@@ -1115,6 +1115,22 @@ bool SmallGicpRelocalizationNode::checkAndTriggerGlobalRelocalization()
     return false;
   }
 
+  // 拿当前机器人在 odom 系下的位置：query_local 必须以机器人为原点，
+  // 而 result_t_.translation() 是 map 系下 odom 原点位置（语义不同），不能混用。
+  Eigen::Vector3d robot_in_odom;
+  try {
+    auto tf_stamped =
+      tf_buffer_->lookupTransform(odom_frame_, robot_base_frame_, tf2::TimePointZero);
+    robot_in_odom << tf_stamped.transform.translation.x, tf_stamped.transform.translation.y,
+      tf_stamped.transform.translation.z;
+  } catch (const tf2::TransformException & ex) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Global relocalization: failed to lookup %s->%s TF: %s. Skipping this trigger.",
+      odom_frame_.c_str(), robot_base_frame_.c_str(), ex.what());
+    return false;
+  }
+
   // 取累积点云快照
   pcl::PointCloud<pcl::PointXYZ>::Ptr snapshot;
   {
@@ -1132,18 +1148,21 @@ bool SmallGicpRelocalizationNode::checkAndTriggerGlobalRelocalization()
   last_global_attempt_time_ = now;
   global_running_.store(true);
   RCLCPP_WARN(
-    this->get_logger(), "TRIGGERING global relocalization (health unhealthy, %zu db descriptors)",
-    sc_db_->descriptors.size());
+    this->get_logger(),
+    "TRIGGERING global relocalization (health unhealthy, %zu db descriptors, "
+    "robot_in_odom=[%.2f, %.2f])",
+    sc_db_->descriptors.size(), robot_in_odom.x(), robot_in_odom.y());
 
-  std::thread([this, snapshot]() {
-    runGlobalRelocalization(snapshot);
+  std::thread([this, snapshot, robot_in_odom]() {
+    runGlobalRelocalization(snapshot, robot_in_odom);
     global_running_.store(false);
   }).detach();
   return true;
 }
 
 void SmallGicpRelocalizationNode::runGlobalRelocalization(
-  pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_snapshot)
+  pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_snapshot,
+  Eigen::Vector3d robot_in_odom)
 {
   if (!accumulated_snapshot || accumulated_snapshot->empty() || !global_relocalization_ready_) {
     return;
@@ -1151,15 +1170,15 @@ void SmallGicpRelocalizationNode::runGlobalRelocalization(
 
   auto t_start = std::chrono::steady_clock::now();
 
-  // 1. 把 accumulated_snapshot（odom 系）转到当前 result_t_ 局部系作为 query。
-  // SC 描述子是 yaw 旋转不变量，因此只需消除 result_t_ 的平移分量；不需要补偿 yaw。
-  Eigen::Vector3d t_now = result_t_.translation();
+  // 1. 把 accumulated_snapshot（odom 系）转到机器人局部系作为 query。
+  // 局部系原点 = 机器人当前位置（odom 系下的 robot_in_odom），不是 odom 原点。
+  // SC 描述子是 yaw 旋转不变量，因此只需消除平移；不需要补偿 yaw（odom 系朝向用作"基准朝向"）。
   pcl::PointCloud<pcl::PointXYZ>::Ptr query_local(new pcl::PointCloud<pcl::PointXYZ>());
   query_local->reserve(accumulated_snapshot->size());
   for (const auto & pt : accumulated_snapshot->points) {
     pcl::PointXYZ p_local;
-    p_local.x = pt.x - static_cast<float>(t_now.x());
-    p_local.y = pt.y - static_cast<float>(t_now.y());
+    p_local.x = pt.x - static_cast<float>(robot_in_odom.x());
+    p_local.y = pt.y - static_cast<float>(robot_in_odom.y());
     p_local.z = pt.z;
     query_local->push_back(p_local);
   }
@@ -1241,15 +1260,26 @@ void SmallGicpRelocalizationNode::runGlobalRelocalization(
   for (size_t k = 0; k < candidates.size(); ++k) {
     const auto & c = candidates[k];
     const Eigen::Vector3d & db_pose = sc_db_->poses[c.db_idx];
-    // 候选初值：以 db_pose 为 map_to_odom 平移、yaw_shift 为初始 yaw。
-    // 因为 sc_query 的 query_local 已经从 odom 系减去 result_t_.translation()，
-    // 所以查询点云原点 ≈ result_t_.translation()；候选 db_pose 是该原点在 map 系的位置。
-    // GICP 用 accumulated_snapshot（odom 系）做 source 与 target_（map 系）配准，
-    // 初值的 translation 应使 source 平移后落在 db_pose 附近：
-    //   guess.translation = db_pose - t_now
+    // GICP 初值 = T_map_odom：把 source（odom 系）平移到 target（map 系）的初始猜测。
+    //
+    // 推导（已通过 /tmp/global_reloc_smoke 闭环验证）：
+    //   query_local 朝向 = odom 朝向；candidate_local 朝向 = map 朝向（codegen yaw=0）。
+    //   ScanContextEngine::distance 返回 yaw_shift 满足 query = R_z(yaw_shift) * candidate
+    //   （点级关系）。这等价于"query frame 相对 candidate frame 顺时针旋转 yaw_shift"，
+    //   而 candidate frame ≡ map frame、query frame ≡ odom frame，所以
+    //     R_map_odom = R_z(-yaw_shift)
+    //   因此 GICP 初值的 yaw 是 -yaw_shift（不是 +yaw_shift）。
+    //
+    //   T_map_robot = [R_map_odom | db_pose]
+    //   T_odom_robot = [I | robot_in_odom]
+    //   T_map_odom = T_map_robot * T_odom_robot^{-1}
+    //              = [R_map_odom | db_pose - R_map_odom * robot_in_odom]
+    Eigen::Matrix3d R_map_odom =
+      Eigen::AngleAxisd(-c.yaw_shift, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+    Eigen::Vector3d trans = db_pose - R_map_odom * robot_in_odom;
     Eigen::Isometry3d guess = Eigen::Isometry3d::Identity();
-    guess.translation() << db_pose.x() - t_now.x(), db_pose.y() - t_now.y(), 0.0;
-    guess.linear() = Eigen::AngleAxisd(c.yaw_shift, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+    guess.translation() << trans.x(), trans.y(), 0.0;
+    guess.linear() = R_map_odom;
 
     auto result = reg->align(*target_, *source, *target_tree_, guess);
     if (!result.converged || result.num_inliers < 50) {

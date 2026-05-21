@@ -197,17 +197,18 @@ std::pair<double, double> ScanContextEngine::distance(
     }
   }
 
-  // Shift semantics: we compare query column (j+shift) % N with candidate
-  // column j. If the query frame is rotated clockwise relative to the
-  // candidate by Delta_theta (i.e. query yaw < candidate yaw using the right
-  // hand z-axis convention), every world feature lands at a phi in the query
-  // local frame that is larger than its phi in the candidate local frame by
-  // Delta_theta. atan2 sign is CCW-positive, so a CCW phi shift maps to a
-  // larger sector index, and aligning the descriptors needs shift = -Delta /
-  // sector_step. Wrapping into [0, N) and converting back gives
-  // yaw_shift = -shift * 2pi / N (mod 2pi), so positive yaw_shift means the
-  // query is rotated clockwise from the candidate.
-  double yaw_shift = -static_cast<double>(best_shift) * kTwoPi / static_cast<double>(num_sectors);
+  // Shift semantics (verified by /tmp/sc_smoke round-trip):
+  //   query == R_z(yaw_shift) * candidate  (CCW positive, right-hand z-axis).
+  // We compare query column (j+shift) % N with candidate column j. If query is
+  // rotated CCW by Delta_theta relative to candidate (yaw_query = yaw_cand +
+  // Delta_theta), every world feature's phi in the query local frame is
+  // smaller by Delta_theta (because the local frame is what rotated, not the
+  // features). To align the descriptors we need to rotate query columns to
+  // higher sector indices by Delta_theta / sector_step, i.e.
+  //   shift = +Delta_theta / sector_step (mod N).
+  // Therefore yaw_shift = +shift * 2pi / N. Positive yaw_shift means query is
+  // rotated CCW from candidate.
+  double yaw_shift = static_cast<double>(best_shift) * kTwoPi / static_cast<double>(num_sectors);
   // Wrap to (-pi, pi].
   while (yaw_shift <= -M_PI) {
     yaw_shift += kTwoPi;
