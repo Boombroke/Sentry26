@@ -6,21 +6,22 @@
       <IsGameStatus max_remain_time="420"
                     min_remain_time="0"
                     expected_game_progress="4"
-                    key_port="{@referee_gameStatus}"
-                    state="{@state}"/>
+                    key_port="{@referee_gameStatus}"/>
       <Sequence>
         <!-- ===== 阶段一（一次性）：首点压制 → 补给 ===== -->
         <Sequence>
-          <!-- 首点 (5.90, 4.15)：弹丸 > 0 且 血量 >= 150 时停留；弹丸 == 0 或 血量 < 150 时离开 -->
+          <!-- 首点 (5.90, 4.15): 弹丸 >= 1 且 血量 >= 150 时停留; 弹丸 == 0 或 血量 < 150 时离开 -->
           <RetryUntilSuccessful num_attempts="-1">
             <Sequence>
               <PubGoal goal_pose_x="5.90"
                        goal_pose_y="4.15"
                        topic_name="/goal_pose"/>
               <Fallback>
-                <IsStatusOK ammo_max="0"
-                            hp_min="0"
-                            key_port="{@referee_robotStatus}"/>
+                <Inverter>
+                  <IsStatusOK ammo_min="1"
+                              hp_min="0"
+                              key_port="{@referee_robotStatus}"/>
+                </Inverter>
                 <Inverter>
                   <IsStatusOK ammo_min="0"
                               hp_min="150"
@@ -37,7 +38,7 @@
                        goal_pose_y="-5.01"
                        topic_name="/goal_pose"/>
               <Sequence>
-                <IsStatusOK ammo_min="49"
+                <IsStatusOK ammo_min="50"
                             hp_min="0"
                             key_port="{@referee_robotStatus}"/>
                 <IsStatusOK ammo_min="0"
@@ -51,8 +52,8 @@
         <!-- ===== 阶段二（循环至比赛结束）：次点驻守 ↔ 补给 ===== -->
         <KeepRunningUntilFailure>
           <WhileDoElse>
-            <!-- 安全条件：弹丸 > 0 且 血量 >= 150 -->
-            <IsStatusOK ammo_min="0"
+            <!-- 安全条件: 弹丸 >= 1 且 血量 >= 150 -->
+            <IsStatusOK ammo_min="1"
                         hp_min="150"
                         key_port="{@referee_robotStatus}"/>
 
@@ -61,7 +62,7 @@
               <PubGoal goal_pose_x="5.56"
                        goal_pose_y="-3.02"
                        topic_name="/goal_pose"/>
-              <Sleep msec="2000"/>
+              <Sleep msec="200"/>
             </Sequence>
 
             <!-- 弹丸 == 0 或 血量 < 150：回补给区，补满后再回次点 -->
@@ -71,7 +72,7 @@
                          goal_pose_y="-5.01"
                          topic_name="/goal_pose"/>
                 <Sequence>
-                  <IsStatusOK ammo_min="49"
+                  <IsStatusOK ammo_min="50"
                               hp_min="0"
                               key_port="{@referee_robotStatus}"/>
                   <IsStatusOK ammo_min="0"
@@ -97,15 +98,13 @@
     <Condition ID="IsGameStatus"
                editable="true">
       <input_port name="max_remain_time"
-                  default="420">GameStatus port on blackboard</input_port>
+                  default="420">Maximum remaining time (s)</input_port>
       <input_port name="min_remain_time"
-                  default="0">Expected game progress stage</input_port>
+                  default="0">Minimum remaining time (s)</input_port>
       <input_port name="expected_game_progress"
-                  default="4">Minimum remaining time (s)</input_port>
+                  default="4">Expected game progress stage</input_port>
       <input_port name="key_port"
-                  default="{@referee_gameStatus}">Maximum remaining time (s)</input_port>
-      <output_port name="state"
-                   default="{@state}"/>
+                  default="{@referee_gameStatus}">GameStatus port on blackboard</input_port>
     </Condition>
     <Condition ID="IsAllyBaseHpLow"
                editable="true">
