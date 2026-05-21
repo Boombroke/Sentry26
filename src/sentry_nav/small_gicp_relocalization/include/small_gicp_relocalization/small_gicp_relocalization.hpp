@@ -182,6 +182,11 @@ private:
   bool global_relocalization_ready_{false};
   std::atomic<bool> global_running_{false};
   std::chrono::steady_clock::time_point last_global_attempt_time_;
+
+  // Manual override: once /initialpose received, all automatic relocalization
+  // paths (periodic / emergency / deep / cold-start SC / health-triggered SC)
+  // are disabled until node restart. Supports multiple manual updates.
+  std::atomic<bool> manual_pose_locked_{false};
 };
 
 }  // namespace small_gicp_relocalization

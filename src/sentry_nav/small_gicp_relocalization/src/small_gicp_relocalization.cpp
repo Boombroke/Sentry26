@@ -252,6 +252,11 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
       deep_verification_interval_, deep_global_leaf_size_, deep_max_dist_sq_, deep_max_iterations_,
       deep_accumulated_count_threshold_, deep_min_score_threshold_, deep_max_correction_distance_);
   }
+
+  RCLCPP_INFO(
+    this->get_logger(),
+    "Manual override: send to /initialpose to lock map->odom. "
+    "Re-send to fine-tune. Restart node to re-enable automatic relocalization.");
 }
 
 void SmallGicpRelocalizationNode::loadPcdFile(const std::string & file_name)
@@ -349,6 +354,12 @@ void SmallGicpRelocalizationNode::registeredPcdCallback(
 {
   last_scan_time_ = msg->header.stamp;
   current_scan_frame_id_ = msg->header.frame_id;
+
+  if (manual_pose_locked_.load()) {
+    // Manual lock: stop accumulating points. publishTransform still runs
+    // off result_t_ which is the manual pose.
+    return;
+  }
 
   if (!global_map_ready_) {
     return;
@@ -481,6 +492,9 @@ void SmallGicpRelocalizationNode::registeredPcdCallback(
 
 void SmallGicpRelocalizationNode::periodicRegistrationCallback()
 {
+  if (manual_pose_locked_.load()) {
+    return;
+  }
   {
     std::lock_guard<std::mutex> lock(cloud_mutex_);
 
@@ -563,6 +577,9 @@ void SmallGicpRelocalizationNode::periodicRegistrationCallback()
 
 bool SmallGicpRelocalizationNode::performEmergencyRegistration()
 {
+  if (manual_pose_locked_.load()) {
+    return false;
+  }
   if (accumulated_cloud_->empty()) {
     if (health_monitor_) {
       health_monitor_->recordFailure();
@@ -699,6 +716,9 @@ bool SmallGicpRelocalizationNode::performEmergencyRegistration()
 
 bool SmallGicpRelocalizationNode::performRegistration(bool is_periodic)
 {
+  if (manual_pose_locked_.load()) {
+    return false;
+  }
   if (accumulated_cloud_->empty()) {
     RCLCPP_WARN(this->get_logger(), "No accumulated points to process.");
     if (health_monitor_) {
@@ -900,44 +920,95 @@ void SmallGicpRelocalizationNode::publishTransform()
 void SmallGicpRelocalizationNode::initialPoseCallback(
   const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
 {
-  RCLCPP_INFO(
-    this->get_logger(), "Received initial pose: [x: %f, y: %f, z: %f]", msg->pose.pose.position.x,
-    msg->pose.pose.position.y, msg->pose.pose.position.z);
+  RCLCPP_WARN(
+    this->get_logger(),
+    "Manual initial pose received: frame=%s, [x=%.3f, y=%.3f]. "
+    "ALL automatic relocalization will be DISABLED until node restart.",
+    msg->header.frame_id.c_str(), msg->pose.pose.position.x, msg->pose.pose.position.y);
 
-  Eigen::Isometry3d map_to_robot_base = Eigen::Isometry3d::Identity();
-  map_to_robot_base.translation() << msg->pose.pose.position.x, msg->pose.pose.position.y,
+  // Interpret /initialpose as map -> base_footprint (RViz default).
+  Eigen::Isometry3d map_to_base = Eigen::Isometry3d::Identity();
+  map_to_base.translation() << msg->pose.pose.position.x, msg->pose.pose.position.y,
     msg->pose.pose.position.z;
-  map_to_robot_base.linear() = Eigen::Quaterniond(
-                                 msg->pose.pose.orientation.w, msg->pose.pose.orientation.x,
-                                 msg->pose.pose.orientation.y, msg->pose.pose.orientation.z)
-                                 .toRotationMatrix();
+  map_to_base.linear() = Eigen::Quaterniond(
+                           msg->pose.pose.orientation.w, msg->pose.pose.orientation.x,
+                           msg->pose.pose.orientation.y, msg->pose.pose.orientation.z)
+                           .toRotationMatrix();
 
+  // Lookup odom -> base at the message's stamp (or fall back to latest if buffered too short).
+  Eigen::Isometry3d odom_to_base = Eigen::Isometry3d::Identity();
+  bool tf_ok = false;
   try {
-    auto transform =
-      tf_buffer_->lookupTransform(robot_base_frame_, current_scan_frame_id_, tf2::TimePointZero);
-    Eigen::Isometry3d robot_base_to_odom = tf2::transformToEigen(transform.transform);
-    Eigen::Isometry3d map_to_odom = map_to_robot_base * robot_base_to_odom;
-
-    previous_result_t_ = result_t_ = map_to_odom;
-    has_localized_ = true;
-    consecutive_periodic_failures_ = 0;
-
-    {
-      std::lock_guard<std::mutex> lock(cloud_mutex_);
-      accumulated_cloud_->clear();
-      accumulated_count_ = 0;
-    }
-
-    RCLCPP_INFO(this->get_logger(), "Initial pose accepted. Marked as localized.");
-  } catch (tf2::TransformException & ex) {
+    auto tf_stamped = tf_buffer_->lookupTransform(
+      odom_frame_, base_frame_, msg->header.stamp, tf2::durationFromSec(0.5));
+    odom_to_base = tf2::transformToEigen(tf_stamped.transform);
+    tf_ok = true;
+  } catch (const tf2::TransformException & ex) {
     RCLCPP_WARN(
-      this->get_logger(), "Could not transform initial pose from %s to %s: %s",
-      robot_base_frame_.c_str(), current_scan_frame_id_.c_str(), ex.what());
+      this->get_logger(),
+      "Could not get %s -> %s at stamp; trying latest. Detail: %s",
+      odom_frame_.c_str(), base_frame_.c_str(), ex.what());
+    try {
+      auto tf_stamped =
+        tf_buffer_->lookupTransform(odom_frame_, base_frame_, tf2::TimePointZero);
+      odom_to_base = tf2::transformToEigen(tf_stamped.transform);
+      tf_ok = true;
+    } catch (const tf2::TransformException & ex2) {
+      RCLCPP_ERROR(
+        this->get_logger(),
+        "Could not get %s -> %s (latest either): %s. "
+        "Manual pose REJECTED, automatic relocalization remains active.",
+        odom_frame_.c_str(), base_frame_.c_str(), ex2.what());
+      return;
+    }
   }
+  (void)tf_ok;
+
+  // map -> odom = map -> base * (odom -> base)^{-1}
+  Eigen::Isometry3d map_to_odom = map_to_base * odom_to_base.inverse();
+
+  // Constrain to 2D (z=0, roll=pitch=0)
+  Eigen::Vector3d t = map_to_odom.translation();
+  double yaw = std::atan2(map_to_odom.rotation()(1, 0), map_to_odom.rotation()(0, 0));
+  Eigen::Isometry3d constrained = Eigen::Isometry3d::Identity();
+  constrained.translation() << t.x(), t.y(), 0.0;
+  constrained.linear() = Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+
+  // Atomically commit
+  previous_result_t_ = result_t_ = constrained;
+  has_localized_ = true;
+  consecutive_periodic_failures_ = 0;
+  manual_pose_locked_.store(true);
+
+  // Clear accumulators so next time we unlock (via restart) we start fresh.
+  {
+    std::lock_guard<std::mutex> lock(cloud_mutex_);
+    accumulated_cloud_->clear();
+    accumulated_count_ = 0;
+  }
+  {
+    std::lock_guard<std::mutex> lock(deep_cloud_mutex_);
+    deep_accumulated_cloud_->clear();
+    deep_accumulated_count_ = 0;
+  }
+
+  // Reset health monitor so any future manual fixes are clean
+  if (health_monitor_) {
+    health_monitor_->reset();
+  }
+
+  RCLCPP_WARN(
+    this->get_logger(),
+    "Manual pose ACCEPTED: map->odom = [%.3f, %.3f, yaw=%.3f rad]. "
+    "All automatic relocalization is now LOCKED. Drag again in RViz to fine-tune.",
+    t.x(), t.y(), yaw);
 }
 
 void SmallGicpRelocalizationNode::deepVerificationTimerCallback()
 {
+  if (manual_pose_locked_.load()) {
+    return;
+  }
   if (!global_map_ready_ || !target_deep_ || !target_deep_tree_) {
     return;
   }
@@ -1153,6 +1224,9 @@ void SmallGicpRelocalizationNode::prepareScanContextDB()
 
 bool SmallGicpRelocalizationNode::checkAndTriggerGlobalRelocalization()
 {
+  if (manual_pose_locked_.load()) {
+    return false;
+  }
   if (!global_relocalization_ready_ || !has_localized_) {
     return false;
   }
