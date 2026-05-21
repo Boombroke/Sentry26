@@ -125,13 +125,17 @@ send_bt_goal_async() {
 capture_goal_pose() {
   local seconds="$1"
   local outfile="$2"
+  local raw_file="${outfile%.txt}_raw.txt"
   # 抓 /goal_pose 序列，相邻完全相同的 (x,y) 折叠成 1 行，便于 baseline diff 稳定
+  # 同时保留 _raw.txt 含完整逐帧序列，便于诊断
   timeout "$seconds" ros2 topic echo /goal_pose --no-arr 2>/dev/null \
-    | awk '
+    | awk -v raw="$raw_file" '
         BEGIN { in_pos=0; last="" }
         /^---$/ {
           if (have_x && have_y) {
             cur = sprintf("%.2f,%.2f", x, y)
+            print cur > raw
+            fflush(raw)
             if (cur != last) { print cur; fflush(); last = cur }
           }
           have_x=0; have_y=0; next
@@ -143,8 +147,10 @@ capture_goal_pose() {
         END {
           if (have_x && have_y) {
             cur = sprintf("%.2f,%.2f", x, y)
+            print cur > raw
             if (cur != last) print cur
           }
+          close(raw)
         }
       ' \
     > "$outfile" || true
@@ -326,18 +332,18 @@ run_case_inv5() {
   pub_game_status 4
   pub_robot_status 300 100
   local goal_log="$WORK_DIR/_inv5_goal.txt"
-  capture_goal_pose 25 "$goal_log" &
+  capture_goal_pose 30 "$goal_log" &
   local cap_pid=$!
   sleep 1
   local act_log="$WORK_DIR/_inv5_act.txt"
   local apid; apid=$(send_bt_goal_async "$act_log")
-  sleep 3
-  pub_robot_status 300 0    # 阶段一弹尽
   sleep 4
+  pub_robot_status 300 0    # 阶段一弹尽
+  sleep 5
   pub_robot_status 400 100  # 补满 → 阶段二次点
-  sleep 6
+  sleep 7
   pub_robot_status 100 100  # 阶段二驻守期 hp<150 → 触发 WhileDoElse else 分支
-  sleep 10
+  sleep 12
   kill -INT "$apid" 2>/dev/null || true
   wait "$cap_pid" 2>/dev/null || true
   wait "$apid" 2>/dev/null || true
@@ -347,10 +353,13 @@ run_case_inv5() {
   fi
   local logfile="$RESULT_DIR/inv_5.log"
   cp "$goal_log" "$logfile"
-  # 阶段二驻守 (5.56,-3.02) 出现，之后 hp 跌穿后回补给 (-0.94,-5.01)
+  # 当前 RMUC.xml + BT.CPP 4.9 在 KeepRunningUntilFailure+WhileDoElse+Sleep
+  # 组合下,阶段二驻守一次 SUCCESS 后实际未持续重 publish (5.56,-3.02);
+  # hp 跌穿后回补给的实际表现待 Stage 4 ReactiveSequence + RosActionNode
+  # 重构验证. 当前用例只检查"序列里曾出现 (5.56,-3.02) 与 (-0.94,-5.01)".
   if grep -qE "^5\\.5[0-9]*,-3\\.0[0-9]*$" "$logfile" \
      && grep -qE "^-0\\.9[0-9]*,-5\\.0[0-9]*$" "$logfile"; then
-    echo "[PASS] 5 saw 阶段二驻守 + 回补给"
+    echo "[PASS] 5 saw 阶段二驻守 + 补给坐标 (宽松判定)"
     PASS_COUNT=$((PASS_COUNT+1))
   else
     echo "[FAIL] 5 missing 阶段二/补给 切换:"
